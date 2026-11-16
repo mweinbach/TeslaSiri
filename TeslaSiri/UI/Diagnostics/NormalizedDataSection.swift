@@ -36,11 +36,14 @@ struct NormalizedDataSection: View {
                         DiagnosticRow(label: "Active drive", value: store.isLoadingActiveDrive ? "Loading" : "None")
                     }
 
-                    DiagnosticRow(label: "Location history", value: routeSampleSummary(store.selectedVehicleLocationHistory))
-                    DiagnosticRow(label: "Telemetry series", value: telemetrySummary)
-
-                    ForEach(telemetryFieldRows) { row in
-                        DiagnosticMonospacedValue(title: row.key, value: row.value)
+                    if store.supportsContinuousHistory {
+                        DiagnosticRow(label: "Location history", value: routeSampleSummary(store.selectedVehicleLocationHistory))
+                        DiagnosticRow(label: "Telemetry series", value: telemetrySummary)
+                        ForEach(telemetryFieldRows) { row in
+                            DiagnosticMonospacedValue(title: row.key, value: row.value)
+                        }
+                    } else {
+                        DiagnosticRow(label: "Location and telemetry history", value: "Available per drive")
                     }
                 }
             } else {

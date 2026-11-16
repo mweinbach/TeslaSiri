@@ -14,6 +14,8 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     public var temperatureInFahrenheit: Bool
     public var usesMetric: Bool
     public var climateOn: Bool?
+    public var allowsVehicleCommands: Bool?
+    public var allowsChargingCommands: Bool?
     public var locked: Bool?
     public var sentryOn: Bool?
     public var openClosures: [String]?
@@ -34,6 +36,8 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
         targetTemperature = snapshot.targetTemp
         temperatureInFahrenheit = snapshot.temperatureInFahrenheit ?? !usesMetric
         self.usesMetric = usesMetric
+        allowsVehicleCommands = vehicle.allowsVehicleCommands
+        allowsChargingCommands = vehicle.allowsChargingCommands
         climateOn = snapshot.hvacOn
         locked = snapshot.locked
         sentryOn = snapshot.sentryModeOn
@@ -46,7 +50,7 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     public var isCharging: Bool { chargingState?.lowercased() == "charging" }
 
     public var canStartCharging: Bool {
-        guard let state = chargingState?.lowercased() else { return false }
+        guard allowsChargingCommands != false, let state = chargingState?.lowercased() else { return false }
         return ["stopped", "nopower", "no_power", "connected"].contains(state)
     }
 

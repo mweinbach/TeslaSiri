@@ -77,6 +77,7 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
             }
 
             let offsetSec = startTime.map { max(Int($0.timeIntervalSinceNow.rounded()), 0) } ?? 0
+            try service.checkSoftwareCommand(for: resolved, installAfter: offsetSec)
             let whenText = offsetSec > 60
                 ? " at \((startTime ?? .now).formatted(date: .omitted, time: .shortened))"
                 : " now"
@@ -144,6 +145,7 @@ public struct CancelSoftwareUpdateIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
+            try service.checkSoftwareCommand(for: resolved, installAfter: nil)
             try await confirmWithSafetyGate(dialog: IntentDialog("Cancel the software update on \(resolved.name)?"))
             try await service.cancelSoftwareUpdate(vin: resolved.vin)
             let summary = "Canceled the software update on \(resolved.name)."

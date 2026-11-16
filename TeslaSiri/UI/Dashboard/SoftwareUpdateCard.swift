@@ -64,9 +64,9 @@ struct SoftwareUpdateCard: View {
                     .font(.subheadline)
                 }
 
-                if update.installable || canCancelUpdate {
+                if canInstallUpdate || canCancelUpdate {
                     HStack(spacing: 10) {
-                        if update.installable {
+                        if canInstallUpdate {
                             Button("Install Now", systemImage: "arrow.down.circle.fill") {
                                 pendingAction = .installNow
                             }
@@ -184,8 +184,12 @@ struct SoftwareUpdateCard: View {
         return EntityIdentifier(for: SoftwareUpdateEntity.self, identifier: SoftwareUpdateEntity.entityID(forVIN: vin))
     }
 
+    private var canInstallUpdate: Bool { update.installable && store.selectedVehicle?.allowsVehicleControls == true }
+
     private var canCancelUpdate: Bool {
-        update.scheduledStartTimeMS != nil
+        guard store.selectedVehicle?.allowsVehicleControls == true,
+              store.capabilities?.software["cancel"] != .bool(false) else { return false }
+        return update.scheduledStartTimeMS != nil
             || update.warningTimeRemainingMS != nil
             || update.status?.localizedCaseInsensitiveContains("scheduled") == true
             || update.status?.localizedCaseInsensitiveContains("pending") == true

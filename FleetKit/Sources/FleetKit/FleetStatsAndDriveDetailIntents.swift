@@ -55,7 +55,7 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
-            let targetEntity: DriveEntity
+            let summary: DriveEntity
             let vehicleName: String
 
             if let providedDrive = drive {
@@ -64,16 +64,17 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
                     throw FleetKitError.api("That drive does not belong to an active vehicle on your account.")
                 }
                 vehicleName = matchingVehicle.name
-                targetEntity = providedDrive
+                summary = providedDrive
             } else {
                 let resolved = try await service.resolvedVehicle(vehicle?.id)
                 vehicleName = resolved.name
                 guard let latest = try await service.drives(vin: resolved.vin, limit: 1).first else {
                     throw FleetKitError.api("No completed drives were found for \(resolved.name).")
                 }
-                targetEntity = DriveEntity(info: latest)
+                summary = DriveEntity(info: latest)
             }
 
+            let targetEntity = try await service.driveDetails(summary)
             let spoken = targetEntity.spokenSummary(vehicleName: vehicleName)
             log.success("inspected drive \(targetEntity.id) for \(vehicleName)")
             return .result(
@@ -146,9 +147,12 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
             let consumption: FleetConsumptionInfo?
             let effectiveStart: Date?
             if period == .sinceLastCharge {
-                let fetchedConsumption = try? await service.consumptionSinceCharge(vin: resolved.vin)
-                consumption = fetchedConsumption
-                effectiveStart = fetchedConsumption?.lastChargeDate
+                let fetched = try await service.consumptionSinceCharge(vin: resolved.vin)
+                guard let lastCharge = fetched.lastChargeDate else {
+                    throw FleetKitError.api("No completed charge was found to start this period.")
+                }
+                consumption = fetched
+                effectiveStart = lastCharge
             } else {
                 consumption = nil
                 effectiveStart = period.startDate()
@@ -156,8 +160,9 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
 
             let rawDrives = try await service.drives(
                 vin: resolved.vin,
-                limit: 200,
-                from: effectiveStart
+                limit: service.usesTeslascope ? .max : 200,
+                from: effectiveStart,
+                requireCompleteRows: service.usesTeslascope
             )
             let filteredDrives: [FleetDriveInfo]
             if let effectiveStart {
@@ -242,7 +247,10 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
                 sessions = try await service.charges(vin: resolved.vin, limit: 1)
             } else {
                 let start = period.startDate()
-                let raw = try await service.charges(vin: resolved.vin, limit: 100, from: start)
+                let raw = try await service.charges(
+                    vin: resolved.vin, limit: service.usesTeslascope ? .max : 100, from: start,
+                    requireCompleteRows: service.usesTeslascope
+                )
                 if let start {
                     sessions = raw.filter { $0.startedAtDate >= start }
                 } else {
@@ -270,7 +278,7 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
 public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Tesla Charging History"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Covers the full Tessie history, including sessions too old for Spotlight. For one session in detail, use the Get Tesla Charge Details tool; for totals, the Get Tesla Charging Stats tool.",
+        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Tesla Charge Details tool; for totals, the Get Tesla Charging Stats tool.",
         searchKeywords: ["charges", "charging sessions", "Supercharger stops", "home charging", "charging log"]
     )
     public static let isDiscoverable = true

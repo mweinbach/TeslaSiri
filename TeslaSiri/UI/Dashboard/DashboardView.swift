@@ -63,10 +63,6 @@ struct DashboardView: View {
         store.selectedVehicle?.name ?? "Vehicle"
     }
 
-    private var controlsEnabled: Bool {
-        store.selectedVehicle?.permissions.contains("control") == true
-    }
-
     @ToolbarContentBuilder
     private var dashboardToolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
@@ -135,7 +131,7 @@ struct DashboardView: View {
     }
 
     private func requestCommand(_ command: VehicleControlCommand) {
-        guard controlsEnabled, !store.isRunningControl,
+        guard let vehicle = store.selectedVehicle, vehicle.allows(command), !store.isRunningControl,
               !store.pendingControls.contains(where: { $0.conflicts(with: command) }) else { return }
         pendingVehicleVIN = store.selectedVehicle?.vin
         if command.requiresConfirmation {
@@ -328,7 +324,7 @@ private struct DashboardShowroom: View {
                     activeControlAction: store.activeControlAction,
                     pendingControls: store.pendingControls,
                     controlMessage: store.vehicleControlMessage,
-                    controlsEnabled: vehicle.permissions.contains("control"),
+                    controlsEnabled: vehicle.allowsVehicleControls,
                     onCommand: onCommand
                 )
                 .padding(.horizontal, 16)
@@ -352,7 +348,7 @@ private struct DashboardNotices: View {
         }
 
         if !isSignedIn, sandboxMode != .demoVehicle {
-            SignInBanner(onSignIn: onSignIn, isAuthenticating: isAuthenticating)
+            SignInBanner(provider: store.provider, onSignIn: onSignIn, isAuthenticating: isAuthenticating)
         }
 
         if store.isShowingCachedData, sandboxMode != .demoVehicle {
@@ -461,6 +457,7 @@ private struct DashboardStandaloneStateScroll: View {
             LazyVStack(spacing: 20) {
                 if !isSignedIn, sandboxMode != .demoVehicle {
                     SignInBanner(
+                        provider: store.provider,
                         onSignIn: onSignIn,
                         isAuthenticating: isAuthenticating
                     )
@@ -470,7 +467,7 @@ private struct DashboardStandaloneStateScroll: View {
 
                     CardContainer(title: "Test without a car", systemImage: "sparkles") {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Launch an interactive simulated Model Y to test Siri climate, security, and trip-prep workflows safely without connecting Tessie.")
+                            Text("Try Siri climate, security, and trip preparation with a simulated Model Y.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 

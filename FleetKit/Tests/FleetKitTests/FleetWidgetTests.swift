@@ -62,6 +62,32 @@ struct FleetWidgetTests {
         #expect(store.cached(vin: "car-one", mode: .demoVehicle) == nil)
     }
 
+    @Test func providerSelectionPreservesLegacyTessieVINAndInvalidatesOldWidgetData() throws {
+        let suite = "FleetProviderTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("first-car", forKey: FleetKitConfig.selectedVINDefaultsKey)
+        let tokens = FleetSharedTokenStore(appGroup: suite) { _ in "same-token" }
+        let widgets = FleetWidgetStore(appGroup: suite)
+        let originalScope = tokens.sessionScope(for: "same-token")
+        #expect(tokens.provider == .tessie)
+        #expect(tokens.selectedVIN() == "first-car")
+        widgets.save(.sample)
+
+        tokens.selectProvider(.teslascope)
+        #expect(tokens.sessionScope(for: "same-token") != originalScope)
+        #expect(tokens.selectedVIN() == nil)
+        #expect(widgets.cached(vin: FleetWidgetSnapshot.sample.vin, mode: .demoVehicle) == nil)
+        tokens.save(selectedVIN: "second-car")
+        #expect(FleetSharedTokenStore(appGroup: suite).provider == .teslascope)
+
+        tokens.selectProvider(.tessie)
+        #expect(tokens.selectedVIN() == "first-car")
+        #expect(tokens.sessionScope(for: "same-token") != originalScope)
+        tokens.selectProvider(.teslascope)
+        #expect(tokens.selectedVIN() == "second-car")
+    }
+
     @Test func snapshotCacheOmitsLocationAndCredentials() throws {
         let encoded = try JSONEncoder().encode(FleetWidgetSnapshot.sample)
         let fields = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])

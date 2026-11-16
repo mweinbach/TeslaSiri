@@ -3,7 +3,7 @@ import FleetKit
 import Foundation
 import OSLog
 
-/// Mirrors the app's current Tessie access token (and selected VIN) into shared
+/// Mirrors the active provider's access token (and selected VIN) into shared
 /// storage so the App Intents extension can authenticate from its own process.
 @MainActor
 enum FleetTokenBridge {
@@ -11,26 +11,34 @@ enum FleetTokenBridge {
 
     @discardableResult
     static func sync(store: FleetDataStore) async -> Bool {
-        let tokenStore = FleetBackend.makeAccessTokenStore()
+        let shared = FleetSharedTokenStore.shared
+        guard shared.provider == store.provider, !Task.isCancelled else { return false }
+        let revision = shared.sessionRevision
+        let tokenStore = FleetBackend.makeAccessTokenStore(provider: store.provider)
         let hasLiveToken: Bool
 
         do {
             let token = try await tokenStore.accessToken()
-            FleetSharedTokenStore.shared.save(accessToken: token)
+            guard revision == shared.sessionRevision, !Task.isCancelled else { return false }
+            try shared.save(accessToken: token, for: store.provider)
             hasLiveToken = true
             logger.notice("Mirrored access token to shared keychain")
         } catch {
-            FleetSharedTokenStore.shared.clearAccessToken()
+            guard revision == shared.sessionRevision, !Task.isCancelled else { return false }
+            try? shared.clearAccessToken(for: store.provider)
             hasLiveToken = false
             logger.warning("No valid session — cleared shared access token (\(error.localizedDescription, privacy: .public))")
         }
 
-        syncSelectedVehicle(store: store, forceShortcutRefresh: true)
-        await FleetIntentDonations.syncCarSuggestions(for: store.selectedVehicle)
+        if !hasLiveToken || store.loadState == .loaded || store.selectedVehicle != nil {
+            syncSelectedVehicle(store: store, forceShortcutRefresh: true)
+            await FleetIntentDonations.syncCarSuggestions(for: store.selectedVehicle)
+        }
         return hasLiveToken
     }
 
     static func syncSelectedVehicle(store: FleetDataStore, forceShortcutRefresh: Bool = false) {
+        guard FleetSharedTokenStore.shared.provider == store.provider, !Task.isCancelled else { return }
         let vin = store.selectedVehicle?.vin
         guard forceShortcutRefresh || FleetSharedTokenStore.shared.selectedVIN() != vin else { return }
 
@@ -45,8 +53,16 @@ enum FleetTokenBridge {
         TeslaSiriShortcuts.updateAppShortcutParameters()
     }
 
-    static func clear() {
-        FleetSharedTokenStore.shared.clearCredentials()
-        logger.notice("Cleared shared credentials (sign-out)")
+    static func clearVehicleSystemData(for vehicles: [FleetVehicle]) async {
+        BatteryReminderManager.shared.clearNotification()
+        try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
+        await FleetIntentDonations.clearVehicleSuggestions(for: vehicles)
+    }
+
+    static func clear(provider: FleetProvider) {
+        let shared = FleetSharedTokenStore.shared
+        guard shared.provider == provider else { return }
+        shared.clearSelectedVIN()
+        TeslaSiriShortcuts.updateAppShortcutParameters()
     }
 }

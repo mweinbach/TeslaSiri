@@ -79,7 +79,7 @@ public struct DrivingStatsEntity: TransientAppEntity {
     public var totalDurationMinutes: Int
 
     @Property(title: "Total Driving Energy (kWh)", description: "Battery energy used for driving in the period, in kilowatt-hours.")
-    public var totalEnergyUsedKWH: Double
+    public var totalEnergyUsedKWH: Double?
 
     @Property(title: "Average Efficiency (Wh/mi)", description: "Average energy used per mile, in watt-hours per mile. Lower is more efficient.")
     public var averageEfficiencyWhPerMile: Double?
@@ -97,7 +97,7 @@ public struct DrivingStatsEntity: TransientAppEntity {
     public var longestDriveMiles: Double?
 
     @Property(title: "Autopilot Distance (Miles)", description: "Miles driven on Autopilot or FSD (Supervised) in the period.")
-    public var autopilotDistanceMiles: Double
+    public var autopilotDistanceMiles: Double?
 
     @Property(title: "Autopilot Share (%)", description: "Share of all miles driven on Autopilot or FSD (Supervised), as a percent.")
     public var autopilotSharePercent: Double?
@@ -111,7 +111,7 @@ public struct DrivingStatsEntity: TransientAppEntity {
     public var displayRepresentation: DisplayRepresentation {
         let subtitle = [
             "\(driveCount) drive\(driveCount == 1 ? "" : "s")",
-            String(format: "%.1f kWh", totalEnergyUsedKWH),
+            totalEnergyUsedKWH.map { String(format: "%.1f kWh", $0) },
             averageEfficiencyWhPerMile.map { String(format: "%.0f Wh/mi", $0) }
         ].compactMap { $0 }.joined(separator: " • ")
         return DisplayRepresentation(
@@ -127,13 +127,13 @@ public struct DrivingStatsEntity: TransientAppEntity {
         self.driveCount = 0
         self.totalDistanceMiles = 0
         self.totalDurationMinutes = 0
-        self.totalEnergyUsedKWH = 0
+        self.totalEnergyUsedKWH = nil
         self.averageEfficiencyWhPerMile = nil
         self.milesPerKWH = nil
         self.averageSpeedMPH = nil
         self.topSpeedMPH = nil
         self.longestDriveMiles = nil
-        self.autopilotDistanceMiles = 0
+        self.autopilotDistanceMiles = nil
         self.autopilotSharePercent = nil
         self.idleEnergySinceChargeKWH = nil
         self.batteryPercentUsedSinceCharge = nil
@@ -159,13 +159,14 @@ public struct DrivingStatsEntity: TransientAppEntity {
         let totalMS = drives.compactMap(\.durationMS).reduce(Int64(0), +)
         self.totalDurationMinutes = Int(totalMS / 60_000)
 
-        let summedEnergy = drives.compactMap(\.energyUsedKWH).reduce(0, +)
-        let resolvedDrivingEnergy = (period == .sinceLastCharge && summedEnergy == 0)
-            ? (consumption?.energyUsedByDrivingKWH ?? consumption?.energyUsedKWH ?? 0)
-            : summedEnergy
-        self.totalEnergyUsedKWH = resolvedDrivingEnergy
+        let energies = drives.compactMap(\.energyUsedKWH)
+        if energies.count == drives.count && !drives.isEmpty {
+            self.totalEnergyUsedKWH = energies.reduce(0, +)
+        } else {
+            self.totalEnergyUsedKWH = consumption?.energyUsedByDrivingKWH
+        }
 
-        if resolvedMiles > 0.05 && resolvedDrivingEnergy > 0 {
+        if let resolvedDrivingEnergy = totalEnergyUsedKWH, resolvedMiles > 0.05, resolvedDrivingEnergy > 0 {
             self.averageEfficiencyWhPerMile = (resolvedDrivingEnergy * 1000.0) / resolvedMiles
             self.milesPerKWH = resolvedMiles / resolvedDrivingEnergy
         } else {
@@ -184,11 +185,12 @@ public struct DrivingStatsEntity: TransientAppEntity {
         self.topSpeedMPH = drives.compactMap(\.maxSpeedMPH).max()
         self.longestDriveMiles = drives.compactMap(\.distanceMiles).max()
 
-        let apMiles = drives.compactMap(\.autopilotDistanceMiles).reduce(0, +)
-        self.autopilotDistanceMiles = apMiles
-        self.autopilotSharePercent = resolvedMiles > 0.05 && apMiles > 0
-            ? min(100.0, (apMiles / resolvedMiles) * 100.0)
-            : nil
+        let autopilotReadings = drives.compactMap(\.autopilotDistanceMiles)
+        if !autopilotReadings.isEmpty && autopilotReadings.count == drives.count {
+            let miles = autopilotReadings.reduce(0, +)
+            self.autopilotDistanceMiles = miles
+            self.autopilotSharePercent = resolvedMiles > 0.05 ? min(100.0, 100.0 * miles / resolvedMiles) : nil
+        }
 
         self.idleEnergySinceChargeKWH = consumption?.idleEnergyUsedKWH
         self.batteryPercentUsedSinceCharge = consumption?.batteryPercentUsed
@@ -217,24 +219,20 @@ public struct DrivingStatsEntity: TransientAppEntity {
             durationPhrase = "\(totalDurationMinutes) min"
         }
 
-        sentences.append(
-            String(
-                format: "For %@ %@: %d drive%@, %.1f miles in %@, using %.1f kWh.",
-                vehicleName,
-                period.spokenLabel,
-                driveCount,
-                driveCount == 1 ? "" : "s",
-                totalDistanceMiles,
-                durationPhrase,
-                totalEnergyUsedKWH
-            )
+        var summary = String(
+            format: "For %@ %@: %d drive%@, %.1f miles in %@",
+            vehicleName, period.spokenLabel, driveCount, driveCount == 1 ? "" : "s", totalDistanceMiles, durationPhrase
         )
+        if let totalEnergyUsedKWH {
+            summary += String(format: ", using %.1f kWh", totalEnergyUsedKWH)
+        }
+        sentences.append(summary + ".")
 
         if let whPerMi = averageEfficiencyWhPerMile, let miPerKWH = milesPerKWH {
             sentences.append(String(format: "Average efficiency was %.0f Wh/mi (%.1f mi/kWh).", whPerMi, miPerKWH))
         }
 
-        if autopilotDistanceMiles > 0.1, let share = autopilotSharePercent {
+        if let autopilotDistanceMiles, autopilotDistanceMiles > 0.1, let share = autopilotSharePercent {
             sentences.append(String(format: "Autopilot covered %.1f miles (%.0f%%).", autopilotDistanceMiles, share))
         }
 
@@ -304,9 +302,14 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
 
     @Property(
         title: "Cost",
-        description: "What the session cost, in the user's local currency as recorded by Tessie. Empty when no cost was recorded, which doesn't mean it was free."
+        description: "What the session cost, in the currency recorded by the provider. Empty when no cost was recorded, which doesn't mean it was free."
     )
     public var cost: Double?
+
+    @Property(title: "Currency", description: "Currency code for the recorded cost, when supplied by the provider.")
+    public var currency: String?
+
+    public var formattedCost: String? { cost.map { formatChargeCost($0, currency: currency) } }
 
     @Property(title: "Odometer", description: "The car's odometer when it charged, in miles.")
     public var odometerMiles: Double?
@@ -336,6 +339,7 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         self.startingBatteryPercent = info.startingBatteryPercent
         self.endingBatteryPercent = info.endingBatteryPercent
         self.cost = info.cost
+        self.currency = info.currency
         self.odometerMiles = info.odometerMiles
         self.latitude = info.latitude
         self.longitude = info.longitude
@@ -375,7 +379,7 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             startedAt.formatted(date: .abbreviated, time: .shortened),
             batterySummaryText,
             milesAdded.map { String(format: "+%.0f mi", $0) },
-            cost.flatMap { $0 > 0 ? String(format: "$%.2f", $0) : nil }
+            formattedCost
         ].compactMap { $0 }
         return DisplayRepresentation(
             title: "\(energyText) • \(place)",
@@ -423,8 +427,8 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         if let minutes = durationMinutes, minutes > 0 {
             parts.append("in \(minutes) min")
         }
-        if let cost, cost > 0 {
-            parts.append(String(format: "for $%.2f", cost))
+        if let formattedCost {
+            parts.append("for \(formattedCost)")
         }
         return parts.joined(separator: " ") + "."
     }
@@ -489,6 +493,11 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
     }
 }
 
+private func formatChargeCost(_ amount: Double, currency: String?) -> String {
+    if let currency { return amount.formatted(.currency(code: currency)) }
+    return amount.formatted(.number.precision(.fractionLength(2)))
+}
+
 /// Aggregated charging energy, Supercharger split, range added, and cost statistics.
 public struct ChargingStatsEntity: TransientAppEntity {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Charging Stats")
@@ -517,10 +526,15 @@ public struct ChargingStatsEntity: TransientAppEntity {
     @Property(title: "Total Miles Added", description: "Total driving range added in the period, in miles.")
     public var totalMilesAdded: Double
 
-    @Property(title: "Total Charging Cost", description: "Total recorded charging cost in the period, in the user's local currency. Sessions without a recorded cost count as 0.")
-    public var totalCost: Double
+    @Property(title: "Total Charging Cost", description: "Sum of recorded charging costs for the period. Empty if there are no recorded costs or the currencies differ.")
+    public var totalCost: Double?
 
-    @Property(title: "Average Cost per kWh", description: "Total cost divided by energy added, in the user's local currency per kilowatt-hour.")
+    @Property(title: "Currency", description: "Currency code shared by the recorded charging costs, when available.")
+    public var currency: String?
+
+    public var formattedCost: String? { totalCost.map { formatChargeCost($0, currency: currency) } }
+
+    @Property(title: "Average Cost per kWh", description: "Total recorded cost divided by energy added, in the same currency per kilowatt-hour.")
     public var averageCostPerKWH: Double?
 
     @Property(title: "Most Recent Charge Location", description: "Where the most recent charge in the period happened.")
@@ -533,7 +547,7 @@ public struct ChargingStatsEntity: TransientAppEntity {
         let subtitle = [
             "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
             superchargerCount > 0 ? "\(superchargerCount) Supercharger" : nil,
-            totalCost > 0 ? String(format: "$%.2f", totalCost) : nil
+            formattedCost
         ].compactMap { $0 }.joined(separator: " • ")
         return DisplayRepresentation(
             title: "\(String(format: "+%.1f kWh", totalEnergyAddedKWH)) (\(periodTitle))",
@@ -550,7 +564,8 @@ public struct ChargingStatsEntity: TransientAppEntity {
         self.acSessionCount = 0
         self.totalEnergyAddedKWH = 0
         self.totalMilesAdded = 0
-        self.totalCost = 0
+        self.totalCost = nil
+        self.currency = nil
         self.averageCostPerKWH = nil
         self.lastChargeLocation = nil
         self.lastChargeDate = nil
@@ -569,9 +584,17 @@ public struct ChargingStatsEntity: TransientAppEntity {
         self.totalEnergyAddedKWH = kwh
         self.totalMilesAdded = sessions.compactMap(\.milesAdded).reduce(0, +)
 
-        let cost = sessions.compactMap(\.cost).reduce(0, +)
+        let priced = sessions.filter { $0.cost != nil }
+        let currencies = Set(priced.compactMap(\.currency))
+        // Tessie costs share the account currency. Teslascope can record a different
+        // currency per session, so several unlabeled amounts cannot be safely combined.
+        let unknownCurrency = priced.filter { $0.currency == nil && $0.cost != 0 }
+        let canSum = currencies.count <= 1 && (unknownCurrency.isEmpty || currencies.isEmpty)
+            && (unknownCurrency.count < 2 || !unknownCurrency.contains { $0.id.contains(":teslascope:") })
+        let cost = canSum && !priced.isEmpty ? priced.compactMap(\.cost).reduce(0, +) : nil
         self.totalCost = cost
-        self.averageCostPerKWH = (kwh > 0.1 && cost > 0) ? (cost / kwh) : nil
+        self.currency = currencies.count == 1 ? currencies.first : nil
+        self.averageCostPerKWH = kwh > 0.1 ? cost.map { $0 / kwh } : nil
 
         let latest = sessions.first
         self.lastChargeLocation = latest?.location
@@ -602,11 +625,11 @@ public struct ChargingStatsEntity: TransientAppEntity {
             sentences.append("All \(superchargerCount) session\(superchargerCount == 1 ? " was" : "s were") at Superchargers.")
         }
 
-        if totalCost > 0 {
+        if let formattedCost {
             if let perKWH = averageCostPerKWH {
-                sentences.append(String(format: "Total recorded cost was $%.2f ($%.2f/kWh).", totalCost, perKWH))
+                sentences.append("Total recorded cost was \(formattedCost) (\(formatChargeCost(perKWH, currency: currency))/kWh).")
             } else {
-                sentences.append(String(format: "Total recorded cost was $%.2f.", totalCost))
+                sentences.append("Total recorded cost was \(formattedCost).")
             }
         }
 

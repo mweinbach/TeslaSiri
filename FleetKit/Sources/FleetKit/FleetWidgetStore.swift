@@ -25,18 +25,22 @@ public struct FleetWidgetStore: Sendable {
         guard mode == FleetSandboxStore.shared.mode(), scope == sessionScope(mode: mode) else {
             throw CancellationError()
         }
-        save(value)
+        save(value, scope: scope)
         return value
     }
 
     public func save(_ snapshot: FleetWidgetSnapshot) {
-        let cached = CachedSnapshot(snapshot: snapshot, sessionScope: sessionScope(mode: snapshot.mode))
+        save(snapshot, scope: sessionScope(mode: snapshot.mode))
+    }
+
+    private func save(_ snapshot: FleetWidgetSnapshot, scope: String) {
+        let cached = CachedSnapshot(snapshot: snapshot, sessionScope: scope)
         guard let data = try? JSONEncoder().encode(cached) else { return }
         UserDefaults(suiteName: appGroup)?.set(data, forKey: cacheKey(vin: snapshot.vin, mode: snapshot.mode))
     }
 
     public func cached(vin: String?, mode: FleetSandboxMode = FleetSandboxStore.shared.mode()) -> FleetWidgetSnapshot? {
-        let selectedVIN = mode == .demoVehicle ? FleetDemoVehicleState.demoVIN : FleetSharedTokenStore.shared.selectedVIN()
+        let selectedVIN = mode == .demoVehicle ? FleetDemoVehicleState.demoVIN : FleetSharedTokenStore(appGroup: appGroup).selectedVIN()
         guard let vin = vin ?? selectedVIN,
               let data = UserDefaults(suiteName: appGroup)?.data(forKey: cacheKey(vin: vin, mode: mode)) else { return nil }
         guard let cached = try? JSONDecoder().decode(CachedSnapshot.self, from: data),

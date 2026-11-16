@@ -130,6 +130,10 @@ public struct SetSeatClimateIntent: AppIntent, PredictableIntent {
             }
             let action = mode == .heat ? "set_seat_heat" : "set_seat_cool"
 
+            let available = try await service.controlActions(for: resolved)
+            guard available.supports(action) else {
+                throw FleetKitError.unsupportedAction(mode == .heat ? "the seat heater" : "seat cooling")
+            }
             if clamped > 0 {
                 try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
             }
@@ -203,6 +207,10 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
+            let available = try await service.controlActions(for: resolved)
+            guard available.supports("steering_wheel_heater") else {
+                throw FleetKitError.unsupportedAction("the steering wheel heater")
+            }
             if on {
                 try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
             }

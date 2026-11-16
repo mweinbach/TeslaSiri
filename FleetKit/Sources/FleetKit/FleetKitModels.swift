@@ -13,6 +13,10 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
     /// Raw Tessie `vehicle_config.exterior_color`, such as `PearlWhite`.
     public let exteriorColor: String?
 
+    /// Explicit permissions granted by the linked vehicle account, when reported by the provider.
+    public internal(set) var allowsVehicleCommands: Bool?
+    public internal(set) var allowsChargingCommands: Bool?
+
     var hasSeatCooling: Bool?
     var canActuateTrunks: Bool?
     var canAcceptNavigationRequests: Bool?
@@ -82,7 +86,9 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
         exteriorColor: String? = nil,
         hasSeatCooling: Bool? = nil,
         canActuateTrunks: Bool? = nil,
-        canAcceptNavigationRequests: Bool? = nil
+        canAcceptNavigationRequests: Bool? = nil,
+        allowsVehicleCommands: Bool? = nil,
+        allowsChargingCommands: Bool? = nil
     ) {
         self.vin = vin
         self.displayName = displayName
@@ -92,6 +98,8 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
         self.hasSeatCooling = hasSeatCooling
         self.canActuateTrunks = canActuateTrunks
         self.canAcceptNavigationRequests = canAcceptNavigationRequests
+        self.allowsVehicleCommands = allowsVehicleCommands
+        self.allowsChargingCommands = allowsChargingCommands
     }
 }
 

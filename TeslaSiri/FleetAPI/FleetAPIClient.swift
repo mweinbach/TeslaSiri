@@ -35,7 +35,7 @@ enum FleetAPIError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAccessToken:
-            return "No Tessie access token is saved."
+            return "A vehicle provider access token is required."
         case .invalidURL(let path):
             return "The Tessie API URL could not be built for \(path)."
         case .invalidHistoryRange:
@@ -135,7 +135,7 @@ struct FleetAPIClient {
         }
     }
 
-    private struct Response<Value: Sendable>: Sendable {
+    struct Response<Value: Sendable>: Sendable {
         var data: Value
         var requestID: String?
     }
@@ -143,7 +143,7 @@ struct FleetAPIClient {
     @MainActor
     private final class VehicleStateScope {
         var vin: String?
-        var cached: (token: String, baseURL: URL, response: Response<TessieJSONObject>)?
+        var cached: (token: String, source: String, response: Response<TessieJSONObject>)?
 
         var readings: FleetSpotlightIndexer.DashboardReadings
 
@@ -764,16 +764,26 @@ struct FleetAPIClient {
 
         let token = try await accessTokenProvider.accessToken()
         try Task.checkCancellation()
-        if let cached = scope.cached, cached.token == token, cached.baseURL == configuration.baseURL {
-            return cached.response
+        return try await Self.sharedVehicleState(vin: vin, token: token, source: configuration.baseURL.absoluteString) {
+            try await readState(accessToken: token)
         }
+    }
 
-        let response = try await readState(accessToken: token)
+    @MainActor
+    static func sharedVehicleState(
+        vin: String, token: String, source: String, load: () async throws -> Response<TessieJSONObject>
+    ) async throws -> Response<TessieJSONObject> {
+        guard let scope = vehicleStateScope, scope.vin == vin else { return try await load() }
+        if let cached = scope.cached, cached.token == token, cached.source == source { return cached.response }
+        let response = try await load()
         try Task.checkCancellation()
-        if scope.vin == vin {
-            scope.cached = (token, configuration.baseURL, response)
-        }
+        if scope.vin == vin { scope.cached = (token, source, response) }
         return response
+    }
+
+    static func recordDashboardState(_ data: Data, vin: String) {
+        guard let scope = vehicleStateScope, scope.vin == vin else { return }
+        scope.readings.state = data
     }
 
     private func snapshotState(
@@ -960,7 +970,7 @@ struct FleetAPIClient {
     }
 
     @concurrent
-    private static func rawPayload(_ data: Data, contentType: String?) async -> (body: JSONValue?, text: String?) {
+    static func rawPayload(_ data: Data, contentType: String?) async -> (body: JSONValue?, text: String?) {
         if let contentType, contentType.hasPrefix("image/") {
             return (.object([
                 "content_type": .string(contentType),
@@ -1051,14 +1061,21 @@ struct FleetAPIClient {
 }
 
 enum FleetBackend {
-    static func makeAPIClient() -> FleetAPIClient {
-        FleetAPIClient(accessTokenProvider: makeAccessTokenStore())
+    static func makeAPIClient(
+        provider: FleetProvider, accessTokenProvider: (any FleetAccessTokenProviding)? = nil
+    ) -> any FleetDataLoading {
+        let tokens = accessTokenProvider ?? makeAccessTokenStore(provider: provider)
+        switch provider {
+        case .tessie: return FleetAPIClient(accessTokenProvider: tokens)
+        case .teslascope: return TeslascopeFleetDataClient(accessTokenProvider: tokens)
+        }
     }
 
-    static func makeDataStore() -> FleetDataStore {
+    static func makeDataStore(provider: FleetProvider) -> FleetDataStore {
         FleetDataStore(
-            apiClient: FleetSandboxDataClient(liveClient: makeAPIClient()),
-            cache: FleetDiskCache()
+            apiClient: FleetSandboxDataClient(liveClient: makeAPIClient(provider: provider)),
+            cache: FleetDiskCache(fileName: provider == .tessie ? "fleet-cache.json" : "teslascope-fleet-cache.json"),
+            provider: provider
         )
     }
 
@@ -1066,7 +1083,7 @@ enum FleetBackend {
         FleetDeviceIdentity()
     }
 
-    static func makeAccessTokenStore() -> TessieAccessTokenStore {
-        TessieAccessTokenStore()
+    static func makeAccessTokenStore(provider: FleetProvider) -> FleetProviderTokenStore {
+        FleetProviderTokenStore(provider: provider)
     }
 }

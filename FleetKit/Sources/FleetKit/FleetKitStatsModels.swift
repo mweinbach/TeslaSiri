@@ -17,6 +17,7 @@ public struct FleetChargeInfo: Encodable, Sendable, Identifiable {
     public let startingBatteryPercent: Int?
     public let endingBatteryPercent: Int?
     public let cost: Double?
+    public let currency: String?
 
     public var id: String { sessionID }
     public var startedAtDate: Date { Date(timeIntervalSince1970: TimeInterval(startedAt) / 1000) }
@@ -42,7 +43,8 @@ public struct FleetChargeInfo: Encodable, Sendable, Identifiable {
         milesAdded: Double?,
         startingBatteryPercent: Int?,
         endingBatteryPercent: Int?,
-        cost: Double?
+        cost: Double?,
+        currency: String? = nil
     ) {
         self.sessionID = sessionID
         self.vin = vin
@@ -59,6 +61,7 @@ public struct FleetChargeInfo: Encodable, Sendable, Identifiable {
         self.startingBatteryPercent = startingBatteryPercent
         self.endingBatteryPercent = endingBatteryPercent
         self.cost = cost
+        self.currency = currency
     }
 }
 

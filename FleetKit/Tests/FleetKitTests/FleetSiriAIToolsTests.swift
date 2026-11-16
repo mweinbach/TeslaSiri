@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import FleetKit
 
-private final class SiriToolMockURLProtocol: URLProtocol {
+final class SiriToolMockURLProtocol: URLProtocol {
     static let headerName = "X-Siri-Test-ID"
     private static let lock = NSLock()
     nonisolated(unsafe) private static var handlers: [String: (URLRequest) throws -> (Int, Data)] = [:]
@@ -75,6 +75,7 @@ private final class SiriToolMockURLProtocol: URLProtocol {
 
 func withIsolatedFleetService<R>(
     selectedVIN: String? = "VIN-1",
+    provider: FleetProvider = .tessie,
     responder: @escaping (URLRequest) throws -> (Int, Data),
     body: (_ requests: () -> [URLRequest]) async throws -> R
 ) async throws -> R {
@@ -89,15 +90,14 @@ func withIsolatedFleetService<R>(
 
     let suiteName = "FleetSiriAITests.\(testID)"
     let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.set("test-token", forKey: FleetKitConfig.accessTokenDefaultsKey)
-    if let selectedVIN {
-        defaults.set(selectedVIN, forKey: FleetKitConfig.selectedVINDefaultsKey)
-    }
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let tokens = FleetSharedTokenStore(appGroup: suiteName, readAccessToken: { provider in
+        provider == .teslascope ? "scope-test-token" : "test-token"
+    })
+    tokens.selectProvider(provider)
+    if let selectedVIN { tokens.save(selectedVIN: selectedVIN) }
 
-    let client = FleetIntentClient(
-        session: session,
-        tokenStore: FleetSharedTokenStore(appGroup: suiteName)
-    )
+    let client = FleetIntentClient(session: session, tokenStore: tokens)
     let service = FleetIntentService(client: client)
 
     return try await FleetIntentService.$testingOverride.withValue(service) {
@@ -122,6 +122,59 @@ struct FleetSiriAIToolsTests {
             _ = try await SelectedVehicleOptionsProvider().results()
             _ = try await LockVehicleIntent().perform()
             #expect(requests().compactMap { $0.url?.path } == ["/vehicles", "/VIN-1/command/lock"])
+        }
+    }
+
+    @Test func teslascopeRoutesReadsAndWritesUsingItsOwnTokenAndVerifiedPublicID() async throws {
+        let vin = "5YJ3E1EA7KF000001"
+        try await withIsolatedFleetService(selectedVIN: vin, provider: .teslascope) { request in
+            #expect(request.url?.host == "teslascope.com")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer scope-test-token")
+            switch request.url?.path {
+            case "/api/account/tesla-accounts":
+                return (200, Data(#"{"code":200,"response":[{"id":1,"scope_vehicle_cmds":true,"scope_vehicle_charging_cmds":false}]}"#.utf8))
+            case "/api/account/tesla-account/1/vehicles":
+                return (200, Data(#"{"code":200,"response":[{"public_id":"blue","vin":"5YJ3E1EA7KF000001","name":"Blue"}]}"#.utf8))
+            case "/api/vehicle/blue/detailed":
+                return (200, Data(#"{"code":200,"response":{"public_id":"blue","vin":"5YJ3E1EA7KF000001","charge_state":{"battery_level":64},"vehicle_state":{"fd_window":0,"fp_window":0,"rd_window":0,"rp_window":0}}}"#.utf8))
+            case "/api/vehicle/blue/command/lock":
+                return (200, Data(#"{"code":200,"response":"The vehicle has been locked."}"#.utf8))
+            default:
+                Issue.record("Unexpected request \(request.httpMethod ?? "") \(request.url?.path ?? "")")
+                return (404, Data())
+            }
+        } body: { requests in
+            let service = FleetIntentService.make()
+            let car = try #require(try await VehicleEntityQuery().allEntities().first)
+            #expect(car.id == vin)
+            #expect(car.controls?.joined().contains("Start or stop charging") == false)
+            let available = try await service.controlActions()
+            #expect(available.supports("door_lock"))
+            #expect(!available.supports("charge_start"))
+            let combined = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.climateOn = true
+            changes.charging = true
+            combined.changes = changes
+            await #expect(throws: FleetKitError.self) { _ = try await combined.perform() }
+            #expect(!requests().contains { $0.httpMethod == "POST" })
+            let snapshot = try await service.snapshot(vin: vin)
+            #expect(snapshot.batteryLevel == 64)
+            #expect(snapshot.openClosures == nil)
+            #expect(try await LockVehicleIntent().perform().value?.succeeded == true)
+            let coolSeat = SetSeatClimateIntent(seat: .driver, level: 3, mode: .cool)
+            await #expect(throws: FleetKitError.self) { _ = try await coolSeat.perform() }
+            let wheel = SetSteeringWheelHeaterIntent()
+            wheel.on = true
+            await #expect(throws: FleetKitError.self) { _ = try await wheel.perform() }
+
+            FleetSharedTokenStore(appGroup: service.appGroupIdentifier).selectProvider(.tessie)
+            #expect(service.sessionScopeID == nil)
+            await #expect(throws: FleetKitError.self) { _ = try await service.snapshot(vin: vin) }
+            await #expect(throws: FleetKitError.self) {
+                try await service.runControl(action: "door_lock", vin: vin, humanName: "locking")
+            }
+            #expect(requests().filter { $0.httpMethod == "POST" }.map { $0.url?.path } == ["/api/vehicle/blue/command/lock"])
         }
     }
 
@@ -252,7 +305,7 @@ struct FleetSiriAIToolsTests {
                 Issue.record("Expected an expired-session error.")
             } catch let error as FleetKitError {
                 let siriError: any CustomLocalizedStringResourceConvertible = error
-                #expect(String(localized: siriError.localizedStringResource) == "Your Tessie access token is invalid or revoked. Open Wattie to replace it.")
+                #expect(String(localized: siriError.localizedStringResource) == "Your vehicle provider access token is invalid or revoked. Open Wattie to replace it.")
             }
             #expect(!requests().contains { $0.httpMethod == "POST" })
         }
@@ -800,7 +853,8 @@ struct FleetSiriAIToolsTests {
             #expect(chargingStats.superchargerCount == 1)
             #expect(chargingStats.acSessionCount == 1)
             #expect(abs(chargingStats.totalEnergyAddedKWH - 70.5) < 0.01)
-            #expect(abs(chargingStats.totalCost - 23.93) < 0.01)
+            let chargingCost = try #require(chargingStats.totalCost)
+            #expect(abs(chargingCost - 23.93) < 0.01)
 
             // 3. Filtered recent Supercharger sessions
             let recentChargesIntent = GetRecentChargesIntent()

@@ -17,7 +17,7 @@ struct DrivesView: View {
     @State private var nicknameSaveError: String?
 
     private var placesIndex: DrivePlacesIndex? {
-        store.selectedVehicle.map { DrivePlacesIndex.shared(vin: $0.vin) }
+        store.selectedVehicle.map { DrivePlacesIndex.shared(vin: $0.vin, provider: store.provider) }
     }
 
     private var trimmedSearch: String {

@@ -57,30 +57,31 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
-            let session: ChargeSessionEntity
+            let summary: ChargeSessionEntity
             let vehicleName: String
 
             if let charge {
                 let vehicles = try await service.vehicles()
                 guard let owner = vehicles.first(where: { $0.vin == charge.vin }) else {
-                    throw FleetKitError.api("That charging session doesn't belong to a car on your Tessie account.")
+                    throw FleetKitError.api("That charging session doesn't belong to a car on your current account.")
                 }
                 vehicleName = owner.name
-                session = charge
+                summary = charge
             } else {
                 let resolved = try await service.resolvedVehicle(vehicle?.id)
                 vehicleName = resolved.name
                 guard let latest = try await service.charges(vin: resolved.vin, limit: 1).first else {
-                    throw FleetKitError.api("Tessie hasn't recorded any charging sessions for \(resolved.name) yet.")
+                    throw FleetKitError.api("No charging sessions have been recorded for \(resolved.name) yet.")
                 }
-                session = ChargeSessionEntity(info: latest)
+                summary = ChargeSessionEntity(info: latest)
             }
 
+            let session = try await service.chargeDetails(summary)
             var spoken = session.spokenSummary(vehicleName: vehicleName)
             if let efficiency = session.chargingEfficiencyPercent, let drawn = session.energyDrawnKWH {
                 spoken += String(format: " It drew %.1f kWh from the charger, %.0f%% efficient.", drawn, efficiency)
             }
-            if session.cost == nil || session.cost == 0 {
+            if session.cost == nil {
                 spoken += " No cost was recorded."
             }
             log.success("described charge \(session.id) for \(vehicleName)")
@@ -325,7 +326,7 @@ public struct ChargeSessionSnippetView: View {
             metricPill(
                 icon: "creditcard",
                 label: "Cost",
-                value: formattedCost
+                value: session.formattedCost ?? "—"
             )
             metricPill(
                 icon: "gauge.with.dots.needle.67percent",
@@ -369,13 +370,6 @@ public struct ChargeSessionSnippetView: View {
                 }
             }
         }
-    }
-
-    private var formattedCost: String {
-        if let cost = session.cost, cost > 0 {
-            return cost.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD"))
-        }
-        return "$0.00"
     }
 
     private var fallbackPoints: [FleetDriveRoutePoint] {

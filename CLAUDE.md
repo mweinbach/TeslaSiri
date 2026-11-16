@@ -28,10 +28,10 @@ When CLI fallback is necessary for project files, explain the reason.
 
 ## Project Summary
 
-TeslaSiri is a SwiftUI iOS 27.3+ app that connects to Tessie for Tesla vehicle data. It includes:
+TeslaSiri is a SwiftUI iOS 27.3+ app that connects to Tessie or Teslascope for Tesla vehicle data. It includes:
 
-- Tessie access-token setup with Keychain-backed storage.
-- Tessie response adapters into app-owned Fleet models.
+- Provider selection in Settings with separate Keychain-backed access tokens.
+- Tessie and Teslascope response adapters into app-owned Fleet models.
 - Observable Fleet data store.
 - Local cache hydration and refresh.
 - Vehicle dashboard UI.
@@ -60,7 +60,7 @@ TeslaSiri is a SwiftUI iOS 27.3+ app that connects to Tessie for Tesla vehicle d
 - `TeslaSiri/FleetAPI/FleetAccessTokenKeychain.swift`: Keychain token storage.
 - `TeslaSiri/FleetAPI/FleetDeviceIdentity.swift`: Device identity.
 - `TeslaSiri/FleetAPI/FleetNotifications.swift`: Local notifications and legacy webhook payload decoding.
-- `TeslaSiri/FleetAPI/TessieAccessTokenStore.swift`: Tessie token persistence and extension mirroring.
+- `TeslaSiri/FleetAPI/FleetProviderTokenStore.swift`: provider-specific token persistence and extension mirroring.
 - `TeslaSiri/Info.plist`: App metadata and background task settings.
 - `FleetKit/Sources/FleetKit/`: `@AppIntent(.tool)` App Intents, `SyncableEntity` + `EntityStringQuery` entities, `FleetSiriAITypes.swift` (`@AppEntity(.generable)` inputs & `VehicleCommandResultEntity`), `SiriAIWorkflowIntents.swift`, `FleetStatsAndDriveDetailIntents.swift`, `ChargeDetailsIntent.swift`, `VehicleInfoIntent.swift` (multi-topic Get Tesla Vehicle Info), `ComfortControlIntents.swift` (seat/steering wheel heat, charging amps), `FleetStatsEntities.swift`, `FleetKitStatsModels.swift`, `FleetIntentClient`, snippet views (`FleetKitPackage`).
 - `TeslaSiri/Skills.skillsbundle/Skills/`: Siri-read workflow `SKILL.md` skills (`vehicle-control`, `driving-and-energy-insights`, `overnight-security-check`, `prepare-trip`, `software-update-advisor`), compiled by Xcode into `Metadata.appintents/Skills.skillsc`. Refer to tools by title, never Swift type names. Never put skills in FleetKit resources (Siri doesn't read them) or as loose `.md` under `TeslaSiri/`.

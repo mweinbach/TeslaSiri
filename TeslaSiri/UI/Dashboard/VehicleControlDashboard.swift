@@ -10,7 +10,8 @@ enum VehicleControlCommand: Hashable, Identifiable {
     case honk
     case lock(shouldLock: Bool)
     case petMode(shouldTurnOn: Bool)
-    case trunk(isFront: Bool)
+    case openFrunk
+    case rearTrunk(open: Bool)
     case ventWindows
 
     var id: String {
@@ -22,7 +23,8 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .honk: "honk"
         case .lock(let shouldLock): "lock-\(shouldLock)"
         case .petMode(let shouldTurnOn): "pet-mode-\(shouldTurnOn)"
-        case .trunk(let isFront): isFront ? "front-trunk" : "rear-trunk"
+        case .openFrunk: "front-trunk"
+        case .rearTrunk(let open): open ? "open-rear-trunk" : "close-rear-trunk"
         case .ventWindows: "vent-windows"
         }
     }
@@ -36,14 +38,15 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .honk: "Honk horn"
         case .lock(let shouldLock): shouldLock ? "Lock vehicle" : "Unlock vehicle"
         case .petMode(let shouldTurnOn): shouldTurnOn ? "Turn on Dog Mode" : "Turn off Dog Mode"
-        case .trunk(let isFront): isFront ? "Open front trunk" : "Open rear trunk"
+        case .openFrunk: "Open front trunk"
+        case .rearTrunk(let open): open ? "Open rear trunk" : "Close rear trunk"
         case .ventWindows: "Vent windows"
         }
     }
 
     func conflicts(with other: Self) -> Bool {
         switch (self, other) {
-        case (.climate, .climate), (.lock, .lock), (.chargePort, .chargePort): true
+        case (.climate, .climate), (.lock, .lock), (.chargePort, .chargePort), (.rearTrunk, .rearTrunk): true
         default: self == other
         }
     }
@@ -53,16 +56,17 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .climate: snapshot?.climateOn
         case .lock: snapshot?.locked
         case .chargePort: snapshot?.chargePortDoorOpen
-        case .trunk(let front): front ? snapshot?.closures?.frontTrunkOpen : snapshot?.closures?.rearTrunkOpen
+        case .openFrunk: snapshot?.closures?.frontTrunkOpen
+        case .rearTrunk: snapshot?.closures?.rearTrunkOpen
         default: nil
         }
     }
 
-    func expectedState(from snapshot: FleetLatestSnapshot?) -> Bool? {
+    var expectedState: Bool? {
         switch self {
         case .climate(let on), .lock(let on), .chargePort(let on): on
-        case .trunk(isFront: true): true
-        case .trunk(isFront: false): snapshot?.closures?.rearTrunkOpen.map { !$0 }
+        case .openFrunk: true
+        case .rearTrunk(let open): open
         default: nil
         }
     }
@@ -77,7 +81,7 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .honk: "honk_horn"
         case .lock(let shouldLock): shouldLock ? "door_lock" : "door_unlock"
         case .petMode: "set_pet_mode"
-        case .trunk: "actuate_trunk"
+        case .openFrunk, .rearTrunk: "actuate_trunk"
         case .ventWindows: "window_control"
         }
     }
@@ -88,8 +92,8 @@ enum VehicleControlCommand: Hashable, Identifiable {
             ["on": .bool(shouldTurnOn)]
         case .petMode(let shouldTurnOn):
             ["on": .bool(shouldTurnOn)]
-        case .trunk(let isFront):
-            ["which_trunk": .string(isFront ? "front" : "rear")]
+        case .openFrunk: ["which_trunk": "front"]
+        case .rearTrunk(let open): ["which_trunk": "rear", "command": .string(open ? "open" : "close")]
         case .ventWindows:
             ["command": .string("vent")]
         default:
@@ -99,7 +103,7 @@ enum VehicleControlCommand: Hashable, Identifiable {
 
     var requiresConfirmation: Bool {
         switch self {
-        case .lock(shouldLock: false), .trunk, .chargePort:
+        case .lock(shouldLock: false), .openFrunk, .rearTrunk, .chargePort:
             true
         case .climate, .defrost, .flashLights, .honk, .lock, .petMode, .ventWindows:
             false
@@ -119,10 +123,10 @@ enum VehicleControlCommand: Hashable, Identifiable {
         switch self {
         case .lock(shouldLock: false):
             "Unlock \(vehicleName)?"
-        case .trunk(let isFront):
-            isFront
-                ? "Open the front trunk on \(vehicleName)?"
-                : "Open the rear trunk on \(vehicleName)?"
+        case .openFrunk:
+            "Open the front trunk on \(vehicleName)?"
+        case .rearTrunk(let open):
+            open ? "Open the rear trunk on \(vehicleName)?" : "Close the rear trunk on \(vehicleName)?"
         case .chargePort(let open):
             open
                 ? "Open the charge port on \(vehicleName)?"
@@ -132,6 +136,13 @@ enum VehicleControlCommand: Hashable, Identifiable {
         }
     }
 }
+extension FleetVehicle {
+    func allows(_ command: VehicleControlCommand) -> Bool {
+        if case .chargePort = command { return allowsChargingControls }
+        return allowsVehicleControls
+    }
+}
+
 struct VehicleControlDashboard: View {
     let vehicle: FleetVehicle
     let vehicles: [FleetVehicle]
@@ -433,7 +444,7 @@ struct VehicleQuickActionBar: View {
         quickAction(
             title: "Frunk",
             systemImage: "car.side.front.open",
-            command: .trunk(isFront: true),
+            command: .openFrunk,
             isActive: isFrunkOpen,
             tint: .orange,
             accessibilityLabel: isFrunkOpen ? "Front trunk" : "Open front trunk",
@@ -443,10 +454,10 @@ struct VehicleQuickActionBar: View {
         quickAction(
             title: "Trunk",
             systemImage: "car.side.rear.open",
-            command: .trunk(isFront: false),
+            command: .rearTrunk(open: !isTrunkOpen),
             isActive: isTrunkOpen,
             tint: .orange,
-            accessibilityLabel: isTrunkOpen ? "Rear trunk" : "Open rear trunk",
+            accessibilityLabel: isTrunkOpen ? "Close rear trunk" : "Open rear trunk",
             accessibilityValue: isTrunkOpen ? "Open" : "Closed"
         )
 

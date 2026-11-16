@@ -134,9 +134,11 @@ struct VehicleWidgetPanel: View {
     private var actions: some View {
         switch topic {
         case .overview:
-            HStack(spacing: 8) {
-                actionButton("Lock", symbol: "lock.fill", action: .lock, iconOnly: family != .systemLarge)
-                actionButton("Climate", symbol: "fan.fill", action: .startClimate, iconOnly: family != .systemLarge)
+            if snapshot.allowsVehicleCommands != false {
+                HStack(spacing: 8) {
+                    actionButton("Lock", symbol: "lock.fill", action: .lock, iconOnly: family != .systemLarge)
+                    actionButton("Climate", symbol: "fan.fill", action: .startClimate, iconOnly: family != .systemLarge)
+                }
             }
         case .charging:
             if snapshot.canStartCharging {
@@ -146,9 +148,13 @@ struct VehicleWidgetPanel: View {
                     .font(.caption.weight(.medium)).lineLimit(1)
             }
         case .climate:
-            actionButton("Start climate", symbol: "fan.fill", action: .startClimate)
+            if snapshot.allowsVehicleCommands != false {
+                actionButton("Start climate", symbol: "fan.fill", action: .startClimate)
+            }
         case .security:
-            actionButton("Lock car", symbol: "lock.fill", action: .lock)
+            if snapshot.allowsVehicleCommands != false {
+                actionButton("Lock car", symbol: "lock.fill", action: .lock)
+            }
         }
     }
 

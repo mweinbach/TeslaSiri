@@ -96,13 +96,14 @@ struct VehicleShowroomStage: View {
     }
 
     private func command(for hotspot: VehicleHotspot) -> VehicleControlCommand? {
-        switch hotspot {
+        guard hotspot == .chargePort ? vehicle.allowsChargingControls : vehicle.allowsVehicleControls else { return nil }
+        return switch hotspot {
         case .lock:
             .lock(shouldLock: snapshot.locked != true)
         case .frunk:
-            snapshot.closures?.frontTrunkOpen == true ? nil : .trunk(isFront: true)
+            snapshot.closures?.frontTrunkOpen == true ? nil : .openFrunk
         case .trunk:
-            .trunk(isFront: false)
+            .rearTrunk(open: snapshot.closures?.rearTrunkOpen != true)
         case .chargePort:
             snapshot.isActivelyCharging ? nil : .chargePort(open: snapshot.chargePortDoorOpen != true)
         }

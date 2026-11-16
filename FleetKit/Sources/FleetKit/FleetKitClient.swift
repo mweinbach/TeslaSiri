@@ -15,16 +15,16 @@ public enum FleetKitError: Swift.Error, LocalizedError, CustomLocalizedStringRes
     public var localizedStringResource: LocalizedStringResource {
         switch self {
         case .notSignedIn:
-            return "Open Wattie and add your Tessie access token to use this."
+            return "Open Wattie and add an access token for your vehicle provider."
         case .sessionExpired:
-            return "Your Tessie access token is invalid or revoked. Open Wattie to replace it."
+            return "Your vehicle provider access token is invalid or revoked. Open Wattie to replace it."
         case .api(let message):
             if let message {
                 return "\(message)"
             }
-            return "Tessie returned an error."
+            return "Your vehicle provider returned an error."
         case .badResponse:
-            return "Tessie returned an unexpected response."
+            return "Your vehicle provider returned an unexpected response."
         case .unsupportedAction(let action):
             return "Your vehicle doesn't support \(action) right now."
         }
@@ -63,18 +63,48 @@ public enum FleetControlValue: Encodable, Sendable {
     }
 }
 
-/// Extension-safe Tessie client for the reads and commands used by App Intents.
+/// Extension-safe provider routing for App Intents, Spotlight, and widgets.
 public struct FleetIntentClient: Sendable {
     private static let sharedRoster = FleetRosterCache()
     private let rosterCache: FleetRosterCache
     private let session: URLSession
     let tokenStore: FleetSharedTokenStore
+    let provider: FleetProvider
+    private let teslascopeClient: TeslascopeClient?
     @TaskLocal static var validateRequest: (@Sendable (String) throws -> Void)?
 
     public init(session: URLSession = .shared, tokenStore: FleetSharedTokenStore = .shared) {
         self.session = session
         self.tokenStore = tokenStore
+        let provider = tokenStore.provider
+        self.provider = provider
+        if provider == .teslascope, let token = tokenStore.accessToken(for: provider) {
+            let scope = tokenStore.sessionScope(for: token)
+            self.teslascopeClient = TeslascopeClient(session: session, token: token, onUnauthorized: {
+                if tokenStore.provider == provider, tokenStore.sessionScope(for: token) == scope {
+                    tokenStore.invalidateSession()
+                }
+            }) {
+                guard tokenStore.provider == provider,
+                      tokenStore.sessionScope(for: token) == scope,
+                      tokenStore.accessToken(for: provider) == token else {
+                    throw FleetKitError.sessionExpired
+                }
+                try Self.validateRequest?(token)
+            }
+        } else {
+            self.teslascopeClient = nil
+        }
         self.rosterCache = session === URLSession.shared ? Self.sharedRoster : FleetRosterCache()
+    }
+
+    private var teslascope: TeslascopeClient? {
+        get throws {
+            guard tokenStore.provider == provider else { throw FleetKitError.sessionExpired }
+            guard provider == .teslascope else { return nil }
+            guard let teslascopeClient else { throw FleetKitError.notSignedIn }
+            return teslascopeClient
+        }
     }
 
     // MARK: - Reads
@@ -105,7 +135,8 @@ public struct FleetIntentClient: Sendable {
     }
 
     private func directRoster() async throws -> FleetRosterCache.Roster {
-        guard let token = tokenStore.accessToken() else { throw FleetKitError.notSignedIn }
+        guard tokenStore.provider == provider else { throw FleetKitError.sessionExpired }
+        guard let token = tokenStore.accessToken(for: provider) else { throw FleetKitError.notSignedIn }
         let fingerprint = FleetSharedTokenStore.fingerprint(for: token)
         let account = tokenStore.sessionScope(fingerprint: fingerprint)
         let result = try await Self.$validateRequest.withValue({ actual in
@@ -119,6 +150,9 @@ public struct FleetIntentClient: Sendable {
 
     private func roster(requiring vin: String? = nil, scope: String) async throws -> FleetRosterCache.Roster {
         try await rosterCache.load(scope: scope, requiring: vin) {
+            if let client = try teslascope {
+                return FleetRosterCache.Roster(vehicles: try await client.vehicles(), units: TeslascopeClient.displayUnits)
+            }
             let response: TessieResults<TessieVehicle> = try await get(
                 "/vehicles", query: [URLQueryItem(name: "only_active", value: "true")]
             )
@@ -143,6 +177,11 @@ public struct FleetIntentClient: Sendable {
         vin: String,
         topics: [VehicleInfoTopic]? = nil
     ) async throws -> (snapshot: FleetSnapshotInfo, state: TessieObject) {
+        if let client = try teslascope {
+            let data = try await client.stateData(vin: vin)
+            let state = try JSONDecoder().decode(TessieObject.self, from: data)
+            return (state.snapshot(vin: vin, tireState: nil, topics: topics), state)
+        }
         if let topics, !topics.contains(.tirePressure) {
             let state: TessieObject = try await get("/\(encoded(vin))/state")
             return (state.snapshot(vin: vin, tireState: nil, topics: topics), state)
@@ -182,6 +221,9 @@ public struct FleetIntentClient: Sendable {
         tag: String? = nil,
         requireCompleteRows: Bool = false
     ) async throws -> [FleetDriveInfo] {
+        if let client = try teslascope {
+            return try await client.drives(vin: vin, limit: limit, from: from, to: to, tag: tag, requireCompleteRows: requireCompleteRows)
+        }
         var query = [
             URLQueryItem(name: "distance_format", value: "mi"),
             URLQueryItem(name: "temperature_format", value: "f"),
@@ -205,12 +247,22 @@ public struct FleetIntentClient: Sendable {
         return drives
     }
 
+    func driveDetails(vin: String, id: String) async throws -> FleetDriveInfo? {
+        guard let client = try teslascope else { return nil }
+        return try await client.drive(vin: vin, sessionID: id)
+    }
+
     public func drivePath(
         vin: String,
+        driveID: String? = nil,
         from: Date,
         to: Date,
         maxPoints: Int = 72
     ) async throws -> [FleetDriveRoutePoint] {
+        if let client = try teslascope {
+            if let driveID { return try await client.drivePath(vin: vin, sessionID: driveID, maxPoints: maxPoints) }
+            return try await client.drivePath(vin: vin, from: from, to: to, maxPoints: maxPoints)
+        }
         let fromSec = Int64(from.timeIntervalSince1970)
         let toSec = max(Int64(to.timeIntervalSince1970), fromSec + 1)
         let response: TessieResults<TessiePathSample> = try await get(
@@ -240,6 +292,9 @@ public struct FleetIntentClient: Sendable {
         to: Date? = nil,
         requireCompleteRows: Bool = false
     ) async throws -> [FleetChargeInfo] {
+        if let client = try teslascope {
+            return try await client.charges(vin: vin, limit: limit, from: from, to: to, requireCompleteRows: requireCompleteRows)
+        }
         var query = [
             URLQueryItem(name: "distance_format", value: "mi"),
             URLQueryItem(name: "limit", value: String(limit))
@@ -259,7 +314,13 @@ public struct FleetIntentClient: Sendable {
         return charges
     }
 
+    func chargeDetails(vin: String, id: String) async throws -> FleetChargeInfo? {
+        guard let client = try teslascope else { return nil }
+        return try await client.charge(vin: vin, sessionID: id)
+    }
+
     public func batteryHealth(vin: String) async throws -> FleetBatteryHealthInfo {
+        if try teslascope != nil { throw FleetKitError.api("Teslascope does not report battery pack health.") }
         async let battery: TessieObject = get("/\(encoded(vin))/battery")
         var healthObject: TessieObject?
         var healthError: Error?
@@ -299,6 +360,10 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func consumptionSinceCharge(vin: String) async throws -> FleetConsumptionInfo {
+        if let client = try teslascope {
+            let latest = try await client.charges(vin: vin, limit: 1).first
+            return FleetConsumptionInfo(lastChargeAt: latest?.endedAt)
+        }
         let response: TessieObject = try await get(
             "/\(encoded(vin))/consumption_since_charge",
             query: [URLQueryItem(name: "distance_format", value: "mi")]
@@ -307,6 +372,7 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func software(vin: String) async throws -> FleetSoftwareInfo {
+        if try teslascope != nil { return try await snapshotState(vin: vin).state.software }
         let state: TessieObject = try await get("/\(encoded(vin))/state")
         return state.software
     }
@@ -315,12 +381,14 @@ public struct FleetIntentClient: Sendable {
         guard !version.isEmpty, version != ".", version != ".." else {
             throw FleetKitError.badResponse
         }
+        if let client = try teslascope { return try await client.releaseNotes(vin: vin, version: version) }
         let response: TessieReleaseNotes = try await get("/\(encoded(vin))/release_notes/\(encoded(version))")
         return response.releaseNotes ?? []
     }
 
     public func controlActions() async throws -> FleetControlActionsInfo {
-        FleetControlActionsInfo(
+        if provider == .teslascope { return TeslascopeClient.controlActions }
+        return FleetControlActionsInfo(
             actions: [
                 "actuate_trunk",
                 "auto_conditioning_start",
@@ -373,6 +441,7 @@ public struct FleetIntentClient: Sendable {
     // MARK: - Writes
 
     public func runControl(action: String, vin: String, params: [String: FleetControlValue]) async throws {
+        if let client = try teslascope { return try await client.runControl(action: action, vin: vin, params: params) }
         let command: String
         var query: [URLQueryItem] = []
 
@@ -450,6 +519,7 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func installSoftwareUpdate(vin: String, offsetSec: Int) async throws {
+        if let client = try teslascope { return try await client.installSoftwareUpdate(vin: vin, offsetSec: offsetSec) }
         try await postCommand(
             "/\(encoded(vin))/command/schedule_software_update",
             query: [URLQueryItem(name: "in_seconds", value: String(max(offsetSec, 0)))]
@@ -457,6 +527,7 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func cancelSoftwareUpdate(vin: String) async throws {
+        if try teslascope != nil { throw FleetKitError.api("Teslascope does not support canceling software updates.") }
         try await postCommand("/\(encoded(vin))/command/cancel_software_update")
     }
 
@@ -500,7 +571,7 @@ public struct FleetIntentClient: Sendable {
 
             if http.statusCode == 401 {
                 FleetKitLog.client.warning("Received 401 from Tessie — the saved access token is invalid or revoked")
-                if let active = tokenStore.accessToken(),
+                if tokenStore.provider == .tessie, let active = tokenStore.accessToken(for: .tessie),
                    request.value(forHTTPHeaderField: "Authorization") == "Bearer \(active)" {
                     tokenStore.invalidateSession()
                 }
@@ -535,8 +606,10 @@ public struct FleetIntentClient: Sendable {
     }
 
     private func authorizedRequest(path: String, query: [URLQueryItem], method: String) throws -> URLRequest {
-        guard let token = tokenStore.accessToken() else { throw FleetKitError.notSignedIn }
+        guard tokenStore.provider == provider else { throw FleetKitError.sessionExpired }
+        guard let token = tokenStore.accessToken(for: provider) else { throw FleetKitError.notSignedIn }
         try Self.validateRequest?(token)
+        guard provider == .tessie else { throw FleetKitError.badResponse }
         let url = try makeURL(path: path, query: query)
         var request = URLRequest(url: url, timeoutInterval: FleetKitConfig.requestTimeout)
         request.httpMethod = method
@@ -918,13 +991,11 @@ private extension Dictionary where Key == String, Value == TessieValue {
             ("fd_window", "Driver window"), ("fp_window", "Passenger window"),
             ("rd_window", "Rear left window"), ("rp_window", "Rear right window")
         ]
-        var reported = false
-        let open = closures.compactMap { closure -> String? in
-            guard let isOpen = bool(closure.key) else { return nil }
-            reported = true
-            return isOpen ? closure.name : nil
+        let reported = closures.compactMap { closure in
+            bool(closure.key).map { (name: closure.name, open: $0) }
         }
-        return reported ? open : nil
+        let open = reported.filter(\.open).map(\.name)
+        return open.isEmpty && reported.count < closures.count ? nil : open
     }
 
     /// Seat heater levels (0–3) from `climate_state`, keyed by readable seat name.

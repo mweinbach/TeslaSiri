@@ -16,7 +16,9 @@ final class BatteryReminderManager {
     static let shared = BatteryReminderManager()
 
     static let taskIdentifier = "com.maxweinbach.TeslaSiri.batterycheck"
+    private let notificationIdentifier = "battery-reminder"
     private let lowBatteryThreshold = 20
+    private let checkInterval: TimeInterval = 3 * 60 * 60
     private let logger = Logger(subsystem: FleetKitLog.subsystem, category: "BatteryReminder")
 
     private init() {}
@@ -43,7 +45,7 @@ final class BatteryReminderManager {
 
     func schedule() async {
         let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 3 * 60 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: checkInterval)
         do {
             try await BGTaskScheduler.shared.submitTaskRequest(request)
             logger.info("Scheduled next battery check")
@@ -65,6 +67,12 @@ final class BatteryReminderManager {
         }
     }
 
+    func clearNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
+        center.removeDeliveredNotifications(withIdentifiers: [notificationIdentifier])
+    }
+
     func checkBatteryAndNotify() async {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
@@ -73,7 +81,8 @@ final class BatteryReminderManager {
         let service = FleetIntentService.make()
         guard
             let vehicle = try? await service.resolvedVehicle(nil),
-            let snapshot = try? await service.snapshot(vin: vehicle.vin),
+            let snapshot = try? await service.batterySnapshotForReminder(for: vehicle, maxAge: checkInterval),
+            service.sessionScopeID != nil,
             let battery = snapshot.batteryLevel
         else {
             logger.warning("Battery check skipped — vehicle or snapshot unavailable")
@@ -102,7 +111,7 @@ final class BatteryReminderManager {
         ]
 
         let request = UNNotificationRequest(
-            identifier: "battery-reminder",
+            identifier: notificationIdentifier,
             content: content,
             trigger: nil
         )

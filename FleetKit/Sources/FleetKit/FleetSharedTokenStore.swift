@@ -9,54 +9,71 @@ import Security
 /// `keychain-access-groups` entitlement). The selected VIN is stored in the App
 /// Group's `UserDefaults` because it is not secret.
 ///
-/// The app is the source of truth and mirrors the Tessie access token here so
+/// The app is the source of truth and mirrors each provider's access token here so
 /// the extension can authenticate.
 public struct FleetSharedTokenStore: Sendable {
     public static let shared = FleetSharedTokenStore()
 
     let appGroup: String
+    private let readAccessToken: (@Sendable (FleetProvider) -> String?)?
     private static let sessionGenerationKey = "FleetKit.sessionGeneration"
 
     public init(appGroup: String = FleetKitConfig.appGroupIdentifier) {
         self.appGroup = appGroup
+        self.readAccessToken = nil
+    }
+
+    init(appGroup: String, readAccessToken: @escaping @Sendable (FleetProvider) -> String?) {
+        self.appGroup = appGroup
+        self.readAccessToken = readAccessToken
     }
 
     private var defaults: UserDefaults? {
         UserDefaults(suiteName: appGroup)
     }
 
-    public func accessToken() -> String? {
-        if let token = try? SharedAccessTokenKeychain.load(), !token.isEmpty {
-            return token
-        }
+    public var provider: FleetProvider {
+        defaults?.string(forKey: "fleet.provider").flatMap(FleetProvider.init(rawValue:)) ?? .tessie
+    }
 
-        // Migrate a legacy UserDefaults mirror from earlier builds.
-        if let legacy = defaults?.string(forKey: FleetKitConfig.accessTokenDefaultsKey),
-           !legacy.isEmpty {
-            do {
-                try SharedAccessTokenKeychain.save(legacy)
-                defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
-            } catch {
-                // Keep the legacy value until keychain migration succeeds. This
-                // also keeps extension-safe clients usable in test processes.
-            }
-            return legacy
-        }
+    public func selectProvider(_ newProvider: FleetProvider) {
+        guard provider != newProvider else { return }
+        defaults?.set(newProvider.rawValue, forKey: "fleet.provider")
+        invalidateSession()
+    }
 
-        return nil
+    public func accessToken() -> String? { accessToken(for: provider) }
+
+    public func accessToken(for provider: FleetProvider) -> String? {
+        if let readAccessToken { return readAccessToken(provider) }
+        let keychain = SharedAccessTokenKeychain(provider: provider)
+        if let token = try? keychain.load() { return token }
+
+        // Only Tessie used the legacy defaults slot.
+        guard provider == .tessie,
+              let legacy = defaults?.string(forKey: FleetKitConfig.accessTokenDefaultsKey),
+              !legacy.isEmpty else { return nil }
+        if (try? keychain.save(legacy)) != nil {
+            defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
+        }
+        return legacy
     }
 
     static func fingerprint(for token: String) -> String {
         Data(SHA256.hash(data: Data(token.utf8))).base64EncodedString()
     }
 
-    func sessionScope(for token: String) -> String {
+    public func sessionScope(for token: String) -> String {
         sessionScope(fingerprint: Self.fingerprint(for: token))
     }
 
-    func sessionScope(fingerprint: String) -> String {
+    public var sessionRevision: String {
         let generation = defaults?.string(forKey: Self.sessionGenerationKey) ?? "initial"
-        return "\(appGroup).\(generation).\(fingerprint)"
+        return "\(appGroup).\(provider.rawValue).\(generation)"
+    }
+
+    func sessionScope(fingerprint: String) -> String {
+        "\(sessionRevision).\(fingerprint)"
     }
 
     func invalidateSession() {
@@ -64,46 +81,47 @@ public struct FleetSharedTokenStore: Sendable {
         FleetWidgetStore(appGroup: appGroup).clear()
     }
 
-    public func save(accessToken: String) {
-        let changed = self.accessToken() != accessToken
-        try? SharedAccessTokenKeychain.save(accessToken)
-        defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
-        if changed { invalidateSession() }
+    public func save(accessToken: String, for provider: FleetProvider) throws {
+        let changed = self.accessToken(for: provider) != accessToken
+        try SharedAccessTokenKeychain(provider: provider).save(accessToken)
+        if provider == .tessie { defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey) }
+        if changed, self.provider == provider { invalidateSession() }
     }
 
-    public func clearAccessToken() {
-        try? SharedAccessTokenKeychain.delete()
-        defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
-        invalidateSession()
+    public func clearAccessToken(for provider: FleetProvider) throws {
+        try SharedAccessTokenKeychain(provider: provider).delete()
+        if provider == .tessie { defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey) }
+        if self.provider == provider { invalidateSession() }
+    }
+
+    private func selectedVINKey(for provider: FleetProvider) -> String {
+        provider == .tessie ? FleetKitConfig.selectedVINDefaultsKey : "fleet.teslascope.selectedVIN"
     }
 
     public func selectedVIN() -> String? {
-        let vin = defaults?.string(forKey: FleetKitConfig.selectedVINDefaultsKey)
+        let vin = defaults?.string(forKey: selectedVINKey(for: provider))
         return (vin?.isEmpty == false) ? vin : nil
     }
 
     public func save(selectedVIN: String) {
-        defaults?.set(selectedVIN, forKey: FleetKitConfig.selectedVINDefaultsKey)
+        defaults?.set(selectedVIN, forKey: selectedVINKey(for: provider))
         FleetWidgetStore.reload()
     }
 
     public func clearSelectedVIN() {
-        defaults?.removeObject(forKey: FleetKitConfig.selectedVINDefaultsKey)
+        defaults?.removeObject(forKey: selectedVINKey(for: provider))
         FleetWidgetStore.reload()
-    }
-
-    /// Clears the mirrored access token and selected vehicle default.
-    public func clearCredentials() {
-        clearAccessToken()
-        clearSelectedVIN()
     }
 }
 
-private enum SharedAccessTokenKeychain {
-    static let service = FleetKitConfig.sharedAccessTokenKeychainService
-    static let account = FleetKitConfig.sharedAccessTokenKeychainAccount
+private struct SharedAccessTokenKeychain {
+    let provider: FleetProvider
 
-    static func load() throws -> String? {
+    private var account: String {
+        provider == .tessie ? FleetKitConfig.sharedAccessTokenKeychainAccount : "teslascopeExtensionAccessToken"
+    }
+
+    func load() throws -> String? {
         var query = baseQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -127,7 +145,7 @@ private enum SharedAccessTokenKeychain {
         return token
     }
 
-    static func save(_ token: String) throws {
+    func save(_ token: String) throws {
         let data = Data(token.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
@@ -159,17 +177,17 @@ private enum SharedAccessTokenKeychain {
         }
     }
 
-    static func delete() throws {
+    func delete() throws {
         let status = SecItemDelete(baseQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError(status: status)
         }
     }
 
-    private static var baseQuery: [String: Any] {
+    private var baseQuery: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: FleetKitConfig.sharedAccessTokenKeychainService,
             kSecAttrAccount as String: account,
             kSecUseDataProtectionKeychain as String: true
         ]

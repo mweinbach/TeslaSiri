@@ -404,6 +404,8 @@ nonisolated struct FleetVehicle: Codable, Equatable, Identifiable, Sendable {
 
     var id: String { vin }
     var name: String { displayName ?? vehicleTag ?? vin }
+    var allowsVehicleControls: Bool { permissions.contains("control") || permissions.contains("vehicle_commands") }
+    var allowsChargingControls: Bool { permissions.contains("control") || permissions.contains("charging_commands") }
 
     enum CodingKeys: String, CodingKey {
         case displayName = "display_name"

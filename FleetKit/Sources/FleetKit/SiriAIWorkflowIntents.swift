@@ -300,6 +300,10 @@ public struct ConfigureCabinClimateIntent: AppIntent {
             let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let steps = settings.controlSteps(climateOn: nil, startWhenEmpty: true)
+            let available = try await service.controlActions(for: resolved)
+            if let unavailable = steps.first(where: { !available.supports($0.action) }) {
+                throw FleetKitError.unsupportedAction(unavailable.label)
+            }
             if settings.enablePetMode == false {
                 try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
             }
@@ -339,7 +343,7 @@ public struct ConfigureCabinClimateIntent: AppIntent {
 public struct FindDrivesIntent: AppIntent {
     public static let title: LocalizedStringResource = "Find Tesla Drives"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Covers the full Tessie history, including drives too old for Spotlight. For one drive in detail, use the Get Tesla Drive Details tool.",
+        "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Tesla Drive Details tool.",
         searchKeywords: ["trip", "trips", "drive history", "where did I drive", "when did I go", "commute"]
     )
     public static let isDiscoverable = true

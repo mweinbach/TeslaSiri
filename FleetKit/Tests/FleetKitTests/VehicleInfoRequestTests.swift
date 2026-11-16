@@ -78,6 +78,40 @@ struct VehicleInfoRequestTests {
         }
     }
 
+    @Test(arguments: [60, 4 * 60 * 60, -3600, nil] as [Int?])
+    func teslascopeBatteryReminderUsesTheChargeObservationAge(age: Int?) async throws {
+        let vin = "5YJ3E1EA7KF000001"
+        let now = Date.now
+        let chargeTime = age.map { now.addingTimeInterval(-Double($0)).ISO8601Format() }
+        let chargeTimestampField = chargeTime.map { ",\"updated_at\":\"\($0)\"" } ?? ""
+        let detailed = """
+        {"code":200,"response":{"public_id":"blue","vin":"\(vin)",
+         "charge_state":{"battery_level":12,"charging_state":"Disconnected"\(chargeTimestampField)},
+         "vehicle_state":{"updated_at":"\(now.ISO8601Format())"}}}
+        """
+        try await withIsolatedFleetService(provider: .teslascope) { request in
+            switch request.url?.path {
+            case "/api/account/tesla-accounts":
+                (200, Data(#"{"code":200,"response":[{"id":1}]}"#.utf8))
+            case "/api/account/tesla-account/1/vehicles":
+                (200, Data(#"{"code":200,"response":[{"public_id":"blue","vin":"5YJ3E1EA7KF000001"}]}"#.utf8))
+            case "/api/vehicle/blue/detailed":
+                (200, Data(detailed.utf8))
+            default: throw FleetKitError.badResponse
+            }
+        } body: { _ in
+            let service = FleetIntentService.make()
+            let vehicle = try await service.resolvedVehicle(nil)
+            let snapshot = try await service.batterySnapshotForReminder(for: vehicle, maxAge: 3 * 60 * 60)
+            if age == 60 {
+                #expect(snapshot?.batteryLevel == 12)
+                #expect(snapshot?.chargingState == "Disconnected")
+            } else {
+                #expect(snapshot == nil)
+            }
+        }
+    }
+
     @Test(arguments: [[], [.tirePressure], [.climate]] as [[VehicleInfoTopic]])
     func dedicatedTiresAreRequestedOnlyForTiresOrFullStatus(topics: [VehicleInfoTopic]) async throws {
         try await withIsolatedFleetService(responder: { request in

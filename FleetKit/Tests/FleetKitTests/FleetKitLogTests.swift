@@ -4,11 +4,11 @@ import Testing
 
 struct FleetKitLogTests {
     @Test(arguments: [
-        (FleetKitError.notSignedIn, "Open Wattie and add your Tessie access token to use this."),
-        (.sessionExpired, "Your Tessie access token is invalid or revoked. Open Wattie to replace it."),
+        (FleetKitError.notSignedIn, "Open Wattie and add an access token for your vehicle provider."),
+        (.sessionExpired, "Your vehicle provider access token is invalid or revoked. Open Wattie to replace it."),
         (.api("The vehicle is offline."), "The vehicle is offline."),
-        (.api(nil), "Tessie returned an error."),
-        (.badResponse, "Tessie returned an unexpected response."),
+        (.api(nil), "Your vehicle provider returned an error."),
+        (.badResponse, "Your vehicle provider returned an unexpected response."),
         (.unsupportedAction("starting climate"), "Your vehicle doesn't support starting climate right now.")
     ])
     func `fleet errors expose messages to Siri across process boundaries`(error: FleetKitError, expected: String) {

@@ -79,7 +79,7 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     @Property(title: "Outside Temperature", description: "Average outside temperature during the drive, in degrees Fahrenheit.")
     public var outsideTempF: Double?
 
-    @Property(title: "Drive Tag", description: "The label the user gave this drive in Tessie, such as Work or Personal. Empty when untagged.")
+    @Property(title: "Drive Tag", description: "The label the user gave this drive, such as Work or Personal. Empty when untagged.")
     public var tag: String?
 
     @Property(title: "Start Latitude", description: "Starting GPS latitude in decimal degrees, for map rendering.", visibility: .internal)

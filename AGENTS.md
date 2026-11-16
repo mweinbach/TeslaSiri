@@ -78,14 +78,14 @@ For documentation-only changes, a full app build is usually not required.
 
 ## Sensitive Data
 
-Do not commit Tessie access tokens, keychain dumps, raw vehicle exports, private keys, provisioning profiles, `.env` files, or local Xcode user state.
+Do not commit provider access tokens, keychain dumps, raw vehicle exports, private keys, provisioning profiles, `.env` files, or local Xcode user state.
 
 ## Architecture Notes
 
 - The user-facing app name is **Wattie**, set with `CFBundleDisplayName`. App Shortcut phrases use `.applicationName` so Siri picks up that name automatically. The Xcode target, module, bundle identifiers, App Group, keychain services, and entity identifiers retain `TeslaSiri` for continuity.
 
 - The `TeslaSiri` target uses a synchronized folder (`"kind": "folder"` in `TeslaSiri.xcodeproj/project.xcproj`) rooted at the `TeslaSiri/` folder. Xcode 27.3 migrated the project from `project.pbxproj` to the JSON-style `project.xcproj` format in November 2026; edit it through Xcode, not by hand. Files placed anywhere under that folder are auto-included in the target on the next Xcode build/scan; do not edit the project.pbxproj by hand to add Swift sources.
-- The root tab shell lives in `TeslaSiri/UI/AppRootView.swift` and owns auth diagnostics, selected tab, and Tessie token setup. Tab content views receive pre-built dependencies and closures — do not create their own auth/backend singletons.
+- `FleetWindow` in `ContentView.swift` keeps each window's selected tab across provider changes. `AppRootView` handles authentication, diagnostics, and tab content. It receives a data store and token store bound to the same provider.
 - The Diagnostics tab is intentionally dense because the project is currently in a "validate the backend" phase. Once data shapes stabilize, move the user-facing pieces into Dashboard and treat Diagnostics as developer/QA chrome.
 - Dashboard cards live in `TeslaSiri/UI/Dashboard/`. Reusable chrome: `AppScreenBackground`, `CardContainer`, `StatusBadge`, `LoadingRow` in `TeslaSiri/UI/Shared/CardContainer.swift`; `DashboardCard` (symbol + title header, optional trailing accessory), `DashboardCardHeader` (also used by `CardContainer`), `MetricValueText`, and `DashboardCardLinkLabel` in `TeslaSiri/UI/Shared/DashboardCard.swift`; `LoadingCard`, `LoadingStateView`, `ErrorStateView`, `EmptyStateView` in `TeslaSiri/UI/Dashboard/DashboardView.swift`; `DiagnosticMonospacedValue` / `DiagnosticGroupHeader` in `TeslaSiri/UI/Shared/DiagnosticMonospacedValue.swift`. Use these instead of repeating backgrounds/padding.
 - **Design system (`TeslaSiri/UI/Shared/AppTheme.swift`)**: every tab uses the same "showroom" palette — `AppTheme.pageBackground` (warm off-white / near-black) behind `AppTheme.surface` cards. Use `.appSurface(cornerRadius:)` for any rounded card or tile (fill + hairline + light-mode shadow) and `AppTheme.insetSurface` for tiles nested inside a card. Never apply a rectangular `.background(Color)` and then stroke a rounded border on top — that leaves square corners (the old Dashboard tile bug). Hairlines strengthen automatically under Increase Contrast. Use `.readableContentWidth()` to cap scrolling tab content at 720 pt on iPad, and `RelativeTimeText` for "Updated 4 minutes ago" timestamps (not `Text(date, style: .relative)`, which renders "5 mths"). Run raw backend states through `humanizedStatus(_:)` ("In_Progress" → "In progress").
@@ -119,7 +119,7 @@ Do not commit Tessie access tokens, keychain dumps, raw vehicle exports, private
 - `FleetWidgetStore` fetches through `FleetIntentService`, saves a minimal snapshot without location or credentials, separates live/dry-run/demo caches, and rejects stale session results. Credential changes clear widget data. `FleetWidgetActionIntent` is a hidden, widget-only action adapter; it validates an explicitly pinned VIN without fallback and only supports lock, start climate, start charging, and refresh. Control Center actions follow the selected car.
 - Widgets refresh on WidgetKit's budgeted timeline (requested every 15 minutes while charging, otherwise 30 minutes), after selection/credential changes and app controls, or through their refresh button. There is no APNs widget sender or continuous live feed. The shared keychain uses `AfterFirstUnlockThisDeviceOnly` so background widgets can authenticate while iPhone is locked after its first unlock.
 
-Siri, Shortcuts, Spotlight, and background intent execution live in a **local Swift package** (`FleetKit/`) plus a thin **ExtensionKit** host (`TeslaSiriAppIntents/`). The main app owns the Tessie access token; the extension reads the mirrored token and calls Tessie on its own.
+Siri, Shortcuts, Spotlight, and background intent execution live in a **local Swift package** (`FleetKit/`) plus a thin **ExtensionKit** host (`TeslaSiriAppIntents/`). The main app owns a token for each provider. The extension reads the selected provider and its mirrored token to make its own requests.
 
 ### Layout
 
@@ -147,7 +147,7 @@ Both **TeslaSiri** and **TeslaSiriAppIntents** targets link the local `FleetKit`
 ### Architecture (process boundaries)
 
 ```
-Main app (TessieAccessTokenStore, FleetDataStore)
+Main app (FleetProviderTokenStore, FleetDataStore)
     → FleetTokenBridge.sync / clear
     → FleetSharedTokenStore (shared keychain token + App Group selected VIN)
     → FleetIntentClient (extension + BG tasks + intents)
@@ -157,7 +157,7 @@ TeslaSiriApp + TeslaSiriAppIntentsExtension
 ```
 
 - **FleetKit is self-contained**: its own minimal models, HTTP client, and intents. The extension must **not** import `FleetDataStore`, dashboard UI, or the app’s full `FleetAPIClient`.
-- **App is source of truth** for the Tessie token. Tessie tokens do not refresh; on 401 the extension surfaces `FleetKitError.sessionExpired` and asks the user to replace the token in the app.
+- **App is source of truth** for each provider token. Tessie tokens do not refresh; on 401 the extension surfaces `FleetKitError.sessionExpired` and asks the user to replace the token in the app.
 - **Vehicle resolution** (`FleetIntentService.resolvedVehicle`) uses the selected VIN, then the first active vehicle, when the vehicle parameter is omitted. An explicit vehicle must belong to the authenticated roster. A missing named vehicle fails before any command is sent. Siri entity queries and controls reuse a short-lived verified roster scoped to the account and command mode.
 - **Isolated test injection**: `FleetIntentService.testingOverride` (`@TaskLocal`) lets Swift Testing suites execute `@AppIntent(.tool)` `perform()` methods against per-test `URLSession` mocks without adding helper stored properties to intent structs.
 
@@ -167,22 +167,29 @@ TeslaSiriApp + TeslaSiriAppIntentsExtension
 
 | Event | Required action |
 |-------|-----------------|
-| App launch | `FleetTokenBridge.sync(store:)` in `ContentView` `.task` |
+| App launch | `FleetTokenBridge.sync(store:)` in the `AppRootView` task before loading the roster, then sync the selected VIN. |
 | App foreground | `FleetTokenBridge.sync` on `scenePhase == .active` |
 | Sign-in | `FleetTokenBridge.sync` after `loadInitialData()` in `AppRootView.signIn()` |
-| Sign-out | `FleetTokenBridge.clear()` after `tokenStore.deleteAccessToken()` |
+| Sign-out | `FleetTokenBridge.clear(provider:)` after `tokenStore.deleteAccessToken()` |
 | Fleet reload | `FleetTokenBridge.sync` in `AppRootView.reloadFleet()` |
 | Vehicle picker change | `FleetTokenBridge.sync` in `DashboardView` `onSelect` |
 | Automatic roster selection change | `FleetTokenBridge.syncSelectedVehicle` in `AppRootView` after verifying the local token |
-| Tessie token save/delete | `TessieAccessTokenStore.saveAccessToken` / `deleteAccessToken` also write/clear `FleetSharedTokenStore` |
+| Provider token save/delete | `FleetProviderTokenStore.saveAccessToken` / `deleteAccessToken` also write/clear `FleetSharedTokenStore` |
 
 `FleetTokenBridge.sync` **clears** the shared access token when `accessToken()` throws (do not leave stale tokens). It calls `TeslaSiriShortcuts.updateAppShortcutParameters()` so shortcut defaults pick up the current vehicle name.
 
 Access tokens live in **shared keychain** (`FleetSharedTokenStore`); selected VIN stays in App Group `UserDefaults`. Legacy UserDefaults tokens are migrated on read.
 
+### Provider selection and Teslascope
+
+- Settings selects a single `FleetProvider` shared by the app, App Intents, and widgets. Tessie is the default and retains its existing keychain, selected VIN, and disk cache keys. The app and extension store Teslascope credentials in separate keychain accounts. A provider switch invalidates the active session and constructs a fresh app store.
+- The app uses `FleetDataLoading` for both providers. `TeslascopeFleetDataClient` and `FleetIntentClient` use FleetKit’s `TeslascopeClient` for transport and conversion. Keep the mapping in those adapters so views, widgets and intents consume normalized Fleet values.
+- Resolve Teslascope public IDs using the authenticated Tesla account roster. VIN remains the vehicle identifier in Wattie. Teslascope drive and charge IDs use `VIN:teslascope:id`. Keep Tessie’s existing `VIN:id` identifiers valid.
+- Teslascope uses bearer-authenticated requests to `https://teslascope.com/api`. `tesla-accounts` and `vehicles` cover discovery and vehicle reads. Commands require `controls` and an eligible subscription. Advertise only commands with documented mappings, and distinguish a command acknowledgement from observed vehicle state. [Authentication](https://teslascope.com/developers/documentation) · [Account](https://teslascope.com/developers/documentation/account) · [Vehicles](https://teslascope.com/developers/documentation/vehicles) · [Commands](https://teslascope.com/developers/documentation/vehicles-tesla-api)
+
 ### Tessie transport
 
-Both clients use `https://api.tessie.com` with `Authorization: Bearer <token>`. `FleetIntentClient` must join API paths with `URLComponents` (see `makeURL` in `FleetKitClient.swift`). **Never** use `baseURL.appendingPathComponent("/...")` for a complete endpoint path — it percent-encodes separators. Match `TeslaSiri/FleetAPI/FleetAPIClient.makeURL`.
+Both Tessie clients use `https://api.tessie.com` with `Authorization: Bearer <token>`. `FleetIntentClient` must join API paths with `URLComponents` (see `makeURL` in `FleetKitClient.swift`). **Never** use `baseURL.appendingPathComponent("/...")` for a complete endpoint path — it percent-encodes separators. Match `TeslaSiri/FleetAPI/FleetAPIClient.makeURL`.
 
 - Retain the app's normalized `Fleet*` model layer. Tessie DTOs and adapters live in `TessieAPIModels.swift`; FleetKit keeps its own extension-safe subset.
 - Tessie has no cursor-delta endpoint, so `changes(since:)` refreshes the active roster from `/vehicles` and advances a local polling cursor. Use the returned roster to reconcile vehicles, selection, and per-VIN caches.
@@ -201,7 +208,7 @@ Read `.agents/skills/siri-ai-tool-design/SKILL.md` whenever adding or editing Ap
 - **`@AppIntent(.tool)`**: Every custom read/control/workflow intent uses `@AppIntent(.tool)` with an explicit `: AppIntent` conformance and rich natural-language `IntentDescription` + `@Parameter(description:)` literals. Do **not** add non-parameter stored properties to an `@AppIntent(.tool)` struct (the macro attaches `@Parameter` to every un-annotated stored property).
 - **Structured return values**: Every mutation/control tool returns `ReturnsValue<VehicleCommandResultEntity> & ProvidesDialog` (`FleetSiriAITypes.swift`) so Siri AI can verify applied values without re-polling `/{vin}/state`.
 - Interactive climate cards use the acknowledged target and any fresh, timestamped cabin observations. Keep the setpoint separate from the measured temperature. A warmer/cooler tap can skip the HVAC start during the same recent interaction. An intervening stop, a newer off reading, or an expired start restores the start-before-set sequence.
-- For several changes to the same vehicle, use **Control Car** directly. Resolve the car once, check all fields and conflicts, confirm sensitive steps together, and send the commands in dependency order. On a partial failure the result identifies accepted changes and the unconfirmed step. **List Cars** is optional discovery. Its capability properties describe requests available in Wattie and take reported hardware exclusions into account. Tessie still decides whether a specific command succeeds.
+- For several changes to the same vehicle, use **Control Car** directly. Resolve the car once, check all fields and conflicts, confirm sensitive steps together, and send the commands in dependency order. On a partial failure the result identifies accepted changes and the unconfirmed step. **List Cars** is optional discovery. Its capability properties describe requests available in Wattie and take reported hardware exclusions into account. The connected provider decides whether a specific command succeeds.
 - **`@AppEntity(.generable)` vs `SyncableEntity`**:
   - Server-backed records (`VehicleEntity`, `VehicleStatusEntity`, `DriveEntity`, `ChargeSessionEntity`, `SoftwareUpdateEntity`, `ReleaseNoteEntity`) conform to `IndexedEntity` + `SyncableEntity` with `@Property(title:description:)` on model fields (27.3 deployment target allows `description:`/`visibility:`; VINs are `visibility: .internal`) (and `EntityStringQuery` for natural-language matching) — **never** `@AppEntity(.generable)` (prevents hallucinated VINs).
   - Synthesized multi-field tool inputs (`CabinClimateSettings`, `DriveFilterCriteria`) use `@AppEntity(.generable)` (`TransientAppEntity` under the hood — no `id` or `defaultQuery`).
@@ -296,7 +303,7 @@ Conventions: every new intent `perform()` must create `let log = FleetIntentLog(
 ### Common pitfalls (from prior reviews)
 
 - Forgetting `FleetTokenBridge.sync` after sign-in, vehicle change, or token replacement → Siri “not signed in” or wrong account.
-- Sign-out without `FleetTokenBridge.clear()` → extension keeps old session.
+- On sign-out, delete the provider's local and shared credentials, clear the selected VIN, and remove the outgoing account's system suggestions, index entries, and battery reminder.
 - Broken FleetKit URLs via `appendingPathComponent`.
 - More than 10 `AppShortcut` entries → compile error.
 - `DriveEntityQuery.entities(for:)` must search **all** account vehicles, not only the default resolved vehicle.
@@ -317,7 +324,7 @@ Conventions: every new intent `perform()` must create `let log = FleetIntentLog(
 4. `XcodeRefreshCodeIssuesInFile` on edited Swift files.
 5. Run the relevant Swift package tests (`swift test --package-path FleetKit`) and AppIntentsTesting/XCUITest suite when one exists.
 6. `BuildProject` (catches shortcut count, `@Parameter` macro issues).
-7. Manually verify token bridge call sites if touching auth, `TessieAccessTokenStore`, `AppRootView`, or `DashboardView`.
+7. Manually verify token bridge call sites if touching auth, `FleetProviderTokenStore`, `AppRootView`, or `DashboardView`.
 
 ### Navigation handoff
 

@@ -248,12 +248,15 @@ private actor SpotlightSyncCoordinator {
     func synchronize(
         vehicles: [FleetVehicleInfo], readings: FleetSpotlightIndexer.DashboardReadings?, scope: String, repair: Bool = false
     ) async -> FleetSpotlightIndexingReport {
-        maintenanceGeneration += 1
-        let generation = maintenanceGeneration
-        if !repair { latestMaintenance = generation }
         do {
+            let service = FleetIntentService.make()
+            guard service.sessionScopeID == scope else { throw CancellationError() }
+            maintenanceGeneration += 1
+            let generation = maintenanceGeneration
+            if !repair { latestMaintenance = generation }
             return try await enqueue {
-                try await self.apply(vehicles: vehicles, readings: readings, scope: scope, repair: repair, generation: generation)
+                try await self.apply(vehicles: vehicles, readings: readings, scope: scope, repair: repair,
+                                     generation: generation, service: service)
             }
         } catch {
             if !(error is CancellationError) {
@@ -264,10 +267,10 @@ private actor SpotlightSyncCoordinator {
     }
 
     private func apply(
-        vehicles: [FleetVehicleInfo], readings: FleetSpotlightIndexer.DashboardReadings?, scope: String, repair: Bool, generation: Int
+        vehicles: [FleetVehicleInfo], readings: FleetSpotlightIndexer.DashboardReadings?, scope: String, repair: Bool,
+        generation: Int, service: FleetIntentService
     ) async throws -> FleetSpotlightIndexingReport {
         guard repair || generation == latestMaintenance else { throw CancellationError() }
-        let service = FleetIntentService.make()
         guard service.sessionScopeID == scope else { throw CancellationError() }
         if repair || manifest.scope != scope { try await reset(scope: scope) }
         defer { persist() }
@@ -292,7 +295,7 @@ private actor SpotlightSyncCoordinator {
                 }
             }
 
-            let identity = VehicleEntity(info: vehicle)
+            let identity = VehicleEntity(info: vehicle, usesTeslascope: service.usesTeslascope)
             // The roster's optional telemetry is independent of the identity registered in Spotlight.
             let fields = [identity.name, identity.model ?? "", identity.color ?? ""]
                 + (identity.controls ?? []) + (identity.additionalControls ?? [])

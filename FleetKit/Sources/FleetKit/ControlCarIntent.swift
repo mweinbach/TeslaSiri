@@ -69,7 +69,7 @@ public struct ControlCarIntent: AppIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let steps = try changes.steps(for: resolved)
-            let available = try await service.controlActions()
+            let available = try await service.controlActions(for: resolved)
             if let unavailable = steps.first(where: { !available.supports($0.action) }) {
                 throw FleetKitError.unsupportedAction(unavailable.label)
             }

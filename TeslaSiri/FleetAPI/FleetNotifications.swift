@@ -1,3 +1,4 @@
+import FleetKit
 import Foundation
 import Observation
 import UserNotifications
@@ -308,7 +309,7 @@ final class FleetNotificationWebhookStore {
 
     convenience init() {
         self.init(
-            apiClient: FleetBackend.makeAPIClient(),
+            apiClient: FleetAPIClient(accessTokenProvider: FleetBackend.makeAccessTokenStore(provider: .tessie)),
             deviceIdentity: FleetBackend.makeDeviceIdentity(),
             center: .current()
         )

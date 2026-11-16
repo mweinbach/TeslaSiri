@@ -1,4 +1,5 @@
 import CoreLocation
+import FleetKit
 import Foundation
 import Observation
 import OSLog
@@ -16,6 +17,7 @@ final class DrivePlacesIndex {
     private(set) var isIndexing = false
 
     @ObservationIgnored private let vin: String
+    @ObservationIgnored private let provider: FleetProvider
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var pendingSave: Task<Void, Error>?
     @ObservationIgnored private var savingNicknameFor: String?
@@ -33,15 +35,19 @@ final class DrivePlacesIndex {
     /// takes two.
     private static let lookupBudget = 20
 
-    static func shared(vin: String) -> DrivePlacesIndex {
-        if let index = instances[vin] { return index }
-        let index = DrivePlacesIndex(vin: vin)
+    static func shared(vin: String, provider: FleetProvider) -> DrivePlacesIndex {
+        let previous = instances[vin]
+        if let previous, previous.provider == provider { return previous }
+        previous?.refreshTask?.cancel()
+        let index = DrivePlacesIndex(vin: vin, provider: provider)
+        index.pendingSave = previous?.pendingSave
         instances[vin] = index
         return index
     }
 
-    private init(vin: String) {
+    private init(vin: String, provider: FleetProvider) {
         self.vin = vin
+        self.provider = provider
     }
 
     // MARK: - Queries
@@ -64,6 +70,7 @@ final class DrivePlacesIndex {
     }
 
     func setNickname(_ nickname: String, for placeID: String) async throws {
+        guard Self.instances[vin] === self else { throw NicknameError.placeUnavailable }
         let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         try await saveToDisk(renaming: (placeID, trimmed.isEmpty ? nil : trimmed))
     }
@@ -124,13 +131,24 @@ final class DrivePlacesIndex {
         defer { isIndexing = false }
 
         if !didLoadCache {
+            _ = await pendingSave?.result
             let snapshot = await Snapshot.load(for: vin)
             guard isCurrent() else { return }
             if let snapshot {
-                drives = snapshot.drives
-                placeIDsByArrival = snapshot.arrivals
-                placeIDsByDeparture = snapshot.departures
-                replacePlaces(with: snapshot.places)
+                if (snapshot.provider ?? FleetProvider.tessie.rawValue) == provider.rawValue {
+                    drives = snapshot.drives
+                    placeIDsByArrival = snapshot.arrivals
+                    placeIDsByDeparture = snapshot.departures
+                    replacePlaces(with: snapshot.places)
+                } else {
+                    // Nicknames belong to locations on this car. Visits and automatic labels come from its provider.
+                    replacePlaces(with: snapshot.places.compactMap { place in
+                        guard let nickname = place.nickname else { return nil }
+                        return DrivePlace(id: place.id, name: "Unnamed place", nickname: nickname,
+                                         latitude: place.latitude, longitude: place.longitude,
+                                         arrivalIDs: [], departureIDs: [], lastVisit: 0, isResolved: false)
+                    })
+                }
             }
             didLoadCache = true
         }
@@ -153,7 +171,7 @@ final class DrivePlacesIndex {
         let drivesByID = Dictionary(drives.map { ($0.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
         while isCurrent() {
             let pending = places
-                .filter { !$0.isResolved }
+                .filter { !$0.isResolved && (!$0.arrivalIDs.isEmpty || !$0.departureIDs.isEmpty) }
                 .sorted { ($0.visitCount + $0.departureIDs.count) > ($1.visitCount + $1.departureIDs.count) }
                 .prefix(Self.lookupBudget)
             guard !pending.isEmpty else { break }
@@ -183,7 +201,7 @@ final class DrivePlacesIndex {
                 try? await saveToDisk()
             }
             guard isCurrent() else { return }
-            let remaining = places.lazy.filter { !$0.isResolved }.count
+            let remaining = places.lazy.filter { !$0.isResolved && (!$0.arrivalIDs.isEmpty || !$0.departureIDs.isEmpty) }.count
             guard remaining > 0 else { break }
             isIndexing = false
             Self.log.info("\(remaining, privacy: .public) places left to name\(throttled ? " (throttled)" : "", privacy: .public); continuing in a minute")
@@ -339,7 +357,7 @@ final class DrivePlacesIndex {
         let task = Task {
             // Take the snapshot after earlier writes have committed their nicknames.
             _ = await previous?.result
-            var snapshot = Snapshot(places: places, drives: drives, arrivals: placeIDsByArrival, departures: placeIDsByDeparture)
+            var snapshot = Snapshot(provider: provider.rawValue, places: places, drives: drives, arrivals: placeIDsByArrival, departures: placeIDsByDeparture)
             if let edit {
                 guard let offset = placeOffsets[edit.id] else { throw NicknameError.placeUnavailable }
                 savingNicknameFor = edit.id
@@ -357,6 +375,7 @@ final class DrivePlacesIndex {
     }
 
     private nonisolated struct Snapshot: Codable, Sendable {
+        var provider: String?
         var places: [DrivePlace]
         var drives: [FleetDriveSession]
         var arrivals: [String: String]

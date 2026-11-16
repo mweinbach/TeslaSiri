@@ -496,7 +496,7 @@ struct FleetSandboxDataClient: FleetDataLoading {
         }
     }
 
-    private static func convertParameters(_ params: [String: JSONValue]) -> [String: FleetControlValue] {
+    static func convertParameters(_ params: [String: JSONValue]) -> [String: FleetControlValue] {
         var converted: [String: FleetControlValue] = [:]
         for (key, value) in params {
             switch value {

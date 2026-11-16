@@ -94,16 +94,29 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
 enum FleetIntentDonations {
     private static let logger = Logger(subsystem: FleetKitLog.subsystem, category: "AppIntents")
 
+    static func clearVehicleSuggestions(for vehicles: [FleetVehicle]) async {
+        INVoiceShortcutCenter.shared.setShortcutSuggestions([])
+        let identifiers = vehicles.map { EntityIdentifier(for: VehicleEntity.self, identifier: $0.vin) }
+        guard !identifiers.isEmpty else { return }
+        do {
+            try await IntentDonationManager.shared.deleteDonations(matching: .entityIdentifiers(identifiers))
+        } catch {
+            logger.warning("Could not clear vehicle donations: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     static func syncCarSuggestions(for vehicle: FleetVehicle?) async {
         let suggestions = CarSiriVoicePhrase.allCases.map { $0.makeShortcut(for: vehicle) }
         INVoiceShortcutCenter.shared.setShortcutSuggestions(suggestions)
 
         guard let vehicleEntity = VehicleEntity(vehicle: vehicle) else { return }
 
+        let revision = FleetSharedTokenStore.shared.sessionRevision
         let climateIntent = StartClimateIntent()
         climateIntent.vehicle = vehicleEntity
         await donate(climateIntent, label: "car climate capability cue")
 
+        guard FleetSharedTokenStore.shared.sessionRevision == revision else { return }
         let statusIntent = GetVehicleStatusIntent()
         statusIntent.vehicle = vehicleEntity
         await donate(statusIntent, label: "car status capability cue")
@@ -138,10 +151,12 @@ enum FleetIntentDonations {
             let intent = VentWindowsIntent()
             intent.vehicle = vehicleEntity
             await donate(intent, label: "dashboard vent windows")
-        case .trunk(let isFront):
+        case .rearTrunk(open: false):
+            return
+        case .openFrunk, .rearTrunk(open: true):
             let intent = OpenTrunkIntent()
             intent.vehicle = vehicleEntity
-            intent.trunk = isFront ? .front : .rear
+            intent.trunk = command == .openFrunk ? .front : .rear
             await donate(intent, label: "dashboard open trunk")
         case .chargePort(let open):
             let intent = SetChargePortIntent()
@@ -198,7 +213,12 @@ enum FleetIntentDonations {
 
     private static func donate(_ intent: some AppIntent, label: String) async {
         do {
-            _ = try await intent.donate()
+            let revision = FleetSharedTokenStore.shared.sessionRevision
+            let id = try await intent.donate()
+            guard FleetSharedTokenStore.shared.sessionRevision == revision else {
+                try await IntentDonationManager.shared.deleteDonations(matching: .donationIdentifier(id))
+                return
+            }
             logger.info("Donated intent for \(label, privacy: .public)")
         } catch {
             logger.warning("Intent donation failed for \(label, privacy: .public): \(error.localizedDescription, privacy: .public)")

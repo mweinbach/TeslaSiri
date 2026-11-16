@@ -1,9 +1,30 @@
 import Foundation
 
-/// Shared configuration for Tessie and cross-process storage.
+public enum FleetProvider: String, CaseIterable, Sendable {
+    case tessie
+    case teslascope
+
+    public var displayName: String {
+        switch self {
+        case .tessie: "Tessie"
+        case .teslascope: "Teslascope"
+        }
+    }
+
+    public var tokenSettingsURL: URL {
+        let address = switch self {
+        case .tessie: "https://dash.tessie.com/settings/api"
+        case .teslascope: "https://teslascope.com/developers/applications"
+        }
+        guard let url = URL(string: address) else { preconditionFailure("Invalid token settings URL.") }
+        return url
+    }
+}
+
+/// Shared configuration for vehicle data providers and cross-process storage.
 ///
 /// `FleetKit` is intentionally self-contained so the App Intents extension can
-/// authenticate and talk to Tessie without dragging in the app's full data
+/// authenticate and access vehicle providers without importing the app's data
 /// layer. The app mirrors the current access token into the shared keychain so
 /// this module can read it from either process.
 public enum FleetKitConfig {

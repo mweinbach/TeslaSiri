@@ -7,6 +7,7 @@ enum AppTab: Hashable, Identifiable, CaseIterable {
     case dashboard
     case drives
     case diagnostics
+    case settings
 
     var id: Self { self }
 
@@ -15,6 +16,7 @@ enum AppTab: Hashable, Identifiable, CaseIterable {
         case .dashboard: "Vehicle"
         case .drives: "Drives"
         case .diagnostics: "Diagnostics"
+        case .settings: "Settings"
         }
     }
 
@@ -23,6 +25,7 @@ enum AppTab: Hashable, Identifiable, CaseIterable {
         case .dashboard: "car.fill"
         case .drives: "map"
         case .diagnostics: "stethoscope"
+        case .settings: "gearshape"
         }
     }
 }
@@ -48,14 +51,16 @@ struct BackendDiagnosticsState: Equatable {
 
 struct AppRootView: View {
     let store: FleetDataStore
-    let tokenStore: TessieAccessTokenStore
+    let tokenStore: FleetProviderTokenStore
+    @Binding var selectedTab: AppTab
+    let isCurrentSession: () -> Bool
+    let onSelectProvider: (FleetProvider) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var authErrorMessage: String?
     @State private var diagnostics = BackendDiagnosticsState()
     @State private var requestedDriveSessionID: String?
-    @State private var selectedTab: AppTab = CommandLine.arguments.contains("--verify-demo-siri") ? .diagnostics : .dashboard
     @State private var spotlightSearchTerm = ""
     @State private var isAuthenticating = false
     @State private var sandboxMode = FleetSandboxStore.shared.mode()
@@ -86,7 +91,7 @@ struct AppRootView: View {
                   let vin = components.queryItems?.first(where: { $0.name == "vin" })?.value else { return }
             Task {
                 await store.loadInitialDataIfNeeded()
-                guard store.vehicles.contains(where: { $0.vin == vin }) else { return }
+                guard isCurrentSession(), store.vehicles.contains(where: { $0.vin == vin }) else { return }
                 openVehicle(vin, tab: .dashboard)
             }
         }
@@ -127,8 +132,12 @@ struct AppRootView: View {
         .task {
             refreshSandboxSnapshot()
             refreshDiagnostics()
+            await FleetTokenBridge.sync(store: store)
+            guard isCurrentSession(), !Task.isCancelled else { return }
             if diagnostics.isSignedIn || sandboxMode == .demoVehicle {
                 await store.loadInitialDataIfNeeded()
+                guard isCurrentSession(), !Task.isCancelled else { return }
+                FleetTokenBridge.syncSelectedVehicle(store: store)
             }
             configureFleetPolling(for: scenePhase)
         }
@@ -143,6 +152,7 @@ struct AppRootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             configureFleetPolling(for: newPhase)
             if newPhase == .active {
+                Task { await FleetTokenBridge.sync(store: store) }
                 refreshSandboxSnapshot()
                 if sandboxMode == .demoVehicle {
                     Task { await store.refresh() }
@@ -163,7 +173,7 @@ struct AppRootView: View {
             }
         }
         .onChange(of: store.selectedVIN) { previousVIN, _ in
-            guard !isAuthenticating,
+            guard isCurrentSession(), !isAuthenticating,
                   !store.vehicles.contains(where: { $0.vin == previousVIN }),
                   sandboxMode == .demoVehicle || (try? tokenStore.loadAccessToken()) != nil else {
                 return
@@ -193,6 +203,15 @@ struct AppRootView: View {
                 onEnableDemoCar: {
                     Task { await updateSandboxMode(.demoVehicle) }
                 }
+            )
+        case .settings:
+            ProviderSettingsView(
+                provider: store.provider,
+                isSignedIn: diagnostics.isSignedIn,
+                isAuthenticating: isAuthenticating,
+                onSelectProvider: onSelectProvider,
+                onSignIn: { token in Task { await signIn(accessToken: token) } },
+                onSignOut: { Task { await signOut() } }
             )
         case .drives:
             DrivesView(
@@ -268,21 +287,30 @@ struct AppRootView: View {
     // MARK: - Actions
 
     private func signIn(accessToken: String) async {
+        guard isCurrentSession(), !isAuthenticating else { return }
         isAuthenticating = true
         defer { isAuthenticating = false }
 
         do {
-            let validationClient = FleetAPIClient(accessTokenProvider: StaticFleetAccessTokenProvider(token: accessToken))
+            let validationClient = FleetBackend.makeAPIClient(
+                provider: store.provider,
+                accessTokenProvider: StaticFleetAccessTokenProvider(token: accessToken)
+            )
             let bootstrap = try await validationClient.bootstrap()
-            let previousScope = FleetIntentService.make().sessionScopeID
+            guard isCurrentSession() else { return }
+            let outgoingVehicles = store.vehicles
+            let previousRevision = FleetSharedTokenStore.shared.sessionRevision
             try tokenStore.saveAccessToken(accessToken)
-            if FleetIntentService.make().sessionScopeID != previousScope {
-                try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
-            }
             await store.reset(clearCache: true)
-            diagnostics.probeMessage = "Connected to Tessie. Loading \(bootstrap.data.vehicles.count) vehicle(s)."
+            guard isCurrentSession() else { return }
+            if FleetSharedTokenStore.shared.sessionRevision != previousRevision {
+                await FleetTokenBridge.clearVehicleSystemData(for: outgoingVehicles)
+                guard isCurrentSession() else { return }
+            }
+            diagnostics.probeMessage = "Connected to \(store.provider.displayName). Loading \(bootstrap.data.vehicles.count) vehicle(s)."
             refreshDiagnostics()
             await store.loadInitialData(validatedBootstrap: bootstrap)
+            guard isCurrentSession() else { return }
             await FleetTokenBridge.sync(store: store)
             refreshDiagnostics()
             configureFleetPolling(for: scenePhase)
@@ -295,13 +323,16 @@ struct AppRootView: View {
 
     private func reloadFleet() async {
         await store.refresh()
+        guard isCurrentSession() else { return }
         await FleetTokenBridge.sync(store: store)
+        guard isCurrentSession() else { return }
         await FleetIntentDonations.donateManualStatusRefresh(for: store.selectedVehicle)
         refreshSandboxSnapshot()
         refreshDiagnostics()
     }
 
     private func updateSandboxMode(_ newMode: FleetSandboxMode) async {
+        guard isCurrentSession() else { return }
         let previousMode = FleetSandboxStore.shared.mode()
         guard previousMode != newMode else { return }
 
@@ -311,12 +342,14 @@ struct AppRootView: View {
         let crossedDemoBoundary = (previousMode == .demoVehicle) != (newMode == .demoVehicle)
         if crossedDemoBoundary {
             try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
+            guard isCurrentSession() else { return }
             await store.reset(clearCache: false)
+            guard isCurrentSession() else { return }
             if newMode == .demoVehicle || diagnostics.isSignedIn {
                 await store.loadInitialDataIfNeeded()
                 await FleetTokenBridge.sync(store: store)
             } else {
-                FleetTokenBridge.clear()
+                FleetTokenBridge.clear(provider: store.provider)
             }
             configureFleetPolling(for: scenePhase)
         }
@@ -325,6 +358,7 @@ struct AppRootView: View {
     }
 
     private func applySandboxPreset(_ preset: FleetDemoPreset) async {
+        guard isCurrentSession() else { return }
         FleetSandboxStore.shared.applyPreset(preset)
         refreshSandboxSnapshot()
         if sandboxMode == .demoVehicle {
@@ -338,7 +372,9 @@ struct AppRootView: View {
         if FleetSandboxStore.shared.mode() != .demoVehicle {
             await updateSandboxMode(.demoVehicle)
         }
+        guard isCurrentSession() else { return }
         await siriVerificationRunner.runAllOnDemoCar()
+        guard isCurrentSession() else { return }
         refreshSandboxSnapshot()
         await store.loadInitialData()
         await FleetTokenBridge.sync(store: store)
@@ -355,6 +391,7 @@ struct AppRootView: View {
     }
 
     private func openVehicle(_ vin: String, tab: AppTab) {
+        guard isCurrentSession() else { return }
         if !vin.isEmpty, vin != store.selectedVIN {
             store.selectVehicle(vin: vin)
             Task { await FleetTokenBridge.sync(store: store) }
@@ -370,6 +407,7 @@ struct AppRootView: View {
         selectedTab = .dashboard
         Task {
             do {
+                guard isCurrentSession() else { return }
                 let initialSession = FleetIntentService.make().sessionScopeID
                 let result = try await phrase.perform(vinOverride: vin)
                 guard let initialSession, initialSession == FleetIntentService.make().sessionScopeID else { return }
@@ -388,7 +426,7 @@ struct AppRootView: View {
     }
 
     private func configureFleetPolling(for phase: ScenePhase) {
-        if phase == .active, diagnostics.isSignedIn || sandboxMode == .demoVehicle {
+        if isCurrentSession(), phase == .active, diagnostics.isSignedIn || sandboxMode == .demoVehicle {
             store.startPolling()
         } else {
             store.stopPolling()
@@ -397,18 +435,18 @@ struct AppRootView: View {
 
     private func runBackendProbe() async {
         diagnostics.isProbeRunning = true
-        diagnostics.probeMessage = "Checking Tessie API access."
+        diagnostics.probeMessage = "Checking \(store.provider.displayName) API access."
         defer {
             diagnostics.isProbeRunning = false
             refreshDiagnostics()
         }
 
         do {
-            let apiClient = FleetBackend.makeAPIClient()
-            let vehiclePage = try await apiClient.vehicles(includeLive: true)
+            let apiClient = FleetBackend.makeAPIClient(provider: store.provider)
+            let bootstrap = try await apiClient.bootstrap()
             diagnostics.probeMessage = backendProbeMessage(
-                vehicleCount: vehiclePage.data.count,
-                requestID: vehiclePage.requestID
+                vehicleCount: bootstrap.data.vehicles.count,
+                requestID: bootstrap.requestID
             )
         } catch {
             diagnostics.probeMessage = error.localizedDescription
@@ -416,18 +454,23 @@ struct AppRootView: View {
     }
 
     private func signOut() async {
+        guard isCurrentSession(), !isAuthenticating else { return }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
         do {
+            let outgoingVehicles = store.vehicles
             try tokenStore.deleteAccessToken()
-            FleetTokenBridge.clear()
+            FleetTokenBridge.clear(provider: store.provider)
             await store.reset(clearCache: true)
+            guard isCurrentSession() else { return }
+            await FleetTokenBridge.clearVehicleSystemData(for: outgoingVehicles)
+            guard isCurrentSession() else { return }
             if sandboxMode == .demoVehicle {
                 await store.loadInitialData()
-                FleetTokenBridge.syncSelectedVehicle(store: store, forceShortcutRefresh: true)
-            } else {
-                try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
-                store.stopPolling()
+                guard isCurrentSession() else { return }
+                await FleetTokenBridge.sync(store: store)
             }
-            diagnostics.probeMessage = "Disconnected Tessie and cleared cached fleet data."
+            diagnostics.probeMessage = "Disconnected \(store.provider.displayName) and cleared cached fleet data."
             refreshSandboxSnapshot()
             refreshDiagnostics()
         } catch {
@@ -450,13 +493,15 @@ struct AppRootView: View {
             diagnostics.isSignedIn = token != nil
             diagnostics.tokenExpiresAt = nil
 
-            if token != nil {
+            diagnostics.clearTokenInspection()
+            if token != nil, store.provider == .tessie {
                 diagnostics.tokenAudience = ["https://api.tessie.com"]
                 diagnostics.tokenFormat = "Tessie access token"
                 diagnostics.tokenIssuer = "Tessie Developer Settings"
                 diagnostics.tokenScopes = TessieModelAdapter.capabilities.scopes
-            } else {
-                diagnostics.clearTokenInspection()
+            } else if token != nil {
+                diagnostics.tokenFormat = "Personal access token"
+                diagnostics.tokenIssuer = store.provider.displayName
             }
         } catch {
             diagnostics.isSignedIn = false
@@ -474,7 +519,7 @@ struct AppRootView: View {
     }
 
     private func backendProbeMessage(vehicleCount: Int, requestID: String?) -> String {
-        var message = "Tessie API OK. Vehicles: \(vehicleCount)."
+        var message = "\(store.provider.displayName) API OK. Vehicles: \(vehicleCount)."
         if let requestID {
             message += " Request ID: \(requestID)."
         }
@@ -485,6 +530,9 @@ struct AppRootView: View {
 #Preview {
     AppRootView(
         store: .previewLoaded(),
-        tokenStore: TessieAccessTokenStore()
+        tokenStore: FleetProviderTokenStore(provider: .tessie),
+        selectedTab: .constant(.dashboard),
+        isCurrentSession: { true },
+        onSelectProvider: { _ in }
     )
 }

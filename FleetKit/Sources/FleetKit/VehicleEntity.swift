@@ -23,7 +23,7 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
 
     @Property(
         title: "Model",
-        description: "The car's model, such as Model 3, Model Y, Model S, Model X, or Cybertruck. Empty if Tessie hasn't reported it.",
+        description: "The car's model, such as Model 3, Model Y, Model S, Model X, or Cybertruck. Empty if the provider hasn't reported it.",
         indexingKey: \.kind
     )
     public var model: String?
@@ -93,33 +93,41 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
         self.color = color
     }
 
-    public init(info: FleetVehicleInfo) {
+    public init(info: FleetVehicleInfo, usesTeslascope: Bool = false) {
         self.id = info.vin
         self.name = info.name
         self.model = info.modelName
         self.color = info.colorName
-        var commands = [
-            "Turn cabin climate on or off and set the target temperature",
-            "Adjust front seat heat, steering wheel heat, and max defrost",
-            "Turn Dog Mode or Bioweapon Defense Mode on or off where equipped",
-            "Lock or unlock the doors and enable or disable Sentry Mode",
-            "Start or stop charging, set the charge limit and charging amps, and open or close the charge port",
-            "Vent or close the windows, honk the horn, and flash the lights"
-        ]
-        if info.canActuateTrunks != false {
-            commands.append(info.canActuateTrunks == true ? "Open the trunk or frunk" : "Open the trunk or frunk if equipped")
+        let allowsVehicle = !usesTeslascope || info.allowsVehicleCommands != false
+        let allowsCharging = !usesTeslascope || info.allowsChargingCommands != false
+        var commands: [String] = []
+        var additional: [String] = []
+        if allowsVehicle {
+            commands = [
+                "Turn cabin climate on or off and set the target temperature",
+                usesTeslascope ? "Adjust seat heat and max defrost" : "Adjust front seat heat, steering wheel heat, and max defrost",
+                usesTeslascope ? "Turn Dog Mode on or off" : "Turn Dog Mode or Bioweapon Defense Mode on or off where equipped",
+                usesTeslascope ? "Enable or disable Sentry Mode; lock or unlock the doors if Allow Unlock is enabled in Teslascope" : "Lock or unlock the doors and enable or disable Sentry Mode",
+                "Vent or close the windows, honk the horn, and flash the lights"
+            ]
+            if info.canActuateTrunks != false {
+                commands.append(info.canActuateTrunks == true ? "Open the trunk or frunk" : "Open the trunk or frunk if equipped")
+            }
+            if info.canAcceptNavigationRequests != false {
+                commands.append(info.canAcceptNavigationRequests == true ? "Send a navigation destination" : "Send a navigation destination if supported")
+            }
+            additional = [
+                "Set Tesla Seat Heater: adjust heating by seat position where equipped",
+                usesTeslascope ? "Install Tesla Software Update: start an available update now" : "Install Tesla Software Update or Cancel Tesla Software Update when an update is available"
+            ]
+            if !usesTeslascope, info.hasSeatCooling != false {
+                additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Heater: adjust front seat cooling" : "Set Tesla Seat Heater: adjust front seat cooling if equipped")
+            }
         }
-        if info.canAcceptNavigationRequests != false {
-            commands.append(info.canAcceptNavigationRequests == true ? "Send a navigation destination" : "Send a navigation destination if supported")
+        if allowsCharging {
+            commands.append(usesTeslascope ? "Start or stop charging, set the charge limit, and open or close the charge port" : "Start or stop charging, set the charge limit and charging amps, and open or close the charge port")
         }
         self.controls = commands
-        var additional = [
-            "Set Tesla Seat Heater: adjust heating by seat position where equipped",
-            "Install Tesla Software Update or Cancel Tesla Software Update when an update is available"
-        ]
-        if info.hasSeatCooling != false {
-            additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Heater: adjust front seat cooling" : "Set Tesla Seat Heater: adjust front seat cooling if equipped")
-        }
         self.additionalControls = additional
     }
 }
@@ -143,7 +151,7 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
         guard let defaultVehicle = service.defaultVehicle(in: vehicles) else { return [] }
         let ordered = [defaultVehicle] + vehicles.filter { $0.vin != defaultVehicle.vin }
         let entities = ordered.map { info in
-            let entity = VehicleEntity(info: info)
+            let entity = VehicleEntity(info: info, usesTeslascope: service.usesTeslascope)
             entity.isDefaultCar = info.vin == defaultVehicle.vin
             return entity
         }

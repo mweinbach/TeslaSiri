@@ -196,7 +196,7 @@ final class DemoSiriVerificationRunner {
                     format: "%.1f mi driven, %.1f kWh added ($%.2f), %.1f%% pack health",
                     driveStats.totalDistanceMiles,
                     chargeStats.totalEnergyAddedKWH,
-                    chargeStats.totalCost,
+                    chargeStats.totalCost ?? 0,
                     health.healthPercent ?? 0
                 )
             }

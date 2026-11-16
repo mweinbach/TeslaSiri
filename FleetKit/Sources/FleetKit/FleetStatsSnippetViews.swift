@@ -31,15 +31,15 @@ public struct DrivingStatsSnippetView: View {
                 Spacer()
             }
 
-            if stats.totalDistanceMiles > 0.1 && stats.autopilotDistanceMiles > 0.05 {
-                let share = min(max(stats.autopilotDistanceMiles / stats.totalDistanceMiles, 0), 1)
+            if let autopilotMiles = stats.autopilotDistanceMiles, stats.totalDistanceMiles > 0.1, autopilotMiles > 0.05 {
+                let share = min(max(autopilotMiles / stats.totalDistanceMiles, 0), 1)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
                         Label("Autopilot Share", systemImage: "steeringwheel")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.cyan)
                         Spacer()
-                        Text(String(format: "%.0f%% · %.1f mi", share * 100, stats.autopilotDistanceMiles))
+                        Text(String(format: "%.0f%% · %.1f mi", share * 100, autopilotMiles))
                             .font(.caption2.weight(.semibold))
                             .monospacedDigit()
                     }
@@ -61,7 +61,7 @@ public struct DrivingStatsSnippetView: View {
                 statPill(
                     icon: "bolt.fill",
                     label: "Energy",
-                    value: String(format: "%.1f kWh", stats.totalEnergyUsedKWH)
+                    value: stats.totalEnergyUsedKWH.map { String(format: "%.1f kWh", $0) } ?? "—"
                 )
                 statPill(
                     icon: "leaf.fill",
@@ -131,8 +131,8 @@ public struct ChargingStatsSnippetView: View {
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(.green)
                     .monospacedDigit()
-                if stats.totalCost > 0 {
-                    Text(String(format: "· $%.2f", stats.totalCost))
+                if let cost = stats.formattedCost {
+                    Text("· \(cost)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()

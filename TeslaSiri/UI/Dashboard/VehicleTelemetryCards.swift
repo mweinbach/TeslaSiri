@@ -334,7 +334,7 @@ private struct ChargeHistoryRow: View {
             parts.append(formattedNumber(power, fractionLength: 1, suffix: " kW avg"))
         }
         if let cost = session.cost, cost > 0 {
-            parts.append(cost.formatted(.currency(code: session.currency ?? "USD")))
+            parts.append(session.currency.map { cost.formatted(.currency(code: $0)) } ?? "Cost \(cost.formatted())")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -378,7 +378,8 @@ struct VehicleClimateCard: View {
     }
 
     private var statusText: String {
-        guard isOn else { return "Climate off" }
+        guard let on = snapshot.climateOn else { return "Climate status unavailable" }
+        guard on else { return "Climate off" }
         if let target = snapshot.targetTemperature {
             return "On · \(formattedNumber(target, fractionLength: 0, suffix: "°"))"
         }
@@ -394,20 +395,21 @@ struct VehicleSecurityCard: View {
     var body: some View {
         DashboardCard("Security", systemImage: "lock.shield", tint: isLocked ? .secondary : .orange) {
             VStack(alignment: .leading, spacing: 4) {
-                Image(systemName: isLocked ? "lock.fill" : "lock.open.fill")
+                Image(systemName: snapshot.locked.map { $0 ? "lock.fill" : "lock.open.fill" } ?? "lock.shield")
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(isLocked ? AnyShapeStyle(.primary) : AnyShapeStyle(.orange))
                     .frame(height: 40, alignment: .bottomLeading)
                     .accessibilityHidden(true)
-                Text(isLocked ? "Locked" : "Unlocked")
+                Text(snapshot.locked.map { $0 ? "Locked" : "Unlocked" } ?? "Lock status unavailable")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 Spacer(minLength: 10)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(closureSummary.text, systemImage: closureSummary.hasOpenItem ? "exclamationmark.triangle.fill" : "checkmark.circle")
-                        .foregroundStyle(closureSummary.hasOpenItem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    let summary = closureSummary
+                    Label(summary.text, systemImage: summary.symbol)
+                        .foregroundStyle(summary.hasOpenItem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     if let sentry = snapshot.sentryMode {
                         Label(sentry ? "Sentry on" : "Sentry off", systemImage: sentry ? "eye.fill" : "eye.slash")
                             .foregroundStyle(sentry ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
@@ -420,31 +422,23 @@ struct VehicleSecurityCard: View {
         }
     }
 
-    private var closureSummary: (text: String, hasOpenItem: Bool) {
-        var openItems: [String] = []
-        if let closures = snapshot.closures {
-            if closures.frontDriverDoorOpen == true
-                || closures.frontPassengerDoorOpen == true
-                || closures.rearDriverDoorOpen == true
-                || closures.rearPassengerDoorOpen == true {
-                openItems.append("Door")
-            }
-            if closures.frontTrunkOpen == true { openItems.append("Frunk") }
-            if closures.rearTrunkOpen == true { openItems.append("Trunk") }
-            if closures.frontDriverWindowOpen == true
-                || closures.frontPassengerWindowOpen == true
-                || closures.rearDriverWindowOpen == true
-                || closures.rearPassengerWindowOpen == true {
-                openItems.append("Window")
-            }
+    private var closureSummary: (text: String, symbol: String, hasOpenItem: Bool) {
+        let c = snapshot.closures
+        let groups: [(String, [Bool?])] = [
+            ("Door", [c?.frontDriverDoorOpen, c?.frontPassengerDoorOpen, c?.rearDriverDoorOpen, c?.rearPassengerDoorOpen]),
+            ("Frunk", [c?.frontTrunkOpen]),
+            ("Trunk", [c?.rearTrunkOpen]),
+            ("Window", [c?.frontDriverWindowOpen, c?.frontPassengerWindowOpen, c?.rearDriverWindowOpen, c?.rearPassengerWindowOpen]),
+            ("Port", [snapshot.chargePortDoorOpen])
+        ]
+        let openItems = groups.filter { $0.1.contains(true) }.map(\.0)
+        if !openItems.isEmpty {
+            return ("\(openItems.formatted(.list(type: .and))) open", "exclamationmark.triangle.fill", true)
         }
-        if snapshot.chargePortDoorOpen == true {
-            openItems.append("Port")
+        if groups.contains(where: { $0.1.contains(nil) }) {
+            return ("Closure status incomplete", "questionmark.circle", false)
         }
-        if openItems.isEmpty {
-            return ("All closed", false)
-        }
-        return ("\(openItems.formatted(.list(type: .and))) open", true)
+        return ("All closed", "checkmark.circle", false)
     }
 }
 

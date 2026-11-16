@@ -31,6 +31,7 @@ final class FleetDataStore {
 
     // MARK: - Dependencies & Background Tasks
 
+    let provider: FleetProvider
     @ObservationIgnored private let apiClient: any FleetDataLoading
     @ObservationIgnored private let cache: any FleetDataCaching
     @TaskLocal private static var batchesCacheWrites = false
@@ -168,7 +169,8 @@ final class FleetDataStore {
 
     // MARK: - Initialization & Polling
 
-    init(apiClient: any FleetDataLoading, cache: any FleetDataCaching = FleetNoDataCache()) {
+    init(apiClient: any FleetDataLoading, cache: any FleetDataCaching = FleetNoDataCache(), provider: FleetProvider = .tessie) {
+        self.provider = provider
         self.apiClient = apiClient
         self.cache = cache
     }
@@ -373,13 +375,13 @@ final class FleetDataStore {
 
     @discardableResult
     func runSelectedVehicleControl(_ command: VehicleControlCommand, for vin: String) async -> Bool {
-        guard selectedVehicle?.vin == vin, !isRunningControl,
+        guard let vehicle = selectedVehicle, vehicle.vin == vin, vehicle.allows(command), !isRunningControl,
               !pendingControls.contains(where: { $0.conflicts(with: command) }) else {
             return false
         }
 
         let generation = sessionGeneration
-        let expected = command.expectedState(from: selectedVehicle?.latest)
+        let expected = command.expectedState
         lastCommandStartedAt = .now
         let climateService: FleetIntentService? = if case .climate = command { .make() } else { nil }
         let climateScope = climateService?.sessionScopeID
@@ -583,8 +585,12 @@ final class FleetDataStore {
         }
     }
 
+    var supportsContinuousHistory: Bool {
+        provider == .tessie || FleetSandboxStore.shared.mode() == .demoVehicle
+    }
+
     func refreshSelectedVehicleTelemetry(limit: Int = 100) async {
-        guard let vin = selectedVehicle?.vin else {
+        guard supportsContinuousHistory, let vin = selectedVehicle?.vin else {
             return
         }
 
@@ -648,7 +654,7 @@ final class FleetDataStore {
         let generation = sessionGeneration
         isExportingRawData = true
         rawDataExportURL = nil
-        rawDataExportMessage = "Exporting raw Tessie data."
+        rawDataExportMessage = "Exporting raw \(provider.displayName) data."
         defer {
             if generation == sessionGeneration { isExportingRawData = false }
         }
@@ -898,13 +904,16 @@ final class FleetDataStore {
     }
 
     private func publishSpotlight(readings: FleetSpotlightIndexer.DashboardReadings?, scope: String) {
+        let checksProviderPermissions = provider == .teslascope && FleetSandboxStore.shared.mode() != .demoVehicle
         let roster = vehicles.map {
             FleetVehicleInfo(vin: $0.vin, displayName: $0.displayName, vehicleTag: $0.vehicleTag,
                              carType: $0.latest?.vehicleConfiguration?.carType,
                              exteriorColor: $0.latest?.vehicleConfiguration?.exteriorColor,
                              hasSeatCooling: $0.latest?.vehicleConfiguration?.hasSeatCooling,
                              canActuateTrunks: $0.latest?.vehicleConfiguration?.canActuateTrunks,
-                             canAcceptNavigationRequests: $0.latest?.vehicleConfiguration?.canAcceptNavigationRequests)
+                             canAcceptNavigationRequests: $0.latest?.vehicleConfiguration?.canAcceptNavigationRequests,
+                             allowsVehicleCommands: checksProviderPermissions ? $0.permissions.contains("vehicle_commands") : nil,
+                             allowsChargingCommands: checksProviderPermissions ? $0.permissions.contains("charging_commands") : nil)
         }
         Task(priority: .utility) { await FleetSpotlightIndexer.synchronize(vehicles: roster, readings: readings, scope: scope) }
     }

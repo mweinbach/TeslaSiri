@@ -21,11 +21,11 @@ public enum FleetSandboxMode: String, Codable, CaseIterable, Identifiable, Senda
     public var explanation: String {
         switch self {
         case .live:
-            "Reads and controls your real Tesla through Tessie."
+            "Reads and controls your real Tesla through your selected provider."
         case .dryRun:
             "Reads your real car's live status, but intercepts and logs every Siri and app command without touching your car."
         case .demoVehicle:
-            "Simulates a Model Y for both the app and Siri—no Tessie sign-in needed. Commands update the demo car locally."
+            "Simulates a Model Y for both the app and Siri—no provider sign-in needed. Commands update the demo car locally."
         }
     }
 
@@ -721,7 +721,7 @@ public struct FleetSandboxStore: Sendable {
         return parsed
     }
 
-    var sessionScope: String {
+    public var sessionScope: String {
         let generation = defaults?.string(forKey: Self.modeGenerationKey) ?? "initial"
         return "\(appGroup).\(mode().rawValue).\(generation)"
     }

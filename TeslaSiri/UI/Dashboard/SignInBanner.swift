@@ -1,6 +1,8 @@
+import FleetKit
 import SwiftUI
 
 struct SignInBanner: View {
+    var provider: FleetProvider = .tessie
     let onSignIn: (String) -> Void
     let isAuthenticating: Bool
 
@@ -11,9 +13,7 @@ struct SignInBanner: View {
         VStack(alignment: .leading, spacing: 18) {
             bannerHeader
 
-            SecureField(text: $accessToken, prompt: Text("Tessie access token")) {
-                Text("Tessie access token")
-            }
+            SecureField("\(provider.displayName) access token", text: $accessToken)
                 .textContentType(.password)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -38,7 +38,7 @@ struct SignInBanner: View {
                         Image(systemName: "key.fill")
                     }
 
-                    Text(isAuthenticating ? "Connecting…" : "Connect Tessie")
+                    Text(isAuthenticating ? "Connecting…" : "Connect \(provider.displayName)")
                         .fontWeight(.semibold)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -82,11 +82,13 @@ struct SignInBanner: View {
 
     private var bannerCopy: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Connect with Tessie")
+            Text("Connect with \(provider.displayName)")
                 .font(.title3.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Text("Paste a Tessie access token to unlock live status, drive history, charging, and vehicle controls.")
+            Text(provider == .tessie
+                 ? "Paste a Tessie access token to see your vehicle and drive history."
+                 : "Create a personal access token with the tesla-accounts and vehicles scopes. For vehicle controls, add the controls scope and use a Teslascope premium subscription.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -110,7 +112,7 @@ struct SignInBanner: View {
     }
 
     private var generateTokenLink: some View {
-        Link(destination: TessieAccessTokenStore.developerSettingsURL) {
+        Link(destination: provider.tokenSettingsURL) {
             Label("Generate a token", systemImage: "arrow.up.right.square")
                 .fixedSize(horizontal: false, vertical: true)
         }

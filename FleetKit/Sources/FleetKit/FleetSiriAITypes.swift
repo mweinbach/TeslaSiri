@@ -19,7 +19,7 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
     @Property(title: "Action", description: "Which command ran, such as door_lock, set_temps, or navigation_request.")
     public var action: String
 
-    /// Whether Tessie accepted the command for delivery to the vehicle.
+    /// Whether the connected provider accepted the command for delivery to the vehicle.
     @Property(title: "Succeeded", description: "Whether Tessie accepted the command and sent it to the car.")
     public var succeeded: Bool
 
@@ -199,7 +199,7 @@ public struct DriveFilterCriteria: TransientAppEntity {
     @Property(title: "Destination Query", description: "Text to match against where a drive ended, such as \"Tahoe\" for \"when did I last drive to Tahoe?\".")
     public var endLocationQuery: String?
 
-    @Property(title: "Drive Tag", description: "A Tessie drive tag to match, such as \"Work\" or \"Commute\". Leave empty for all drives.")
+    @Property(title: "Drive Tag", description: "A drive tag to match, such as \"Work\" or \"Commute\". Leave empty for all drives.")
     public var tagQuery: String?
 
     @Property(title: "Start Date", description: "Earliest start time to include, in the user’s time zone. For \"yesterday\" use the start of yesterday. Leave empty for no lower limit.")
