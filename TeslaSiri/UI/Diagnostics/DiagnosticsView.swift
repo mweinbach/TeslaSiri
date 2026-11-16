@@ -44,6 +44,9 @@ struct DiagnosticsView: View {
         )
         .observeDuoPosture()
         .background(AppScreenBackground())
+        .task(id: store.selectedVehicle?.vin) {
+            await store.refreshSelectedVehicleTelemetry()
+        }
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

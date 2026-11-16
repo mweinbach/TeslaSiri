@@ -13,6 +13,7 @@ struct DashboardView: View {
     var onEnableDemoCar: () -> Void = {}
 
     @State private var pendingCommand: VehicleControlCommand?
+    @State private var pendingVehicleVIN: String?
     @State private var isShowingConfirmation = false
 
     private var canRefreshFleet: Bool {
@@ -45,6 +46,11 @@ struct DashboardView: View {
             dashboardToolbarContent
         }
         .appEntityIdentifier(selectedVehicleEntityIdentifier)
+        .onChange(of: store.selectedVehicle?.vin) {
+            pendingCommand = nil
+            pendingVehicleVIN = nil
+            isShowingConfirmation = false
+        }
         .vehicleCommandConfirmation(
             vehicleName: store.selectedVehicle?.name ?? "Vehicle",
             pendingCommand: $pendingCommand,
@@ -63,6 +69,14 @@ struct DashboardView: View {
 
     @ToolbarContentBuilder
     private var dashboardToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            NavigationLink {
+                WidgetGalleryView()
+            } label: {
+                Label("Widgets & Controls", systemImage: "square.grid.2x2")
+            }
+        }
+
         if store.vehicles.count > 1 {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -121,7 +135,9 @@ struct DashboardView: View {
     }
 
     private func requestCommand(_ command: VehicleControlCommand) {
-        guard controlsEnabled, !store.isRunningControl else { return }
+        guard controlsEnabled, !store.isRunningControl,
+              !store.pendingControls.contains(where: { $0.conflicts(with: command) }) else { return }
+        pendingVehicleVIN = store.selectedVehicle?.vin
         if command.requiresConfirmation {
             pendingCommand = command
             isShowingConfirmation = true
@@ -132,13 +148,13 @@ struct DashboardView: View {
 
     private func performCommand(_ command: VehicleControlCommand) {
         pendingCommand = nil
-        let targetVehicle = store.selectedVehicle
+        let confirmedVIN = pendingVehicleVIN
+        pendingVehicleVIN = nil
+        guard let targetVehicle = store.selectedVehicle, targetVehicle.vin == confirmedVIN else { return }
         Task {
-            let succeeded = await store.runSelectedVehicleControl(
-                action: command.action,
-                params: command.parameters
-            )
+            let succeeded = await store.runSelectedVehicleControl(command, for: targetVehicle.vin)
             if succeeded {
+                FleetWidgetStore.reload()
                 await FleetIntentDonations.donateControlCommand(command, for: targetVehicle)
             }
         }
@@ -310,6 +326,7 @@ private struct DashboardShowroom: View {
                     units: store.user?.units,
                     isRunningControl: store.isRunningControl,
                     activeControlAction: store.activeControlAction,
+                    pendingControls: store.pendingControls,
                     controlMessage: store.vehicleControlMessage,
                     controlsEnabled: vehicle.permissions.contains("control"),
                     onCommand: onCommand
@@ -564,4 +581,3 @@ struct LoadingCard: View {
         }
     }
 }
-

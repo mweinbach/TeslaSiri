@@ -702,7 +702,8 @@ public struct FleetSandboxStore: Sendable {
     public static let shared = FleetSandboxStore()
     public static let maxCommandLogEntries = 40
 
-    private let appGroup: String
+    let appGroup: String
+    private static let modeGenerationKey = "FleetKit.sandboxModeGeneration"
 
     public init(appGroup: String = FleetKitConfig.appGroupIdentifier) {
         self.appGroup = appGroup
@@ -720,7 +721,15 @@ public struct FleetSandboxStore: Sendable {
         return parsed
     }
 
+    var sessionScope: String {
+        let generation = defaults?.string(forKey: Self.modeGenerationKey) ?? "initial"
+        return "\(appGroup).\(mode().rawValue).\(generation)"
+    }
+
     public func setMode(_ mode: FleetSandboxMode) {
+        if self.mode() != mode {
+            defaults?.set(UUID().uuidString, forKey: Self.modeGenerationKey)
+        }
         defaults?.set(mode.rawValue, forKey: FleetKitConfig.sandboxModeDefaultsKey)
         if mode == .demoVehicle, loadStoredDemoState() == nil {
             let preset = selectedPreset()

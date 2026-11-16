@@ -51,7 +51,7 @@ final class DemoSiriVerificationRunner {
         await FleetIntentService.$sandboxConfirmationRecorder.withValue({ prompt in
             confirmationBox.record(prompt)
         }) {
-            // MARK: - 1. Bundled Siri AI Skills (4 multi-step workflows)
+            // MARK: - Bundled Siri AI workflow scenarios
 
             await recordStep(.skill, "Skill: prepare-trip (Freezing Morning)") {
                 sandbox.applyPreset(.freezingMorning)
@@ -201,6 +201,34 @@ final class DemoSiriVerificationRunner {
                 )
             }
 
+            await recordStep(.skill, "Skill: vehicle-control (status and capabilities)") {
+                sandbox.applyPreset(.freezingMorning)
+                let before = sandbox.commandLog().count
+                let cars = try Self.unwrap(try await ListCarsIntent().perform().value, "ListCarsIntent")
+                let car = try Self.unwrap(cars.first, "Default demo vehicle")
+                try Self.expect(car.isDefaultCar == true && car.controls?.isEmpty == false, "Expected default car and controls")
+                let check = GetVehicleInfoIntent(vehicle: car, topics: [.climate])
+                let info = try Self.unwrap(try await check.perform().value, "GetVehicleInfoIntent")
+                try Self.expect(info.vin == car.id && info.insideTemp == 26 && info.targetTemp == 68, "Expected 26°F cabin, set to 68°F")
+                try Self.expect(sandbox.commandLog().count == before, "Discovery and readings should issue no commands")
+                return "\(car.name) is the default; the cabin is 26°F and the target is 68°F."
+            }
+
+            await recordStep(.skill, "Skill: vehicle-control (combined changes)") {
+                sandbox.applyPreset(.freezingMorning)
+                let changes = CarControlSettings()
+                changes.climateOn = true
+                changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+                changes.locked = true
+                let control = ControlCarIntent()
+                control.changes = changes
+                let applied = try Self.unwrap(try await control.perform().value, "ControlCarIntent")
+                let state = sandbox.demoState()
+                try Self.expect(applied.succeeded && state.locked && state.hvacOn && abs(state.targetTempF - 71.6) < 0.1,
+                                "Expected the default demo car locked and conditioning to 22°C")
+                return applied.summary
+            }
+
             // MARK: - 2. Climate & Comfort Siri Tools ("Warm Up" / "Cool Down" + Individual Controls)
 
             await recordStep(.tool, "Climate Tools: StartClimate & SetCabinTemperature") {
@@ -332,7 +360,7 @@ final class DemoSiriVerificationRunner {
                 let suggestedNotes = try await ReleaseNoteEntityQuery().suggestedEntities()
                 let suggestedCharges = try await ChargeSessionEntityQuery().suggestedEntities()
 
-                let warmUpSummary = try await CarSiriVoicePhrase.warmUp.perform()
+                let warmUpSummary = try await CarSiriVoicePhrase.warmUp.perform().summary
 
                 try Self.expect(
                     !suggestedVehicles.isEmpty

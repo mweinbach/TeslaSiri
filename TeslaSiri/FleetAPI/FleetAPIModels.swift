@@ -437,6 +437,9 @@ nonisolated struct FleetVehicle: Codable, Equatable, Identifiable, Sendable {
 nonisolated struct FleetVehicleConfiguration: Codable, Equatable, Sendable {
     var carType: String?
     var chassisType: String?
+    var canActuateTrunks: Bool?
+    var canAcceptNavigationRequests: Bool?
+    var hasSeatCooling: Bool?
     var exteriorColor: String?
     var fasciaType: String?
     var interiorTrimType: String?
@@ -448,6 +451,9 @@ nonisolated struct FleetVehicleConfiguration: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case carType = "car_type"
         case chassisType = "chassis_type"
+        case canActuateTrunks = "can_actuate_trunks"
+        case canAcceptNavigationRequests = "can_accept_navigation_requests"
+        case hasSeatCooling = "has_seat_cooling"
         case exteriorColor = "exterior_color"
         case fasciaType = "fascia_type"
         case interiorTrimType = "interior_trim_type"

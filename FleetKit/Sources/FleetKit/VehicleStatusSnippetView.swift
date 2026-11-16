@@ -8,22 +8,32 @@ import SwiftUI
 public struct VehicleStatusSnippetView: View {
     public let status: VehicleStatusEntity
     public let mapData: SiriRenderedMapData?
+    let topics: Set<VehicleInfoTopic>
 
-    public init(status: VehicleStatusEntity, mapData: SiriRenderedMapData? = nil) {
+    public init(
+        status: VehicleStatusEntity,
+        mapData: SiriRenderedMapData? = nil,
+        topics: Set<VehicleInfoTopic> = Set(VehicleInfoTopic.allCases)
+    ) {
         self.status = status
         self.mapData = mapData
+        self.topics = topics
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             headerRow
-            batteryCard
+            if !topics.isDisjoint(with: [.battery, .range, .charging]) {
+                batteryCard
+            }
 
-            if hasLocationCard {
+            if topics.contains(.location), hasLocationCard {
                 parkedLocationMapCard
             }
 
-            bentoGrid
+            if !topics.isDisjoint(with: [.climate, .tirePressure, .odometer, .security]) {
+                bentoGrid
+            }
 
             if !status.id.isEmpty {
                 quickControlsRow
@@ -43,7 +53,7 @@ public struct VehicleStatusSnippetView: View {
 
             Spacer()
 
-            if let isLocked = status.isLocked {
+            if topics.contains(.security), let isLocked = status.isLocked {
                 Label(
                     isLocked ? "Locked" : "Unlocked",
                     systemImage: isLocked ? "lock.fill" : "lock.open.fill"
@@ -55,7 +65,7 @@ public struct VehicleStatusSnippetView: View {
                 .background(.quaternary, in: Capsule())
             }
 
-            if status.sentryModeOn == true {
+            if topics.contains(.security), status.sentryModeOn == true {
                 Image(systemName: "record.circle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
@@ -71,11 +81,17 @@ public struct VehicleStatusSnippetView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(batteryColor)
 
-                Text(status.batteryDisplay)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                if topics == [.range] {
+                    Text(status.batteryRangeMiles.map { "\(Int($0.rounded())) mi" } ?? "Range unavailable")
+                        .font(.title.weight(.bold))
+                        .monospacedDigit()
+                } else {
+                    Text(status.batteryDisplay)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
 
-                if let range = status.batteryRangeMiles {
+                if topics.contains(.range), topics != [.range], let range = status.batteryRangeMiles {
                     Text("· \(Int(range.rounded())) mi")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -84,7 +100,7 @@ public struct VehicleStatusSnippetView: View {
 
                 Spacer()
 
-                if let state = status.chargingState, !state.isEmpty {
+                if topics.contains(.charging), let state = status.chargingState, !state.isEmpty {
                     chargingBadge(for: state)
                 }
             }
@@ -226,41 +242,51 @@ public struct VehicleStatusSnippetView: View {
     private var bentoGrid: some View {
         let unit = status.temperatureUnit ?? "°F"
         return Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-            GridRow {
-                bentoTile(
-                    icon: status.isClimateOn == true ? "fan.fill" : "thermometer.medium",
-                    title: "Cabin",
-                    value: status.insideTemp.map { "\(Int($0.rounded()))\(unit)" } ?? "—",
-                    subtitle: status.outsideTemp.map { "Out \(Int($0.rounded()))\(unit)" }
-                        ?? (status.isClimateOn == true ? "Climate On" : "Climate Off"),
-                    accent: status.isClimateOn == true ? .orange : .secondary
-                )
-
-                bentoTile(
-                    icon: hasLowTire ? "exclamationmark.tirepressure" : "car.side.rear.and.tire.marks",
-                    title: "Tires",
-                    value: compactTireRange ?? "—",
-                    subtitle: hasLowTire ? "Check pressure" : "All 4 nominal",
-                    accent: hasLowTire ? .orange : .secondary
-                )
+            if topics.contains(.climate) || topics.contains(.tirePressure) {
+                GridRow {
+                    if topics.contains(.climate) {
+                        bentoTile(
+                            icon: status.isClimateOn == true ? "fan.fill" : "thermometer.medium",
+                            title: "Cabin",
+                            value: status.insideTemp.map { "\(Int($0.rounded()))\(unit)" } ?? "—",
+                            subtitle: status.outsideTemp.map { "Out \(Int($0.rounded()))\(unit)" }
+                                ?? status.isClimateOn.map { $0 ? "Climate On" : "Climate Off" },
+                            accent: status.isClimateOn == true ? .orange : .secondary
+                        )
+                    }
+                    if topics.contains(.tirePressure) {
+                        bentoTile(
+                            icon: hasLowTire ? "exclamationmark.tirepressure" : "car.side.rear.and.tire.marks",
+                            title: "Tires",
+                            value: compactTireRange ?? "—",
+                            subtitle: hasLowTire ? "Check pressure" : status.tireSummary,
+                            accent: hasLowTire ? .orange : .secondary
+                        )
+                    }
+                }
             }
 
-            GridRow {
-                bentoTile(
-                    icon: "gauge.with.needle",
-                    title: "Odometer",
-                    value: status.odometerDisplay ?? "—",
-                    subtitle: updatedSubtitle,
-                    accent: .secondary
-                )
-
-                bentoTile(
-                    icon: hasOpenClosures ? "car.top.door.front.left.open" : "checkmark.shield.fill",
-                    title: "Closures",
-                    value: hasOpenClosures ? (status.openClosures ?? "Open") : "All Closed",
-                    subtitle: status.sentryModeOn == true ? "Sentry Active" : "Sentry Off",
-                    accent: hasOpenClosures ? .orange : .green
-                )
+            if topics.contains(.odometer) || topics.contains(.security) {
+                GridRow {
+                    if topics.contains(.odometer) {
+                        bentoTile(
+                            icon: "gauge.with.needle",
+                            title: "Odometer",
+                            value: status.odometerDisplay ?? "—",
+                            subtitle: updatedSubtitle,
+                            accent: .secondary
+                        )
+                    }
+                    if topics.contains(.security) {
+                        bentoTile(
+                            icon: hasOpenClosures ? "car.top.door.front.left.open" : "checkmark.shield.fill",
+                            title: "Closures",
+                            value: status.openClosures.map { $0 == "None" ? "All Closed" : $0 } ?? "—",
+                            subtitle: status.sentryModeOn.map { $0 ? "Sentry Active" : "Sentry Off" },
+                            accent: hasOpenClosures ? .orange : .green
+                        )
+                    }
+                }
             }
         }
     }
@@ -456,35 +482,49 @@ public struct ClimateControlSnippetView: View {
     public let vehicle: VehicleEntity
     public let status: VehicleStatusEntity?
     public let appliedSummary: String
+    private let receipt: ClimateCommandReceipt?
+    private let interactionID: String?
+    private let sessionScope: String?
 
     public init(vehicle: VehicleEntity, status: VehicleStatusEntity?, appliedSummary: String) {
+        self.init(vehicle: vehicle, status: status, appliedSummary: appliedSummary, receipt: nil,
+                  interactionID: nil, sessionScope: FleetIntentService.make().sessionScopeID)
+    }
+
+    init(vehicle: VehicleEntity, status: VehicleStatusEntity?, appliedSummary: String,
+         receipt: ClimateCommandReceipt?, interactionID: String?, sessionScope: String?) {
         self.vehicle = vehicle
         self.status = status
         self.appliedSummary = appliedSummary
+        self.receipt = receipt
+        self.interactionID = interactionID
+        self.sessionScope = sessionScope
     }
 
     public var body: some View {
-        let isRunning = status?.isClimateOn ?? true
-        let unit = status?.temperatureUnit ?? "°F"
-        let currentTargetF = resolvedTargetFahrenheit
+        let isRunning = displayedRunning
+        let unit = displayUnit == .celsius ? "°C" : "°F"
+        let currentTargetF = displayedTarget?.converted(to: .fahrenheit).value
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Label(vehicle.name, systemImage: isRunning ? "fan.fill" : "fan.slash.fill")
+                Label(vehicle.name, systemImage: isRunning == false ? "fan.slash.fill" : "fan.fill")
                     .font(.headline)
-                    .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
+                    .foregroundStyle(isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
 
                 Spacer()
 
-                Text(isRunning ? "Conditioning" : "Climate Off")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.secondary))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        (isRunning ? thermalAccent.opacity(0.16) : Color.secondary.opacity(0.14)),
-                        in: Capsule()
-                    )
+                if let isRunning {
+                    Text(isRunning ? "Conditioning" : "Climate Off")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.secondary))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            (isRunning ? thermalAccent.opacity(0.16) : Color.secondary.opacity(0.14)),
+                            in: Capsule()
+                        )
+                }
             }
 
             HStack(alignment: .center, spacing: 14) {
@@ -492,9 +532,9 @@ public struct ClimateControlSnippetView: View {
                     Text("TARGET")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text("\(Int(displayTargetTemp.rounded()))\(unit)")
+                    Text(displayedTarget.map { "\($0.value.formatted(.number.precision(.fractionLength(0...1))))\(unit)" } ?? "—")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
+                        .foregroundStyle(isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
                         .monospacedDigit()
                 }
 
@@ -512,12 +552,17 @@ public struct ClimateControlSnippetView: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+                    if let updated = status?.updatedAt, status?.insideTemp != nil || status?.outsideTemp != nil {
+                        Text("Observed \(updated, format: .dateTime.hour().minute())")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(12)
             .background(
                 LinearGradient(
-                    colors: isRunning
+                    colors: isRunning == true
                         ? [thermalAccent.opacity(0.18), thermalAccent.opacity(0.05)]
                         : [Color.secondary.opacity(0.10), Color.secondary.opacity(0.04)],
                     startPoint: .topLeading,
@@ -545,48 +590,19 @@ public struct ClimateControlSnippetView: View {
 
             if !vehicle.id.isEmpty {
                 HStack(spacing: 8) {
-                    Button(
-                        intent: AdjustSnippetClimateIntent(
-                            vehicle: vehicle,
-                            targetFahrenheit: max(60, currentTargetF - 2),
-                            turnOff: false
-                        )
-                    ) {
-                        Label("Cooler", systemImage: "minus")
-                            .frame(maxWidth: .infinity)
-                    }
-
-                    Button(
-                        intent: AdjustSnippetClimateIntent(
-                            vehicle: vehicle,
-                            targetFahrenheit: min(82, currentTargetF + 2),
-                            turnOff: false
-                        )
-                    ) {
-                        Label("Warmer", systemImage: "plus")
-                            .frame(maxWidth: .infinity)
-                    }
-
-                    if isRunning {
-                        Button(
-                            intent: AdjustSnippetClimateIntent(
-                                vehicle: vehicle,
-                                targetFahrenheit: currentTargetF,
-                                turnOff: true
-                            )
-                        ) {
-                            Label("Off", systemImage: "power")
+                    if let currentTargetF {
+                        Button(intent: adjust(targetFahrenheit: currentTargetF - 2)) {
+                            Label("Cooler", systemImage: "minus")
                                 .frame(maxWidth: .infinity)
                         }
-                    } else {
-                        Button(
-                            intent: AdjustSnippetClimateIntent(
-                                vehicle: vehicle,
-                                targetFahrenheit: currentTargetF,
-                                turnOff: false
-                            )
-                        ) {
-                            Label("Turn On", systemImage: "fan.fill")
+                        Button(intent: adjust(targetFahrenheit: currentTargetF + 2)) {
+                            Label("Warmer", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    if let isRunning {
+                        Button(intent: adjust(turnOff: isRunning)) {
+                            Label(isRunning ? "Off" : "Turn On", systemImage: isRunning ? "power" : "fan.fill")
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -599,25 +615,39 @@ public struct ClimateControlSnippetView: View {
         .appEntityIdentifier(EntityIdentifier(for: VehicleEntity.self, identifier: vehicle.id))
     }
 
-    private var displayTargetTemp: Double {
-        if let target = status?.targetTemp {
-            return target
-        }
-        return status?.temperatureUnit == "°C" ? 21.0 : 70.0
+    private func adjust(targetFahrenheit: Double? = nil, turnOff: Bool = false) -> AdjustSnippetClimateIntent {
+        AdjustSnippetClimateIntent(vehicle: vehicle, targetFahrenheit: targetFahrenheit, turnOff: turnOff,
+                                  interactionID: interactionID, scope: sessionScope)
     }
 
-    private var resolvedTargetFahrenheit: Double {
-        guard let target = status?.targetTemp else { return 70.0 }
-        if status?.temperatureUnit == "°C" {
-            return (target * 9.0 / 5.0) + 32.0
+    private var displayUnit: UnitTemperature {
+        switch status?.temperatureUnit {
+        case "°C": .celsius
+        case "°F": .fahrenheit
+        default: Locale.current.measurementSystem == .us ? .fahrenheit : .celsius
         }
-        return target
+    }
+
+    private func observationIsNewer(than commandDate: Date?) -> Bool {
+        guard let date = status?.updatedAt, let commandDate else { return false }
+        return date > commandDate
+    }
+
+    var displayedTarget: Measurement<UnitTemperature>? {
+        if let target = status?.targetTemp, status?.temperatureUnit != nil,
+           observationIsNewer(than: receipt?.targetSetAt) || receipt?.targetCelsius == nil {
+            return Measurement(value: target, unit: displayUnit)
+        }
+        return receipt?.targetCelsius.map { Measurement(value: $0, unit: .celsius).converted(to: displayUnit) }
+    }
+
+    var displayedRunning: Bool? {
+        if observationIsNewer(than: receipt?.date), let observed = status?.isClimateOn { return observed }
+        return receipt?.running ?? status?.isClimateOn
     }
 
     private var thermalAccent: Color {
-        if let inside = status?.insideTemp, inside > displayTargetTemp + 2 {
-            return .cyan
-        }
+        if let inside = status?.insideTemp, let target = displayedTarget, inside > target.value + 2 { return .cyan }
         return .orange
     }
 

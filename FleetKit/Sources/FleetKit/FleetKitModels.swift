@@ -13,6 +13,26 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
     /// Raw Tessie `vehicle_config.exterior_color`, such as `PearlWhite`.
     public let exteriorColor: String?
 
+    var hasSeatCooling: Bool?
+    var canActuateTrunks: Bool?
+    var canAcceptNavigationRequests: Bool?
+
+    var rosterCharge: FleetSnapshotInfo?
+    var rosterClimate: FleetSnapshotInfo?
+
+    func afterCommand(invalidatingCharge: Bool, invalidatingClimate: Bool) -> Self {
+        var vehicle = self
+        if invalidatingCharge { vehicle.rosterCharge = nil }
+        if invalidatingClimate, let climate = rosterClimate {
+            // A command invalidates the setpoint and HVAC state. Ambient temperatures keep their observation time.
+            vehicle.rosterClimate = FleetSnapshotInfo(
+                vin: vin, insideTemp: climate.insideTemp, outsideTemp: climate.outsideTemp,
+                updatedAt: climate.updatedAt, temperatureInFahrenheit: climate.temperatureInFahrenheit
+            )
+        }
+        return vehicle
+    }
+
     public var id: String { vin }
     public var name: String { displayName ?? vehicleTag ?? vin }
 
@@ -54,22 +74,28 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
         case exteriorColor = "exterior_color"
     }
 
-    init(
+    public init(
         vin: String,
         displayName: String?,
         vehicleTag: String? = nil,
         carType: String? = nil,
-        exteriorColor: String? = nil
+        exteriorColor: String? = nil,
+        hasSeatCooling: Bool? = nil,
+        canActuateTrunks: Bool? = nil,
+        canAcceptNavigationRequests: Bool? = nil
     ) {
         self.vin = vin
         self.displayName = displayName
         self.vehicleTag = vehicleTag
         self.carType = carType
         self.exteriorColor = exteriorColor
+        self.hasSeatCooling = hasSeatCooling
+        self.canActuateTrunks = canActuateTrunks
+        self.canAcceptNavigationRequests = canAcceptNavigationRequests
     }
 }
 
-public struct FleetSnapshotInfo: Decodable, Sendable {
+public struct FleetSnapshotInfo: Codable, Sendable {
     public let vin: String
     public let batteryLevel: Double?
     public let batteryRangeMiles: Double?
@@ -109,6 +135,12 @@ public struct FleetSnapshotInfo: Decodable, Sendable {
         updatedAt.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000) }
     }
 
+    /// A roster read can be recent even when the parked car's observation is old.
+    var isRecentRosterObservation: Bool {
+        guard let updatedAtDate else { return false }
+        return (0...30).contains(Date.now.timeIntervalSince(updatedAtDate))
+    }
+
     /// Whether climate keeper reports pet (dog) mode.
     public var petModeOn: Bool? {
         guard let climateKeeperMode else { return nil }
@@ -141,6 +173,7 @@ public struct FleetSnapshotInfo: Decodable, Sendable {
         case defrostMode = "defrost_mode"
         case tires
         case shiftState = "shift_state"
+        case temperatureInFahrenheit, openClosures, seatHeaterLevels, steeringWheelHeaterOn
     }
 
     init(
@@ -228,17 +261,17 @@ public struct FleetSnapshotInfo: Decodable, Sendable {
         climateKeeperMode = c.flexibleEnumString(.climateKeeperMode)
         defrostMode = c.flexibleEnumString(.defrostMode)
         tires = try c.decodeIfPresent(FleetTirePressuresInfo.self, forKey: .tires)
-        temperatureInFahrenheit = nil
+        temperatureInFahrenheit = try c.decodeIfPresent(Bool.self, forKey: .temperatureInFahrenheit)
         shiftState = try c.decodeIfPresent(String.self, forKey: .shiftState)
-        openClosures = nil
-        seatHeaterLevels = nil
-        steeringWheelHeaterOn = nil
+        openClosures = try c.decodeIfPresent([String].self, forKey: .openClosures)
+        seatHeaterLevels = try c.decodeIfPresent([String: Int].self, forKey: .seatHeaterLevels)
+        steeringWheelHeaterOn = try c.decodeIfPresent(Bool.self, forKey: .steeringWheelHeaterOn)
     }
 }
 
 /// TPMS readings from the live snapshot. `nil` until the backend has received
 /// a TPMS reading; values use PSI regardless of the vehicle's display settings.
-public struct FleetTirePressuresInfo: Decodable, Sendable {
+public struct FleetTirePressuresInfo: Codable, Sendable {
     public let frontLeftPSI: Double?
     public let frontRightPSI: Double?
     public let rearLeftPSI: Double?

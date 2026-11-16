@@ -60,7 +60,7 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
     }
 
     @MainActor
-    func perform(vinOverride: String? = nil) async throws -> String {
+    func perform(vinOverride: String? = nil) async throws -> (vin: String?, summary: String) {
         let targetEntity: VehicleEntity? = vinOverride.flatMap { vin in
             vin.isEmpty ? nil : VehicleEntity(id: vin, name: "Car")
         }
@@ -70,20 +70,20 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
             let intent = StartClimateIntent()
             intent.vehicle = targetEntity
             let result = try await intent.perform()
-            return result.value?.summary ?? "Climate is starting in your car."
+            return (result.value?.vin, result.value?.summary ?? "Climate is starting in your car.")
         case .lock:
             let intent = LockVehicleIntent()
             intent.vehicle = targetEntity
             let result = try await intent.perform()
-            return result.value?.summary ?? "Locked your car."
+            return (result.value?.vin, result.value?.summary ?? "Locked your car.")
         case .checkStatus:
             let intent = GetVehicleStatusIntent()
             intent.vehicle = targetEntity
             let result = try await intent.perform()
             if let status = result.value {
-                return "\(status.vehicleName): \(status.statusSummary)"
+                return (status.vin, "\(status.vehicleName): \(status.statusSummary)")
             }
-            return "Refreshed your car's status."
+            return (nil, "Refreshed your car's status.")
         }
     }
 }

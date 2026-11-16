@@ -170,7 +170,7 @@ private struct PreviewFleetDataClient: FleetDataLoading {
         makePage(data: FleetSyncChanges(), cursor: cursor + 1, requestID: "preview")
     }
 
-    func latestSnapshot(vin: String) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
         makePage(data: FleetLatestSnapshot(vin: vin), requestID: "preview-live")
     }
 

@@ -1,5 +1,4 @@
 import AppIntents
-import OSLog
 
 /// Shared copy and helpers for vehicle-scoped App Intent metadata.
 enum FleetIntentMetadata {
@@ -17,22 +16,11 @@ public struct SelectedVehicleOptionsProvider: DynamicOptionsProvider {
     public init() {}
 
     public func results() async throws -> [VehicleEntity] {
-        try await FleetIntentService.make().vehicles().map(VehicleEntity.init(info:))
+        try await VehicleEntity.defaultQuery.allEntities()
     }
 
     public func defaultResult() async -> VehicleEntity? {
-        let service = FleetIntentService.make()
-        guard let vehicles = try? await service.vehicles(), !vehicles.isEmpty else {
-            FleetKitLog.entities.warning("SelectedVehicleOptionsProvider has no vehicles for a default")
-            return nil
-        }
-        if let vin = FleetSharedTokenStore.shared.selectedVIN(),
-           let match = vehicles.first(where: { $0.vin == vin }) {
-            FleetKitLog.entities.info("SelectedVehicleOptionsProvider default: \(match.name, privacy: .public) (shared selected VIN)")
-            return VehicleEntity(info: match)
-        }
-        FleetKitLog.entities.info("SelectedVehicleOptionsProvider default: \(vehicles[0].name, privacy: .public) (first vehicle)")
-        return VehicleEntity(info: vehicles[0])
+        try? await results().first
     }
 }
 

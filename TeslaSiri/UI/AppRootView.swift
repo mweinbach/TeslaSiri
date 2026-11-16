@@ -77,6 +77,19 @@ struct AppRootView: View {
         .onAppIntentExecution(OpenVehicleIntent.self) { intent in
             openVehicle(intent.target.id, tab: .dashboard)
         }
+        .onChange(of: sandboxMode) { _, _ in
+            FleetWidgetStore.reload()
+        }
+        .onOpenURL { url in
+            guard url.scheme == "wattie", url.host == "vehicle",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let vin = components.queryItems?.first(where: { $0.name == "vin" })?.value else { return }
+            Task {
+                await store.loadInitialDataIfNeeded()
+                guard store.vehicles.contains(where: { $0.vin == vin }) else { return }
+                openVehicle(vin, tab: .dashboard)
+            }
+        }
         .onAppIntentExecution(OpenVehicleStatusIntent.self) { intent in
             openVehicle(intent.target.vin, tab: .dashboard)
         }
@@ -205,6 +218,7 @@ struct AppRootView: View {
                     },
                     onReloadFleet: {
                         await reloadFleet()
+                        await store.refreshSelectedVehicleTelemetry()
                     },
                     onExportRawData: {
                         Task { await exportRawData() }
@@ -260,13 +274,16 @@ struct AppRootView: View {
         do {
             let validationClient = FleetAPIClient(accessTokenProvider: StaticFleetAccessTokenProvider(token: accessToken))
             let bootstrap = try await validationClient.bootstrap()
+            let previousScope = FleetIntentService.make().sessionScopeID
             try tokenStore.saveAccessToken(accessToken)
+            if FleetIntentService.make().sessionScopeID != previousScope {
+                try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
+            }
             await store.reset(clearCache: true)
             diagnostics.probeMessage = "Connected to Tessie. Loading \(bootstrap.data.vehicles.count) vehicle(s)."
             refreshDiagnostics()
             await store.loadInitialData(validatedBootstrap: bootstrap)
             await FleetTokenBridge.sync(store: store)
-            _ = await FleetSpotlightIndexer.reindexAll()
             refreshDiagnostics()
             configureFleetPolling(for: scenePhase)
         } catch {
@@ -279,7 +296,6 @@ struct AppRootView: View {
     private func reloadFleet() async {
         await store.refresh()
         await FleetTokenBridge.sync(store: store)
-        _ = await FleetSpotlightIndexer.reindexAll()
         await FleetIntentDonations.donateManualStatusRefresh(for: store.selectedVehicle)
         refreshSandboxSnapshot()
         refreshDiagnostics()
@@ -294,14 +310,13 @@ struct AppRootView: View {
 
         let crossedDemoBoundary = (previousMode == .demoVehicle) != (newMode == .demoVehicle)
         if crossedDemoBoundary {
+            try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
             await store.reset(clearCache: false)
             if newMode == .demoVehicle || diagnostics.isSignedIn {
                 await store.loadInitialDataIfNeeded()
                 await FleetTokenBridge.sync(store: store)
-                _ = await FleetSpotlightIndexer.reindexAll()
             } else {
                 FleetTokenBridge.clear()
-                try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
             }
             configureFleetPolling(for: scenePhase)
         }
@@ -315,7 +330,6 @@ struct AppRootView: View {
         if sandboxMode == .demoVehicle {
             await store.loadInitialData()
             await FleetTokenBridge.sync(store: store)
-            _ = await FleetSpotlightIndexer.reindexAll()
             refreshSandboxSnapshot()
         }
     }
@@ -356,8 +370,16 @@ struct AppRootView: View {
         selectedTab = .dashboard
         Task {
             do {
-                _ = try await phrase.perform(vinOverride: vin)
-                await store.refresh()
+                let initialSession = FleetIntentService.make().sessionScopeID
+                let result = try await phrase.perform(vinOverride: vin)
+                guard let initialSession, initialSession == FleetIntentService.make().sessionScopeID else { return }
+                if let vin = result.vin, store.selectedVehicle?.vin == vin {
+                    switch phrase {
+                    case .warmUp, .coolDown: store.reconcileAcknowledgedControl(.climate(shouldTurnOn: true), for: vin, expected: true)
+                    case .lock: store.reconcileAcknowledgedControl(.lock(shouldLock: true), for: vin, expected: true)
+                    case .checkStatus: store.showVehicleStatusSummary(result.summary, for: vin)
+                    }
+                }
                 refreshSandboxSnapshot()
             } catch {
                 authErrorMessage = error.localizedDescription
@@ -401,7 +423,6 @@ struct AppRootView: View {
             if sandboxMode == .demoVehicle {
                 await store.loadInitialData()
                 FleetTokenBridge.syncSelectedVehicle(store: store, forceShortcutRefresh: true)
-                _ = await FleetSpotlightIndexer.reindexAll()
             } else {
                 try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
                 store.stopPolling()

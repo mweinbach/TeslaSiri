@@ -34,6 +34,15 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
     )
     public var color: String?
 
+    @Property(title: "Default Car", description: "Whether a command with no vehicle specified targets this car in the current fleet. Empty on a car returned without the roster.")
+    public var isDefaultCar: Bool?
+
+    @Property(title: "Control Car Requests", description: "Changes Wattie can request with the Control Car tool. Equipment, current vehicle state and account permissions determine which requests can be accepted.")
+    public var controls: [String]?
+
+    @Property(title: "Additional Controls", description: "Actions available through the named specialist tools, subject to equipment, vehicle state and permissions.")
+    public var additionalControls: [String]?
+
     public var displayRepresentation: DisplayRepresentation {
         let subtitle = [model, color].compactMap { $0 }.joined(separator: " · ")
         var entitySynonyms: [LocalizedStringResource] = [
@@ -89,6 +98,29 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
         self.name = info.name
         self.model = info.modelName
         self.color = info.colorName
+        var commands = [
+            "Turn cabin climate on or off and set the target temperature",
+            "Adjust front seat heat, steering wheel heat, and max defrost",
+            "Turn Dog Mode or Bioweapon Defense Mode on or off where equipped",
+            "Lock or unlock the doors and enable or disable Sentry Mode",
+            "Start or stop charging, set the charge limit and charging amps, and open or close the charge port",
+            "Vent or close the windows, honk the horn, and flash the lights"
+        ]
+        if info.canActuateTrunks != false {
+            commands.append(info.canActuateTrunks == true ? "Open the trunk or frunk" : "Open the trunk or frunk if equipped")
+        }
+        if info.canAcceptNavigationRequests != false {
+            commands.append(info.canAcceptNavigationRequests == true ? "Send a navigation destination" : "Send a navigation destination if supported")
+        }
+        self.controls = commands
+        var additional = [
+            "Set Tesla Seat Heater: adjust heating by seat position where equipped",
+            "Install Tesla Software Update or Cancel Tesla Software Update when an update is available"
+        ]
+        if info.hasSeatCooling != false {
+            additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Heater: adjust front seat cooling" : "Set Tesla Seat Heater: adjust front seat cooling if equipped")
+        }
+        self.additionalControls = additional
     }
 }
 
@@ -106,14 +138,15 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
     public init() {}
 
     public func allEntities() async throws -> [VehicleEntity] {
-        let selectedVIN = FleetSharedTokenStore.shared.selectedVIN()
-        let vehicles = try await FleetIntentService.make().vehicles()
-        let ordered = vehicles.sorted { lhs, rhs in
-            if lhs.vin == selectedVIN { return true }
-            if rhs.vin == selectedVIN { return false }
-            return false
+        let service = FleetIntentService.make()
+        let vehicles = try await service.vehicles()
+        guard let defaultVehicle = service.defaultVehicle(in: vehicles) else { return [] }
+        let ordered = [defaultVehicle] + vehicles.filter { $0.vin != defaultVehicle.vin }
+        let entities = ordered.map { info in
+            let entity = VehicleEntity(info: info)
+            entity.isDefaultCar = info.vin == defaultVehicle.vin
+            return entity
         }
-        let entities = ordered.map(VehicleEntity.init(info:))
         FleetKitLog.entities.info("VehicleEntityQuery.allEntities returned \(entities.count, privacy: .public) vehicle(s)")
         return entities
     }

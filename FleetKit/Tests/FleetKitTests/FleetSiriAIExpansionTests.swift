@@ -293,19 +293,30 @@ struct FleetSiriAIExpansionTests {
         let directories = try FileManager.default.contentsOfDirectory(at: skillsRoot, includingPropertiesForKeys: nil)
             .filter { !$0.lastPathComponent.hasPrefix(".") }
         #expect(Set(directories.map(\.lastPathComponent)) == [
-            "driving-and-energy-insights", "overnight-security-check", "prepare-trip", "software-update-advisor"
+            "driving-and-energy-insights", "overnight-security-check", "prepare-trip", "software-update-advisor",
+            "vehicle-control"
         ])
 
-        let toolTitles: Set<String> = [
-            GetVehicleInfoIntent.title, GetVehicleStatusIntent.title, LockVehicleIntent.title,
-            SetSentryModeIntent.title, CloseWindowsIntent.title, SetChargePortIntent.title,
-            StopClimateIntent.title, StartChargingIntent.title, SetChargeLimitIntent.title,
-            ConfigureCabinClimateIntent.title, SendNavigationIntent.title, FindDrivesIntent.title,
-            GetDriveDetailsIntent.title, GetRecentChargesIntent.title, GetChargeDetailsIntent.title,
-            GetDrivingStatsIntent.title, GetChargingStatsIntent.title, GetBatteryHealthIntent.title,
-            GetSoftwareStatusIntent.title, GetReleaseNotesIntent.title, InstallSoftwareUpdateIntent.title,
-            CancelSoftwareUpdateIntent.title
-        ].reduce(into: []) { $0.insert(String(localized: $1)) }
+        let allTools: [any AppIntent.Type] = [
+            LockVehicleIntent.self, UnlockVehicleIntent.self, StartClimateIntent.self,
+            StopClimateIntent.self, SetCabinTemperatureIntent.self, SetMaxDefrostIntent.self,
+            SetPetModeIntent.self, SetBioweaponModeIntent.self, VentWindowsIntent.self,
+            CloseWindowsIntent.self, OpenTrunkIntent.self, SetChargeLimitIntent.self,
+            SetSeatClimateIntent.self, SetSteeringWheelHeaterIntent.self, SetChargingAmpsIntent.self,
+            FlashLightsIntent.self, HonkHornIntent.self, SendNavigationIntent.self,
+            StartChargingIntent.self, StopChargingIntent.self, SetChargePortIntent.self,
+            SetSentryModeIntent.self, ConfigureCabinClimateIntent.self, ControlCarIntent.self,
+            ListCarsIntent.self, GetVehicleInfoIntent.self, GetVehicleStatusIntent.self,
+            FindDrivesIntent.self, GetDriveDetailsIntent.self, GetRecentChargesIntent.self,
+            GetChargeDetailsIntent.self, GetDrivingStatsIntent.self, GetChargingStatsIntent.self,
+            GetBatteryHealthIntent.self, GetSoftwareStatusIntent.self, GetReleaseNotesIntent.self,
+            InstallSoftwareUpdateIntent.self, CancelSoftwareUpdateIntent.self
+        ]
+        let toolTitles: Set<String> = allTools.reduce(into: []) {
+            $0.insert(String(localized: $1.title))
+        }
+        #expect(allTools.count == 38)
+        #expect(toolTitles.count == allTools.count, "Every @AppIntent(.tool) must have a unique title")
 
         let namePattern = /^[a-z0-9]+(-[a-z0-9]+)*$/
         for directory in directories {
@@ -332,6 +343,12 @@ struct FleetSiriAIExpansionTests {
 
             let referenced = body.matches(of: /the ([A-Z][A-Za-z &]+?) tool/).map { String($0.output.1) }
             #expect(!referenced.isEmpty)
+            if name == "vehicle-control" {
+                let requiredTools = [
+                    ListCarsIntent.title, GetVehicleInfoIntent.title, ControlCarIntent.title, SetSeatClimateIntent.title
+                ].map { String(localized: $0) }
+                #expect(Set(requiredTools).isSubset(of: Set(referenced)))
+            }
             for title in referenced {
                 #expect(toolTitles.contains(title), "\(name) references unknown tool \"\(title)\"")
             }

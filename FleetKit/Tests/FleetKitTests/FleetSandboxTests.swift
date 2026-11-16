@@ -74,7 +74,7 @@ private final class SandboxMockURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-private func withSandboxTestContext<R>(
+func withSandboxTestContext<R>(
     mode: FleetSandboxMode,
     preset: FleetDemoPreset? = nil,
     accessToken: String? = "test-token",

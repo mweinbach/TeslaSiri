@@ -48,7 +48,7 @@ public enum FleetControlValue: Encodable, Sendable {
         }
     }
 
-    fileprivate var queryValue: String {
+    var queryValue: String {
         switch self {
         case .string(let value): value
         case .int(let value): String(value)
@@ -65,28 +65,64 @@ public enum FleetControlValue: Encodable, Sendable {
 
 /// Extension-safe Tessie client for the reads and commands used by App Intents.
 public struct FleetIntentClient: Sendable {
+    private static let sharedRoster = FleetRosterCache()
+    private let rosterCache: FleetRosterCache
     private let session: URLSession
-    private let tokenStore: FleetSharedTokenStore
+    let tokenStore: FleetSharedTokenStore
+    @TaskLocal static var validateRequest: (@Sendable (String) throws -> Void)?
 
     public init(session: URLSession = .shared, tokenStore: FleetSharedTokenStore = .shared) {
         self.session = session
         self.tokenStore = tokenStore
+        self.rosterCache = session === URLSession.shared ? Self.sharedRoster : FleetRosterCache()
     }
 
     // MARK: - Reads
 
     public func vehicles() async throws -> [FleetVehicleInfo] {
-        let response: TessieResults<TessieVehicle> = try await get(
-            "/vehicles",
-            query: [URLQueryItem(name: "only_active", value: "true")]
-        )
-        return response.results.map { vehicle in
-            FleetVehicleInfo(
-                vin: vehicle.vin,
-                displayName: vehicle.lastState?.displayName,
-                carType: vehicle.lastState?.carType,
-                exteriorColor: vehicle.lastState?.exteriorColor
+        try await directRoster().vehicles
+    }
+
+    func vehicles(requiring vin: String?, scope: String) async throws -> [FleetVehicleInfo] {
+        try await roster(requiring: vin, scope: scope).vehicles
+    }
+
+    func cachedVehicle(vin: String, scope: String) async -> FleetVehicleInfo? {
+        await rosterCache.cachedVehicle(vin: vin, scope: scope)
+    }
+
+    func invalidateRosterTelemetry(vin: String, scope: String, action: String) async {
+        let topic: FleetRosterCache.ChangedTelemetry
+        switch action {
+        case "charge_start", "charge_stop", "charge_port_door_close", "charge_port_door_open", "set_charge_limit", "set_charging_amps":
+            topic = .charge
+        case "auto_conditioning_start", "auto_conditioning_stop", "set_temps", "remote_defrost", "set_pet_mode", "set_bioweapon_mode", "set_seat_heat", "set_seat_cool", "steering_wheel_heater":
+            topic = .climate
+        default:
+            return
+        }
+        await rosterCache.invalidateTelemetry(vin: vin, scope: scope, topic: topic)
+    }
+
+    private func directRoster() async throws -> FleetRosterCache.Roster {
+        guard let token = tokenStore.accessToken() else { throw FleetKitError.notSignedIn }
+        let fingerprint = FleetSharedTokenStore.fingerprint(for: token)
+        let account = tokenStore.sessionScope(fingerprint: fingerprint)
+        let result = try await Self.$validateRequest.withValue({ actual in
+            guard actual == token else { throw FleetKitError.sessionExpired }
+        }) { try await roster(scope: account) }
+        guard tokenStore.sessionScope(fingerprint: fingerprint) == account else {
+            throw FleetKitError.sessionExpired
+        }
+        return result
+    }
+
+    private func roster(requiring vin: String? = nil, scope: String) async throws -> FleetRosterCache.Roster {
+        try await rosterCache.load(scope: scope, requiring: vin) {
+            let response: TessieResults<TessieVehicle> = try await get(
+                "/vehicles", query: [URLQueryItem(name: "only_active", value: "true")]
             )
+            return FleetRosterCache.Roster(vehicles: response.results.map(\.vehicleInfo), units: response.results.first?.lastState?.units)
         }
     }
 
@@ -94,12 +130,23 @@ public struct FleetIntentClient: Sendable {
         try await snapshotState(vin: vin).snapshot
     }
 
+    func snapshot(vin: String, topics: [VehicleInfoTopic]) async throws -> FleetSnapshotInfo {
+        try await snapshotState(vin: vin, topics: topics).snapshot
+    }
+
     func snapshotAndSoftware(vin: String) async throws -> (snapshot: FleetSnapshotInfo, software: FleetSoftwareInfo) {
         let (snapshot, state) = try await snapshotState(vin: vin)
         return (snapshot, state.software)
     }
 
-    private func snapshotState(vin: String) async throws -> (snapshot: FleetSnapshotInfo, state: TessieObject) {
+    private func snapshotState(
+        vin: String,
+        topics: [VehicleInfoTopic]? = nil
+    ) async throws -> (snapshot: FleetSnapshotInfo, state: TessieObject) {
+        if let topics, !topics.contains(.tirePressure) {
+            let state: TessieObject = try await get("/\(encoded(vin))/state")
+            return (state.snapshot(vin: vin, tireState: nil, topics: topics), state)
+        }
         async let tireRead: TessieObject = get(
             "/\(encoded(vin))/tire_pressure",
             query: [URLQueryItem(name: "pressure_format", value: "psi")]
@@ -116,15 +163,15 @@ public struct FleetIntentClient: Sendable {
             try Task.checkCancellation()
             tireState = nil
         }
-        return (state.snapshot(vin: vin, tireState: tireState), state)
+        return (state.snapshot(vin: vin, tireState: tireState, topics: topics), state)
     }
 
     public func user() async throws -> FleetUserInfo {
-        let response: TessieResults<TessieVehicle> = try await get(
-            "/vehicles",
-            query: [URLQueryItem(name: "only_active", value: "true")]
-        )
-        return FleetUserInfo(units: response.results.first?.lastState?.units)
+        try await FleetUserInfo(units: directRoster().units)
+    }
+
+    func units(scope: String) async throws -> String? {
+        try await roster(scope: scope).units
     }
 
     public func drives(
@@ -132,7 +179,8 @@ public struct FleetIntentClient: Sendable {
         limit: Int,
         from: Date? = nil,
         to: Date? = nil,
-        tag: String? = nil
+        tag: String? = nil,
+        requireCompleteRows: Bool = false
     ) async throws -> [FleetDriveInfo] {
         var query = [
             URLQueryItem(name: "distance_format", value: "mi"),
@@ -152,8 +200,9 @@ public struct FleetIntentClient: Sendable {
             "/\(encoded(vin))/drives",
             query: query
         )
-        return response.results.compactMap { $0.drive(vin: vin) }
-            .sorted { $0.startedAt > $1.startedAt }
+        let drives = response.results.compactMap { $0.drive(vin: vin) }.sorted { $0.startedAt > $1.startedAt }
+        if requireCompleteRows, Set(drives.map(\.id)).count != response.results.count { throw FleetKitError.badResponse }
+        return drives
     }
 
     public func drivePath(
@@ -188,7 +237,8 @@ public struct FleetIntentClient: Sendable {
         vin: String,
         limit: Int,
         from: Date? = nil,
-        to: Date? = nil
+        to: Date? = nil,
+        requireCompleteRows: Bool = false
     ) async throws -> [FleetChargeInfo] {
         var query = [
             URLQueryItem(name: "distance_format", value: "mi"),
@@ -204,8 +254,9 @@ public struct FleetIntentClient: Sendable {
             "/\(encoded(vin))/charges",
             query: query
         )
-        return response.results.compactMap { $0.charge(vin: vin) }
-            .sorted { $0.startedAt > $1.startedAt }
+        let charges = response.results.compactMap { $0.charge(vin: vin) }.sorted { $0.startedAt > $1.startedAt }
+        if requireCompleteRows, Set(charges.map(\.id)).count != response.results.count { throw FleetKitError.badResponse }
+        return charges
     }
 
     public func batteryHealth(vin: String) async throws -> FleetBatteryHealthInfo {
@@ -434,6 +485,9 @@ public struct FleetIntentClient: Sendable {
     private func execute(_ request: URLRequest) async throws -> Data {
         let method = request.httpMethod ?? "GET"
         let path = Self.logPath(request.url?.path(percentEncoded: true) ?? "?")
+        let signposter = FleetKitLog.signposter
+        let interval = signposter.beginInterval("Tessie request", id: signposter.makeSignpostID(), "\(method, privacy: .public) \(path, privacy: .public)")
+        defer { signposter.endInterval("Tessie request", interval) }
         let start = ContinuousClock.now
         do {
             let (data, response) = try await session.data(for: request)
@@ -446,6 +500,10 @@ public struct FleetIntentClient: Sendable {
 
             if http.statusCode == 401 {
                 FleetKitLog.client.warning("Received 401 from Tessie — the saved access token is invalid or revoked")
+                if let active = tokenStore.accessToken(),
+                   request.value(forHTTPHeaderField: "Authorization") == "Bearer \(active)" {
+                    tokenStore.invalidateSession()
+                }
                 throw FleetKitError.sessionExpired
             }
             guard (200..<300).contains(http.statusCode) else {
@@ -477,9 +535,8 @@ public struct FleetIntentClient: Sendable {
     }
 
     private func authorizedRequest(path: String, query: [URLQueryItem], method: String) throws -> URLRequest {
-        guard let token = tokenStore.accessToken() else {
-            throw FleetKitError.notSignedIn
-        }
+        guard let token = tokenStore.accessToken() else { throw FleetKitError.notSignedIn }
+        try Self.validateRequest?(token)
         let url = try makeURL(path: path, query: query)
         var request = URLRequest(url: url, timeoutInterval: FleetKitConfig.requestTimeout)
         request.httpMethod = method
@@ -510,6 +567,33 @@ public struct FleetIntentClient: Sendable {
     }
 }
 
+
+extension FleetIntentClient {
+    static func spotlightState(_ data: Data, tires: Data?, vin: String) throws -> (FleetSnapshotInfo, FleetSoftwareInfo) {
+        let decoder = JSONDecoder()
+        let state = try decoder.decode(TessieObject.self, from: data)
+        let pressures = try tires.map { try decoder.decode(TessieObject.self, from: $0) }
+        return (state.snapshot(vin: vin, tireState: pressures), state.software)
+    }
+
+    static func spotlightDrives(_ data: Data, vin: String) throws -> ([FleetDriveInfo], Int) {
+        let rows = try JSONDecoder().decode(TessieResults<TessieObject>.self, from: data).results
+        return (rows.compactMap { $0.drive(vin: vin) }.sorted { $0.startedAt > $1.startedAt }, rows.count)
+    }
+
+    static func spotlightCharges(_ data: Data, vin: String) throws -> ([FleetChargeInfo], Int) {
+        let rows = try JSONDecoder().decode(TessieResults<TessieObject>.self, from: data).results
+        return (rows.compactMap { $0.charge(vin: vin) }.sorted { $0.startedAt > $1.startedAt }, rows.count)
+    }
+
+    static func spotlightNotes(_ data: Data) throws -> [FleetReleaseNoteInfo] {
+        guard let notes = try JSONDecoder().decode(TessieReleaseNotes.self, from: data).releaseNotes else {
+            throw FleetKitError.badResponse
+        }
+        return notes
+    }
+}
+
 private typealias TessieObject = [String: TessieValue]
 
 private struct TessieResults<Value: Decodable>: Decodable {
@@ -519,6 +603,42 @@ private struct TessieResults<Value: Decodable>: Decodable {
 private struct TessieVehicle: Decodable {
     let vin: String
     let lastState: RosterState?
+
+    var vehicleInfo: FleetVehicleInfo {
+        var vehicle = FleetVehicleInfo(
+            vin: vin,
+            displayName: lastState?.displayName,
+            carType: lastState?.carType,
+            exteriorColor: lastState?.exteriorColor
+        )
+        vehicle.hasSeatCooling = lastState?.hasSeatCooling
+        vehicle.canActuateTrunks = lastState?.canActuateTrunks
+        vehicle.canAcceptNavigationRequests = lastState?.canAcceptNavigationRequests
+        if let charge = lastState?.charge, let timestamp = charge.int64("timestamp") {
+            vehicle.rosterCharge = FleetSnapshotInfo(
+                vin: vin,
+                batteryLevel: charge.double("battery_level"),
+                batteryRangeMiles: charge.double("battery_range"),
+                updatedAt: TessieObject.milliseconds(timestamp)
+            )
+        }
+        if let state = lastState, let climate = state.climate, let timestamp = climate.int64("timestamp") {
+            let fahrenheit = state.units != "metric"
+            func temperature(_ field: String) -> Double? {
+                climate.double(field).map { fahrenheit ? $0 * 9 / 5 + 32 : $0 }
+            }
+            vehicle.rosterClimate = FleetSnapshotInfo(
+                vin: vin,
+                insideTemp: temperature("inside_temp"),
+                outsideTemp: temperature("outside_temp"),
+                targetTemp: temperature("driver_temp_setting"),
+                hvacOn: climate.bool("is_climate_on") ?? climate.bool("is_auto_conditioning_on"),
+                updatedAt: TessieObject.milliseconds(timestamp),
+                temperatureInFahrenheit: fahrenheit
+            )
+        }
+        return vehicle
+    }
 
     enum CodingKeys: String, CodingKey {
         case vin
@@ -531,10 +651,21 @@ private struct RosterState: Decodable {
     let carType: String?
     let exteriorColor: String?
     let units: String?
+    let hasSeatCooling: Bool?
+    let canActuateTrunks: Bool?
+    let canAcceptNavigationRequests: Bool?
+    let charge: TessieObject?
+    let climate: TessieObject?
 
     private enum Field: String, CodingKey {
+        case charge = "charge_state", climate = "climate_state", timestamp
+        case battery = "battery_level", range = "battery_range"
+        case inside = "inside_temp", outside = "outside_temp", target = "driver_temp_setting"
+        case climateOn = "is_climate_on", autoConditioning = "is_auto_conditioning_on"
         case displayName = "display_name", vehicleState = "vehicle_state", vehicleName = "vehicle_name"
         case config = "vehicle_config", carType = "car_type", exteriorColor = "exterior_color"
+        case seatCooling = "has_seat_cooling", actuateTrunks = "can_actuate_trunks"
+        case acceptNavigation = "can_accept_navigation_requests"
         case settings = "gui_settings", temperature = "gui_temperature_units", distance = "gui_distance_units"
     }
 
@@ -546,9 +677,22 @@ private struct RosterState: Decodable {
         func string(_ field: Field, in container: KeyedDecodingContainer<Field>?) throws -> String? {
             try container?.decodeIfPresent(TessieValue.self, forKey: field)?.stringValue
         }
+        func readings(_ section: Field, fields: [Field]) -> TessieObject? {
+            guard let values = try? state.nestedContainer(keyedBy: Field.self, forKey: section) else { return nil }
+            var selected: TessieObject = [:]
+            for field in fields {
+                selected[field.rawValue] = try? values.decodeIfPresent(TessieValue.self, forKey: field)
+            }
+            return selected
+        }
+        charge = readings(.charge, fields: [.timestamp, .battery, .range])
+        climate = readings(.climate, fields: [.timestamp, .inside, .outside, .target, .climateOn, .autoConditioning])
         displayName = try string(.displayName, in: state) ?? string(.vehicleName, in: vehicle)
         carType = try string(.carType, in: config)
         exteriorColor = try string(.exteriorColor, in: config)
+        hasSeatCooling = try? config?.decodeIfPresent(TessieValue.self, forKey: .seatCooling)?.boolValue
+        canActuateTrunks = try? config?.decodeIfPresent(TessieValue.self, forKey: .actuateTrunks)?.boolValue
+        canAcceptNavigationRequests = try? config?.decodeIfPresent(TessieValue.self, forKey: .acceptNavigation)?.boolValue
         if let temperature = try string(.temperature, in: settings) {
             units = temperature.lowercased().hasPrefix("f") ? "imperial" : "metric"
         } else {
@@ -706,17 +850,31 @@ private extension Dictionary where Key == String, Value == TessieValue {
         return usesFahrenheit ? (celsius * 9 / 5) + 32 : celsius
     }
 
-    func snapshot(vin: String, tireState: TessieObject?) -> FleetSnapshotInfo {
+    func snapshot(vin: String, tireState: TessieObject?, topics: [VehicleInfoTopic]? = nil) -> FleetSnapshotInfo {
         let charge = object("charge_state")
         let climate = object("climate_state")
         let drive = object("drive_state")
         let vehicle = object("vehicle_state")
-        let timestamps = [
-            charge.int64("timestamp"),
-            climate.int64("timestamp"),
-            drive.int64("timestamp"),
-            vehicle.int64("timestamp")
-        ].compactMap { $0 }.map(Self.milliseconds)
+        let tires = tireState?.tirePressures ?? vehicle.stateTirePressures
+        let chargeTime = charge.int64("timestamp").map(Self.milliseconds)
+        let climateTime = climate.int64("timestamp").map(Self.milliseconds)
+        let driveTime = drive.int64("timestamp").map(Self.milliseconds)
+        let vehicleTime = vehicle.int64("timestamp").map(Self.milliseconds)
+        let updatedAt: Int64?
+        if let topics {
+            // An unrelated fresh reading must not make an older requested topic look current.
+            updatedAt = topics.compactMap { topic in
+                switch topic {
+                case .battery, .range, .charging: chargeTime
+                case .climate: climateTime
+                case .location: driveTime
+                case .odometer, .security: vehicleTime
+                case .tirePressure: tires?.lastMeasuredAt ?? vehicleTime
+                }
+            }.min()
+        } else {
+            updatedAt = [chargeTime, climateTime, driveTime, vehicleTime].compactMap { $0 }.max()
+        }
 
         return FleetSnapshotInfo(
             vin: vin,
@@ -738,10 +896,10 @@ private extension Dictionary where Key == String, Value == TessieValue {
             longitude: drive.double("longitude"),
             odometer: vehicle.double("odometer"),
             speed: drive.double("speed"),
-            updatedAt: timestamps.max(),
+            updatedAt: updatedAt,
             climateKeeperMode: climate.string("climate_keeper_mode"),
             defrostMode: climate.string("defrost_mode"),
-            tires: tireState?.tirePressures ?? vehicle.stateTirePressures,
+            tires: tires,
             temperatureInFahrenheit: usesFahrenheit,
             shiftState: drive.string("shift_state"),
             openClosures: vehicle.openClosures,

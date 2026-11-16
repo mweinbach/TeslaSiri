@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Security
 
@@ -13,7 +14,8 @@ import Security
 public struct FleetSharedTokenStore: Sendable {
     public static let shared = FleetSharedTokenStore()
 
-    private let appGroup: String
+    let appGroup: String
+    private static let sessionGenerationKey = "FleetKit.sessionGeneration"
 
     public init(appGroup: String = FleetKitConfig.appGroupIdentifier) {
         self.appGroup = appGroup
@@ -44,14 +46,35 @@ public struct FleetSharedTokenStore: Sendable {
         return nil
     }
 
+    static func fingerprint(for token: String) -> String {
+        Data(SHA256.hash(data: Data(token.utf8))).base64EncodedString()
+    }
+
+    func sessionScope(for token: String) -> String {
+        sessionScope(fingerprint: Self.fingerprint(for: token))
+    }
+
+    func sessionScope(fingerprint: String) -> String {
+        let generation = defaults?.string(forKey: Self.sessionGenerationKey) ?? "initial"
+        return "\(appGroup).\(generation).\(fingerprint)"
+    }
+
+    func invalidateSession() {
+        defaults?.set(UUID().uuidString, forKey: Self.sessionGenerationKey)
+        FleetWidgetStore(appGroup: appGroup).clear()
+    }
+
     public func save(accessToken: String) {
+        let changed = self.accessToken() != accessToken
         try? SharedAccessTokenKeychain.save(accessToken)
         defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
+        if changed { invalidateSession() }
     }
 
     public func clearAccessToken() {
         try? SharedAccessTokenKeychain.delete()
         defaults?.removeObject(forKey: FleetKitConfig.accessTokenDefaultsKey)
+        invalidateSession()
     }
 
     public func selectedVIN() -> String? {
@@ -61,10 +84,12 @@ public struct FleetSharedTokenStore: Sendable {
 
     public func save(selectedVIN: String) {
         defaults?.set(selectedVIN, forKey: FleetKitConfig.selectedVINDefaultsKey)
+        FleetWidgetStore.reload()
     }
 
     public func clearSelectedVIN() {
         defaults?.removeObject(forKey: FleetKitConfig.selectedVINDefaultsKey)
+        FleetWidgetStore.reload()
     }
 
     /// Clears the mirrored access token and selected vehicle default.
@@ -106,7 +131,7 @@ private enum SharedAccessTokenKeychain {
         let data = Data(token.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)

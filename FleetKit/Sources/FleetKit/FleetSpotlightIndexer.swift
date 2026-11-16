@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CryptoKit
 import Foundation
 import OSLog
 
@@ -77,125 +78,36 @@ public enum FleetSpotlightIndexer {
     /// reachable through the Get Tesla Charging History tool.
     public static let chargesPerVehicle = 50
 
-    private static let reindexCoordinator = ReindexCoordinator()
+    /// Dashboard response bytes are retained only within one active refresh.
+    public struct DashboardReadings: Sendable {
+        public let vin: String
+        public var state: Data?
+        public var tires: Data?
+        public var drives: Data?
+        public var driveLimit: Int?
+        public var charges: Data?
+        public var chargeLimit: Int?
+        public var notes: Data?
+        public var notesVersion: String?
 
-    /// Coalesces concurrent callers: if a reindex is already running, callers
-    /// join it and receive its report instead of starting a competing run.
-    public static func reindexAll() async -> FleetSpotlightIndexingReport {
-        await reindexCoordinator.run { await performReindexAll() }
+        public init(vin: String) { self.vin = vin }
     }
 
-    private static func performReindexAll() async -> FleetSpotlightIndexingReport {
-        let submittedAt = Date()
-        let start = ContinuousClock.now
+    private static let coordinator = SpotlightSyncCoordinator()
+
+    public static func synchronize(vehicles: [FleetVehicleInfo], readings: DashboardReadings?, scope: String) async {
+        _ = await coordinator.synchronize(vehicles: vehicles, readings: readings, scope: scope)
+    }
+
+    public static func reindexAll() async -> FleetSpotlightIndexingReport {
         let service = FleetIntentService.make()
-        var groups: [FleetSpotlightSubmittedGroup] = []
-        var errors: [String] = []
-
-        FleetKitLog.spotlight.notice("Reindex started (index: \(indexName, privacy: .public))")
-
         do {
-            let vehicles = try await service.vehicles()
-            guard !vehicles.isEmpty else {
-                FleetKitLog.spotlight.error("Reindex aborted: no vehicles returned from the Fleet backend")
-                return FleetSpotlightIndexingReport(indexName: indexName, submittedAt: submittedAt, groups: [], errors: ["No vehicles returned from the Fleet backend."])
-            }
-
-            do {
-                try await deleteAllIndexedEntities()
-            } catch {
-                errors.append("Clearing stale Spotlight entities: \(error.localizedDescription)")
-            }
-
-            let vehicleEntities = vehicles.map(VehicleEntity.init(info:))
-            await index(vehicleEntities, groupName: "Vehicles", priority: 10, groups: &groups, errors: &errors)
-
-            var statuses: [VehicleStatusEntity] = []
-            var drives: [DriveEntity] = []
-            var charges: [ChargeSessionEntity] = []
-            var software: [SoftwareUpdateEntity] = []
-            var notes: [ReleaseNoteEntity] = []
-
-            // An expired/missing session fails every remaining backend call the
-            // same way, so stop fetching at the first auth failure instead of
-            // burning minutes on requests that can only 401.
-            var stoppedOnAuthFailure = false
-
-            vehicleLoop: for vehicle in vehicles {
-                var softwareFromState: FleetSoftwareInfo?
-                do {
-                    let state = try await service.snapshotAndSoftware(vin: vehicle.vin)
-                    softwareFromState = state.software
-                    statuses.append(VehicleStatusEntity(snapshot: state.snapshot, vehicleName: vehicle.name))
-                } catch {
-                    errors.append("Status for \(vehicle.name): \(error.localizedDescription)")
-                    if isAuthFailure(error) { stoppedOnAuthFailure = true; break vehicleLoop }
-                }
-
-                do {
-                    let recent = try await service.drives(vin: vehicle.vin, limit: drivesPerVehicle)
-                    drives.append(contentsOf: recent.map(DriveEntity.init(info:)))
-                } catch {
-                    errors.append("Drives for \(vehicle.name): \(error.localizedDescription)")
-                    if isAuthFailure(error) { stoppedOnAuthFailure = true; break vehicleLoop }
-                }
-
-                do {
-                    let recent = try await service.charges(vin: vehicle.vin, limit: chargesPerVehicle)
-                    charges.append(contentsOf: recent.map(ChargeSessionEntity.init(info:)))
-                } catch {
-                    errors.append("Charging sessions for \(vehicle.name): \(error.localizedDescription)")
-                    if isAuthFailure(error) { stoppedOnAuthFailure = true; break vehicleLoop }
-                }
-
-                let info: FleetSoftwareInfo
-                do {
-                    if let softwareFromState {
-                        info = softwareFromState
-                    } else {
-                        info = try await service.software(vin: vehicle.vin)
-                    }
-                    software.append(SoftwareUpdateEntity(info: info, vin: vehicle.vin, vehicleName: vehicle.name))
-                } catch {
-                    errors.append("Software for \(vehicle.name): \(error.localizedDescription)")
-                    if isAuthFailure(error) { stoppedOnAuthFailure = true; break vehicleLoop }
-                    continue
-                }
-
-                if let version = info.availableVersion ?? info.currentVersion {
-                    do {
-                        let releaseNotes = try await service.releaseNotes(vin: vehicle.vin, version: version)
-                        notes.append(contentsOf: releaseNotes.map { ReleaseNoteEntity(info: $0, vin: vehicle.vin, version: version) })
-                    } catch {
-                        errors.append("Release notes for \(vehicle.name): \(error.localizedDescription)")
-                        if isAuthFailure(error) { stoppedOnAuthFailure = true; break vehicleLoop }
-                    }
-                }
-            }
-
-            if stoppedOnAuthFailure {
-                FleetKitLog.spotlight.error("Reindex stopped early: session not usable; donating what was fetched so far")
-            }
-
-            await index(statuses, groupName: "Live Status", priority: 10, groups: &groups, errors: &errors)
-            await index(drives, groupName: "Recent Drives", priority: 4, groups: &groups, errors: &errors)
-            await index(charges, groupName: "Charging Sessions", priority: 4, groups: &groups, errors: &errors)
-            await index(software, groupName: "Software", priority: 8, groups: &groups, errors: &errors)
-            await index(notes, groupName: "Release Notes", priority: 2, groups: &groups, errors: &errors)
+            guard let scope = service.sessionScopeID else { throw FleetKitError.notSignedIn }
+            let roster = try await service.vehicles()
+            return await coordinator.synchronize(vehicles: roster, readings: nil, scope: scope, repair: true)
         } catch {
-            FleetKitLog.spotlight.error("Reindex failed: \(error.localizedDescription, privacy: .public)")
-            errors.append(error.localizedDescription)
+            return FleetSpotlightIndexingReport(indexName: indexName, submittedAt: Date(), groups: [], errors: [error.localizedDescription])
         }
-
-        let report = FleetSpotlightIndexingReport(indexName: indexName, submittedAt: submittedAt, groups: groups, errors: errors)
-        let elapsed = FleetKitLog.milliseconds(since: start)
-        let groupSummary = groups.map { "\($0.name): \($0.count)" }.joined(separator: ", ")
-        if report.succeeded {
-            FleetKitLog.spotlight.notice("Reindex finished in \(elapsed, privacy: .public) ms — \(report.submittedCount, privacy: .public) entities [\(groupSummary, privacy: .public)]")
-        } else {
-            FleetKitLog.spotlight.error("Reindex finished in \(elapsed, privacy: .public) ms with \(errors.count, privacy: .public) error(s) — \(report.submittedCount, privacy: .public) entities [\(groupSummary, privacy: .public)]; errors: \(errors.joined(separator: " | "), privacy: .public)")
-        }
-        return report
     }
 
     public static func search(_ term: String, limit: Int = 20) async throws -> [FleetSpotlightSearchResult] {
@@ -241,49 +153,7 @@ public enum FleetSpotlightIndexer {
     }
 
     public static func deleteAllIndexedEntities() async throws {
-        let index = CSSearchableIndex(name: indexName)
-        do {
-            try await index.deleteAllSearchableItems()
-            FleetKitLog.spotlight.notice("Deleted all FleetKit indexed entities")
-        } catch {
-            FleetKitLog.spotlight.error("Deleting FleetKit indexed entities failed — \(error.localizedDescription, privacy: .public)")
-            throw error
-        }
-    }
-
-    private static func index<Entity: IndexedEntity>(
-        _ entities: [Entity],
-        groupName: String,
-        priority: Int = 0,
-        groups: inout [FleetSpotlightSubmittedGroup],
-        errors: inout [String]
-    ) async {
-        guard !entities.isEmpty else {
-            groups.append(FleetSpotlightSubmittedGroup(name: groupName, count: 0, sampleTitles: []))
-            return
-        }
-
-        do {
-            try await donate(entities, priority: priority)
-            groups.append(
-                FleetSpotlightSubmittedGroup(
-                    name: groupName,
-                    count: entities.count,
-                    sampleTitles: entities.prefix(3).map { String(localized: $0.displayRepresentation.title) }
-                )
-            )
-        } catch {
-            errors.append("\(groupName): \(error.localizedDescription)")
-        }
-    }
-
-    private static func isAuthFailure(_ error: any Error) -> Bool {
-        switch error {
-        case FleetKitError.sessionExpired, FleetKitError.notSignedIn:
-            return true
-        default:
-            return false
-        }
+        try await coordinator.clear()
     }
 
     private static func queryString(for rawTerm: String) -> String {
@@ -294,22 +164,271 @@ public enum FleetSpotlightIndexer {
     }
 }
 
-/// Ensures only one reindex runs at a time. The app triggers reindexing from
-/// several launch paths (app task, sign-in, manual refresh) that can fire
-/// near-simultaneously; overlapping runs interleave donations and double the
-/// backend load for no benefit.
-private actor ReindexCoordinator {
-    private var inFlight: Task<FleetSpotlightIndexingReport, Never>?
+/// Only identifiers, content digests and coverage times are persisted. A failed or partial
+/// read cannot erase records whose absence has not been established by Tessie.
+struct SpotlightIndexManifest: Codable {
+    struct Group: Codable {
+        var digests: [String: Data] = [:]
+        var completeAt: Date?
+        var version: String?
+        var vehicleNameDigest: Data?
 
-    func run(_ operation: @escaping @Sendable () async -> FleetSpotlightIndexingReport) async -> FleetSpotlightIndexingReport {
-        if let inFlight {
-            FleetKitLog.spotlight.notice("Reindex already in flight — joining the existing run")
-            return await inFlight.value
+        func needsRefresh(at now: Date) -> Bool {
+            guard let completeAt else { return true }
+            return now.timeIntervalSince(completeAt) >= 15 * 60
         }
-        let task = Task { await operation() }
-        inFlight = task
-        let report = await task.value
-        inFlight = nil
-        return report
+
+        func canUsePage(ids: Set<String>, requested: Int, limit: Int, at now: Date) -> Bool {
+            ids.count < requested || requested >= limit || (!needsRefresh(at: now) && ids.isSubset(of: digests.keys))
+        }
+
+        func removedIDs(in current: Set<String>, complete: Bool) -> Set<String> {
+            complete ? Set(digests.keys).subtracting(current) : []
+        }
+    }
+
+    var scope: String
+    var vehicles: [String: [String: Group]] = [:]
+}
+
+private actor SpotlightSyncCoordinator {
+    private typealias Group = SpotlightIndexManifest.Group
+    private let manifestKey = "FleetSpotlightManifest.v1"
+    private let defaults = UserDefaults.standard
+    private var tail: Task<Void, Never>?
+    private var ticket = 0
+    private var maintenanceGeneration = 0
+    private var latestMaintenance: Int?
+    private var pendingSyncs: [Int: @Sendable () -> Void] = [:]
+    private var manifest = SpotlightIndexManifest(scope: "")
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: "FleetSpotlightManifest.v1"),
+           let stored = try? JSONDecoder().decode(SpotlightIndexManifest.self, from: data) {
+            manifest = stored
+        }
+    }
+
+    /// Core Spotlight writes can suspend; finish each job (including account clears)
+    /// before the next job writes. Each job checks the active account again on entry.
+    private func enqueue<T: Sendable>(cancelOnClear: Bool = true, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
+        let previous = tail
+        ticket += 1
+        let current = ticket
+        let job = Task {
+            await previous?.value
+            try Task.checkCancellation()
+            return try await work()
+        }
+        tail = Task { _ = await job.result }
+        if cancelOnClear { pendingSyncs[current] = { job.cancel() } }
+        defer {
+            pendingSyncs[current] = nil
+            if ticket == current { tail = nil }
+        }
+        return try await job.value
+    }
+
+    func clear() async throws {
+        latestMaintenance = nil
+        for cancel in pendingSyncs.values { cancel() }
+        try await enqueue(cancelOnClear: false) { try await self.reset(scope: "") }
+    }
+
+    private func reset(scope: String) async throws {
+        try await CSSearchableIndex(name: FleetSpotlightIndexer.indexName).deleteAllSearchableItems()
+        manifest = SpotlightIndexManifest(scope: scope)
+        persist()
+    }
+
+    private func persist() {
+        if let data = try? JSONEncoder().encode(manifest) { defaults.set(data, forKey: manifestKey) }
+    }
+
+    func synchronize(
+        vehicles: [FleetVehicleInfo], readings: FleetSpotlightIndexer.DashboardReadings?, scope: String, repair: Bool = false
+    ) async -> FleetSpotlightIndexingReport {
+        maintenanceGeneration += 1
+        let generation = maintenanceGeneration
+        if !repair { latestMaintenance = generation }
+        do {
+            return try await enqueue {
+                try await self.apply(vehicles: vehicles, readings: readings, scope: scope, repair: repair, generation: generation)
+            }
+        } catch {
+            if !(error is CancellationError) {
+                FleetKitLog.spotlight.error("Spotlight sync failed: \(error.localizedDescription, privacy: .private)")
+            }
+            return .init(indexName: FleetSpotlightIndexer.indexName, submittedAt: Date(), groups: [], errors: [error.localizedDescription])
+        }
+    }
+
+    private func apply(
+        vehicles: [FleetVehicleInfo], readings: FleetSpotlightIndexer.DashboardReadings?, scope: String, repair: Bool, generation: Int
+    ) async throws -> FleetSpotlightIndexingReport {
+        guard repair || generation == latestMaintenance else { throw CancellationError() }
+        let service = FleetIntentService.make()
+        guard service.sessionScopeID == scope else { throw CancellationError() }
+        if repair || manifest.scope != scope { try await reset(scope: scope) }
+        defer { persist() }
+        let now = Date()
+        var groups: [FleetSpotlightSubmittedGroup] = []
+        var errors: [String] = []
+        let vins = Set(vehicles.map(\.vin))
+        for vin in Set(manifest.vehicles.keys).subtracting(vins) {
+            try await removeVehicle(vin)
+        }
+        for vehicle in vehicles {
+            guard service.sessionScopeID == scope else { throw CancellationError() }
+            let vin = vehicle.vin
+            let samples = readings?.vin == vin ? readings : nil
+            func group(_ name: String) -> Group { manifest.vehicles[vin]?[name] ?? Group() }
+            func record(_ error: Error, group: String) throws {
+                try Task.checkCancellation()
+                if service.sessionScopeID != scope { throw CancellationError() }
+                switch error {
+                case FleetKitError.sessionExpired, FleetKitError.notSignedIn, is CancellationError: throw error
+                default: errors.append("\(group): \(error.localizedDescription)")
+                }
+            }
+
+            let identity = VehicleEntity(info: vehicle)
+            // The roster's optional telemetry is independent of the identity registered in Spotlight.
+            let fields = [identity.name, identity.model ?? "", identity.color ?? ""]
+                + (identity.controls ?? []) + (identity.additionalControls ?? [])
+            try await update([(identity, fields)],
+                             vin: vin, name: "Vehicles", priority: 10, complete: true, force: repair, groups: &groups)
+            let nameDigest = Data(SHA256.hash(data: Data(vehicle.name.utf8)))
+            let stateChangedName = group("Live Status").vehicleNameDigest != nameDigest
+            var version = group("Software").version
+            do {
+                let state: (FleetSnapshotInfo, FleetSoftwareInfo)?
+                if let data = samples?.state {
+                    state = try FleetIntentClient.spotlightState(data, tires: samples?.tires, vin: vin)
+                } else if repair || stateChangedName || group("Live Status").needsRefresh(at: now) {
+                    state = try await service.snapshotAndSoftware(vin: vin)
+                } else { state = nil }
+                if let (snapshot, software) = state {
+                    guard service.sessionScopeID == scope else { throw CancellationError() }
+                    try await update([(VehicleStatusEntity(snapshot: snapshot, vehicleName: vehicle.name), snapshot)],
+                                     vin: vin, name: "Live Status", priority: 10, complete: true, force: repair || stateChangedName,
+                                     vehicleNameDigest: nameDigest, groups: &groups)
+                    version = software.availableVersion ?? software.currentVersion
+                    try await update([(SoftwareUpdateEntity(info: software, vin: vin, vehicleName: vehicle.name), software)],
+                                     vin: vin, name: "Software", priority: 8, complete: true, force: repair || stateChangedName,
+                                     version: version, groups: &groups)
+                }
+            } catch { try record(error, group: "Status and software") }
+
+            do {
+                try await history(
+                    vin: vin, name: "Recent Drives", limit: FleetSpotlightIndexer.drivesPerVehicle, force: repair,
+                    payload: samples?.drives, requested: samples?.driveLimit, decode: FleetIntentClient.spotlightDrives,
+                    fetch: { try await service.drives(vin: vin, limit: $0, requireCompleteRows: true) },
+                    entity: DriveEntity.init(info:), scope: scope, groups: &groups
+                )
+            } catch { try record(error, group: "Recent Drives") }
+            do {
+                try await history(
+                    vin: vin, name: "Charging Sessions", limit: FleetSpotlightIndexer.chargesPerVehicle, force: repair,
+                    payload: samples?.charges, requested: samples?.chargeLimit, decode: FleetIntentClient.spotlightCharges,
+                    fetch: { try await service.charges(vin: vin, limit: $0, requireCompleteRows: true) },
+                    entity: ChargeSessionEntity.init(info:), scope: scope, groups: &groups
+                )
+            } catch { try record(error, group: "Charging Sessions") }
+
+            do {
+                if let version {
+                    let notes: [FleetReleaseNoteInfo]?
+                    if let data = samples?.notes, samples?.notesVersion == version {
+                        notes = try FleetIntentClient.spotlightNotes(data)
+                    } else if repair || group("Release Notes").version != version {
+                        notes = try await service.releaseNotes(vin: vin, version: version)
+                    } else { notes = nil }
+                    if let notes {
+                        guard service.sessionScopeID == scope else { throw CancellationError() }
+                        try await update(notes.map { (ReleaseNoteEntity(info: $0, vin: vin, version: version), $0) },
+                                         vin: vin, name: "Release Notes", priority: 2, complete: true,
+                                         force: repair, version: version, groups: &groups)
+                    }
+                }
+            } catch { try record(error, group: "Release Notes") }
+        }
+        guard service.sessionScopeID == scope else { throw CancellationError() }
+        if !errors.isEmpty {
+            FleetKitLog.spotlight.error("Spotlight sync kept previous rows for \(errors.count, privacy: .public) failed group(s): \(errors.joined(separator: ", "), privacy: .private)")
+        }
+        return .init(indexName: FleetSpotlightIndexer.indexName, submittedAt: now, groups: groups, errors: errors)
+    }
+
+    private func history<Row: Encodable & Identifiable & Sendable, Entity: IndexedEntity>(
+        vin: String, name: String, limit: Int, force: Bool, payload: Data?, requested: Int?,
+        decode: (Data, String) throws -> ([Row], Int), fetch: (Int) async throws -> [Row],
+        entity: (Row) -> Entity, scope: String, groups: inout [FleetSpotlightSubmittedGroup]
+    ) async throws where Entity.ID == String, Row.ID == String {
+        let group = manifest.vehicles[vin]?[name] ?? Group()
+        let rows: [Row]
+        let complete: Bool
+        if let payload, let requested, requested > 0 {
+            let (page, count) = try decode(payload, vin)
+            let ids = Set(page.map(\.id))
+            guard ids.count == count else { throw FleetKitError.badResponse }
+            if group.canUsePage(ids: ids, requested: requested, limit: limit, at: Date()) {
+                rows = Array(page.prefix(limit))
+                complete = count < requested || requested >= limit
+            } else {
+                rows = try await fetch(limit)
+                complete = true
+            }
+        } else if force || group.needsRefresh(at: Date()) {
+            rows = try await fetch(limit)
+            complete = true
+        } else { return }
+        guard FleetIntentService.make().sessionScopeID == scope else { throw CancellationError() }
+        try await update(rows.map { (entity($0), $0) }, vin: vin, name: name, priority: 4,
+                         complete: complete, force: force, groups: &groups)
+    }
+
+    private func update<Entity: IndexedEntity, Model: Encodable>(
+        _ rows: [(Entity, Model)], vin: String, name: String, priority: Int,
+        complete: Bool, force: Bool, version: String? = nil, vehicleNameDigest: Data? = nil,
+        groups: inout [FleetSpotlightSubmittedGroup]
+    ) async throws where Entity.ID == String {
+        try Task.checkCancellation()
+        var group = manifest.vehicles[vin]?[name] ?? Group()
+        var current: Set<String> = []
+        var changed: [Entity] = []
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        for (entity, model) in rows where current.insert(entity.id).inserted {
+            let digest = Data(SHA256.hash(data: try encoder.encode(model)))
+            if force || group.digests[entity.id] != digest { changed.append(entity) }
+            group.digests[entity.id] = digest
+        }
+        let removed = group.removedIDs(in: current, complete: complete)
+        try await FleetSpotlightIndexer.donate(changed, priority: priority)
+        if !removed.isEmpty {
+            try await CSSearchableIndex(name: FleetSpotlightIndexer.indexName).deleteAppEntities(identifiedBy: Array(removed), ofType: Entity.self)
+            for id in removed { group.digests[id] = nil }
+        }
+        if complete { group.completeAt = Date() }
+        group.version = version
+        group.vehicleNameDigest = vehicleNameDigest
+        manifest.vehicles[vin, default: [:]][name] = group
+        groups.append(.init(name: name, count: changed.count, sampleTitles: changed.prefix(3).map { String(localized: $0.displayRepresentation.title) }))
+    }
+
+    private func removeVehicle(_ vin: String) async throws {
+        func remove<E: IndexedEntity>(_ type: E.Type, _ name: String) async throws where E.ID == String {
+            guard let ids = manifest.vehicles[vin]?[name]?.digests.keys, !ids.isEmpty else { return }
+            try await CSSearchableIndex(name: FleetSpotlightIndexer.indexName).deleteAppEntities(identifiedBy: Array(ids), ofType: type)
+        }
+        try await remove(VehicleEntity.self, "Vehicles")
+        try await remove(VehicleStatusEntity.self, "Live Status")
+        try await remove(DriveEntity.self, "Recent Drives")
+        try await remove(ChargeSessionEntity.self, "Charging Sessions")
+        try await remove(SoftwareUpdateEntity.self, "Software")
+        try await remove(ReleaseNoteEntity.self, "Release Notes")
+        manifest.vehicles[vin] = nil
     }
 }

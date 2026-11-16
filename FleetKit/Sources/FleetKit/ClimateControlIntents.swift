@@ -45,6 +45,7 @@ public struct StopClimateIntent: AppIntent, PredictableIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
+            let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             try await service.runControl(action: "auto_conditioning_stop", vin: resolved.vin, humanName: "stopping climate")
             let summary = "Climate is turning off in \(resolved.name)."
@@ -55,7 +56,7 @@ public struct StopClimateIntent: AppIntent, PredictableIntent {
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary
+                    appliedSummary: summary, scope: scope, running: false
                 )
             )
         } catch {
@@ -125,6 +126,7 @@ public struct SetCabinTemperatureIntent: AppIntent, PredictableIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
+            let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
 
             let targetCelsius = Self.targetCelsius(for: temperature)
@@ -160,7 +162,7 @@ public struct SetCabinTemperatureIntent: AppIntent, PredictableIntent {
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary
+                    appliedSummary: summary, scope: scope, running: true, targetCelsius: targetCelsius
                 )
             )
         } catch {

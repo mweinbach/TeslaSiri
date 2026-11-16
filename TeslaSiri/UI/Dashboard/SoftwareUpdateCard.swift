@@ -195,14 +195,12 @@ struct SoftwareUpdateCard: View {
         let vehicle = store.selectedVehicle
         guard await store.installSelectedVehicleSoftwareUpdate(offsetSec: 0) else { return }
         await FleetIntentDonations.donateSoftwareInstall(for: vehicle)
-        _ = await FleetSpotlightIndexer.reindexAll()
     }
 
     private func cancelSoftwareUpdate() async {
         let vehicle = store.selectedVehicle
         guard await store.cancelSelectedVehicleSoftwareUpdate() else { return }
         await FleetIntentDonations.donateSoftwareCancel(for: vehicle)
-        _ = await FleetSpotlightIndexer.reindexAll()
     }
 }
 

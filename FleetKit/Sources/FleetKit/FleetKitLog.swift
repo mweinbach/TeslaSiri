@@ -22,6 +22,8 @@ public enum FleetKitLog {
     /// HTTP traffic from the intents client (method, path, status, timing).
     public static let client = Logger(subsystem: subsystem, category: "FleetIntentClient")
 
+    static let signposter = OSSignposter(subsystem: subsystem, category: "SiriPerformance")
+
     /// AppEntity queries and option providers (Siri/Shortcuts resolution).
     public static let entities = Logger(subsystem: subsystem, category: "Entities")
 
@@ -51,16 +53,20 @@ public enum FleetKitLog {
 public struct FleetIntentLog: Sendable {
     private let name: String
     private let start: ContinuousClock.Instant
+    private let interval: OSSignpostIntervalState
 
     public init(_ intentType: (some AppIntent).Type, vehicle: VehicleEntity? = nil) {
         let name = String(describing: intentType)
         self.name = name
         self.start = ContinuousClock.now
+        let signposter = FleetKitLog.signposter
+        self.interval = signposter.beginInterval("Intent", id: signposter.makeSignpostID(), "\(name, privacy: .public)")
         let vehicleName = vehicle?.name ?? "default"
         FleetKitLog.intents.notice("\(name, privacy: .public) started (vehicle: \(vehicleName, privacy: .public))")
     }
 
     public func success(_ detail: String) {
+        FleetKitLog.signposter.endInterval("Intent", interval)
         let elapsed = FleetKitLog.milliseconds(since: start)
         FleetKitLog.intents.notice("\(self.name, privacy: .public) succeeded in \(elapsed, privacy: .public) ms — \(detail, privacy: .public)")
     }
@@ -69,6 +75,7 @@ public struct FleetIntentLog: Sendable {
     /// `throw log.failure(error)`. User cancellation is logged as a notice,
     /// not an error.
     public func failure(_ error: any Error) -> any Error {
+        FleetKitLog.signposter.endInterval("Intent", interval)
         let elapsed = FleetKitLog.milliseconds(since: start)
         if error is CancellationError {
             FleetKitLog.intents.notice("\(self.name, privacy: .public) cancelled after \(elapsed, privacy: .public) ms")

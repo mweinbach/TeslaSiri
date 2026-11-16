@@ -108,6 +108,113 @@ func withIsolatedFleetService<R>(
 }
 
 struct FleetSiriAIToolsTests {
+    @Test func vehicleOptionsAndControlShareOneVerifiedRoster() async throws {
+        try await withIsolatedFleetService { request in
+            if request.url?.path == "/vehicles" {
+                return (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+            }
+            return (200, FleetKitFixtures.commandResponse(result: true))
+        } body: { requests in
+            let service = FleetIntentService.make()
+            async let lookup = service.vehicles()
+            async let selected = service.resolvedVehicle("VIN-1")
+            _ = try await (lookup, selected)
+            _ = try await SelectedVehicleOptionsProvider().results()
+            _ = try await LockVehicleIntent().perform()
+            #expect(requests().compactMap { $0.url?.path } == ["/vehicles", "/VIN-1/command/lock"])
+        }
+    }
+
+    @Test func unknownExplicitVehicleRefreshesAndNeverControlsFallback() async throws {
+        try await withIsolatedFleetService { _ in
+            (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+        } body: { requests in
+            let service = FleetIntentService.make()
+            _ = try await service.vehicles()
+            await #expect(throws: FleetKitError.self) {
+                try await service.runControl(action: "door_lock", vin: "REMOVED", humanName: "locking")
+            }
+            #expect(requests().compactMap { $0.url?.path } == ["/vehicles", "/vehicles"])
+        }
+    }
+
+    @Test func rosterExpiryAndScopeChangesRequireFreshLoads() async throws {
+        let car = FleetVehicleInfo(vin: "FIRST", displayName: "First")
+        let next = FleetVehicleInfo(vin: "SECOND", displayName: "Second")
+        let expired = FleetRosterCache(lifetime: .zero)
+        _ = try await expired.load(scope: "A", requiring: nil) { .init(vehicles: [car], units: nil) }
+        let refreshed = try await expired.load(scope: "A", requiring: nil) { .init(vehicles: [next], units: nil) }
+        #expect(refreshed.vehicles.map(\.vin) == ["SECOND"])
+
+        let cache = FleetRosterCache()
+        _ = try await cache.load(scope: "A", requiring: nil) { .init(vehicles: [car], units: nil) }
+        let secondAccount = try await cache.load(scope: "B", requiring: nil) { .init(vehicles: [next], units: nil) }
+        #expect(secondAccount.vehicles.map(\.vin) == ["SECOND"])
+        #expect(await cache.cachedVehicle(vin: "FIRST", scope: "A") == nil)
+    }
+
+    @Test func anOutstandingOldRosterCannotRepopulateTheCacheAfterAccountSwitch() async throws {
+        let cache = FleetRosterCache()
+        let (started, start) = AsyncStream<Void>.makeStream()
+        let (released, release) = AsyncStream<Void>.makeStream()
+        let old = Task {
+            try await cache.load(scope: "A", requiring: nil) {
+                start.yield()
+                start.finish()
+                for await _ in released { break }
+                return .init(vehicles: [FleetVehicleInfo(vin: "OLD", displayName: nil)], units: nil)
+            }
+        }
+        for await _ in started { break }
+        let current = try await cache.load(scope: "B", requiring: nil) {
+            .init(vehicles: [FleetVehicleInfo(vin: "NEW", displayName: nil)], units: nil)
+        }
+        release.yield()
+        release.finish()
+        #expect(current.vehicles.map(\.vin) == ["NEW"])
+        await #expect(throws: CancellationError.self) { try await old.value }
+        #expect(await cache.cachedVehicle(vin: "NEW", scope: "B")?.vin == "NEW")
+    }
+
+    @Test func authorizationFailureInvalidatesTheVerifiedRoster() async throws {
+        try await withIsolatedFleetService { request in
+            if request.url?.path == "/vehicles" { return (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8)) }
+            return (401, Data())
+        } body: { requests in
+            let service = FleetIntentService.make()
+            let originalScope = service.sessionScopeID
+            _ = try await service.vehicles()
+            await #expect(throws: FleetKitError.self) {
+                try await service.runControl(action: "door_lock", vin: "VIN-1", humanName: "locking")
+            }
+            #expect(service.sessionScopeID != originalScope)
+            await #expect(throws: FleetKitError.self) { try await service.vehicles() }
+            #expect(requests().count == 2)
+        }
+    }
+
+    @Test func changingModeAfterResolutionCancelsTheWrite() async throws {
+        try await withIsolatedFleetService { _ in
+            (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+        } body: { requests in
+            let service = FleetIntentService.make()
+            let group = service.appGroupIdentifier
+            let sandbox = FleetSandboxStore(appGroup: group)
+            sandbox.setMode(.demoVehicle)
+            let isolated = FleetIntentService(sandbox: sandbox)
+            let vehicle = try await isolated.resolvedVehicle(nil)
+            let scope = isolated.sessionScopeID
+            sandbox.setMode(.dryRun)
+            sandbox.setMode(.demoVehicle)
+            #expect(isolated.sessionScopeID != scope)
+            await #expect(throws: FleetKitError.self) {
+                try await isolated.runControl(action: "door_lock", vin: vehicle.vin, humanName: "locking")
+            }
+            #expect(requests().isEmpty)
+            #expect(sandbox.commandLog().isEmpty)
+        }
+    }
+
     @Test func `warm up and send a destination execute together for the selected vehicle`() async throws {
         try await withIsolatedFleetService(responder: { request in
             if request.url?.path == "/vehicles" {

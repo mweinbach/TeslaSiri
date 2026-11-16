@@ -221,7 +221,7 @@ struct SandboxDebugSection: View {
             }
 
             if runner.results.isEmpty && !runner.isRunning {
-                Text("Runs all 4 bundled Siri AI Skills, all 36 Siri tools, App Shortcuts, and Spotlight EntityQueries end-to-end against the Demo Car.")
+                Text("Runs all 5 bundled Siri AI Skills, all 38 Siri tools, App Shortcuts, and Spotlight EntityQueries end-to-end against the Demo Car.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

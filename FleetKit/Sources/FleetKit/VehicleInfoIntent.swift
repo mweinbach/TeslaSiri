@@ -10,7 +10,7 @@ import SwiftUI
 public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Tesla Vehicle Info"
     public static let description = IntentDescription(
-        "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the full live status for follow-up questions.",
+        "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions.",
         searchKeywords: ["my car", "car battery", "battery", "range", "tire pressure", "PSI", "mileage", "odometer", "miles", "charging", "temperature", "locked", "is my car locked", "doors", "windows", "where is my car", "location"]
     )
     public static let isDiscoverable = true
@@ -61,36 +61,33 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            let snapshot = try await service.snapshot(vin: resolved.vin)
             let requested = topics.isEmpty ? VehicleInfoTopic.allCases : topics
-            let allowNetwork = FleetIntentService.testingOverride == nil
-
-            var address: String?
-            if requested.contains(.location) {
-                address = await FleetLocationNamer.address(latitude: snapshot.latitude, longitude: snapshot.longitude)
-            }
-
-            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, locationAddress: address)
+            let snapshot = try await service.snapshot(for: resolved, topics: requested)
+            let address: String?
             let mapData: SiriRenderedMapData?
-            if requested.contains(.location) || allowNetwork {
-                mapData = await SiriMapSnapshotRenderer.renderLocationPin(
-                    latitude: snapshot.latitude,
-                    longitude: snapshot.longitude,
-                    fallbackPlaceQuery: address,
+            if requested.contains(.location), let latitude = snapshot.latitude, let longitude = snapshot.longitude {
+                let allowNetwork = FleetIntentService.testingOverride == nil
+                async let place = allowNetwork ? FleetLocationNamer.address(latitude: latitude, longitude: longitude) : nil
+                async let map = SiriMapSnapshotRenderer.renderLocationPin(
+                    latitude: latitude,
+                    longitude: longitude,
                     style: SiriSnippetStateStore.shared.mapStyle(for: "vehicle"),
                     accentHex: 0x0A84FF,
                     allowNetworkSnapshot: allowNetwork
                 )
+                (address, mapData) = await (place, map)
             } else {
+                address = nil
                 mapData = nil
             }
 
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, locationAddress: address)
             let answer = entity.spokenAnswer(for: requested)
             log.success("answered \(requested.map(\.rawValue).joined(separator: ",")) for \(resolved.name)")
             return .result(
                 value: entity,
                 dialog: IntentDialog("\(answer)"),
-                view: VehicleStatusSnippetView(status: entity, mapData: mapData)
+                view: VehicleStatusSnippetView(status: entity, mapData: mapData, topics: Set(requested))
             )
         } catch {
             throw log.failure(error)

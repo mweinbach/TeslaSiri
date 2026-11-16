@@ -30,7 +30,7 @@ public struct FleetDriveRoutePoint: Codable, Equatable, Sendable {
     }
 }
 
-public struct FleetDriveInfo: Decodable, Sendable, Identifiable {
+public struct FleetDriveInfo: Codable, Sendable, Identifiable {
     public let sessionID: String
     public let vin: String
     public let distanceMiles: Double?
@@ -172,7 +172,7 @@ public struct FleetDriveInfo: Decodable, Sendable, Identifiable {
     }
 }
 
-public struct FleetReleaseNoteInfo: Decodable, Sendable, Identifiable {
+public struct FleetReleaseNoteInfo: Codable, Sendable, Identifiable {
     public let title: String
     public let subtitle: String?
     public let details: String?
@@ -211,7 +211,7 @@ public struct FleetReleaseNoteInfo: Decodable, Sendable, Identifiable {
     }
 }
 
-public struct FleetSoftwareInfo: Decodable, Sendable {
+public struct FleetSoftwareInfo: Codable, Sendable {
     public let currentVersion: String?
     public let availableVersion: String?
     public let updateAvailable: Bool

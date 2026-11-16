@@ -57,9 +57,9 @@ struct FleetSandboxDataClient: FleetDataLoading {
 
     // MARK: - Live Snapshot & Vehicle Controls
 
-    func latestSnapshot(vin: String) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
         guard sandbox.mode() == .demoVehicle else {
-            return try await liveClient.latestSnapshot(vin: vin)
+            return try await liveClient.latestSnapshot(vin: vin, includingTires: includingTires)
         }
         let state = sandbox.demoState()
         return makePage(Self.makeSnapshot(from: state), requestID: "demo-live")

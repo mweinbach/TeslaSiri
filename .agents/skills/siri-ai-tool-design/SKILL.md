@@ -9,7 +9,7 @@ Use this skill whenever adding, updating, or reviewing Siri AI / Apple Intellige
 
 ## 1. Architecture & Target Boundaries
 
-- **All domain intents, entities, queries, snippet views, and bundled Siri AI skills live in `FleetKit`** (`FleetKit/Sources/FleetKit/`), exported through `FleetKitPackage: AppIntentsPackage`.
+- Domain intents, entities, queries, and snippet views live in `FleetKit/Sources/FleetKit/` and are exported through `FleetKitPackage: AppIntentsPackage`. The app ships Siri workflows from `TeslaSiri/Skills.skillsbundle/Skills/`.
 - Both **`TeslaSiriApp`** and **`TeslaSiriAppIntentsExtension`** include `FleetKitPackage.self` via `includedPackages` so Siri can run tools in-extension without launching the main UI.
 - **Deployment Target**: `@AppIntent(.tool)` and `@AppEntity(.generable)` require **iOS 27.3 / macOS 27.3** (`FleetKit/Package.swift` and `IPHONEOS_DEPLOYMENT_TARGET = 27.3`).
 - **`TeslaSiriShortcuts` (`AppShortcutsProvider`) stays in the app target** (`TeslaSiri/AppIntents/TeslaSiriShortcuts.swift`) and **must never exceed 10 `AppShortcut` entries** (Apple's hard compile-time limit). Exposing new intents to Siri AI via `@AppIntent(.tool)` does **not** consume an `AppShortcut` slot.
@@ -30,6 +30,7 @@ Use this skill whenever adding, updating, or reviewing Siri AI / Apple Intellige
    - Ensure readouts (`ProvidesDialog`) speak actual user-facing content (such as `ReleaseNoteEntity.spokenDigest(...)`, `DriveEntity.spokenSummary(vehicleName:)`, or stats summaries) rather than bare record counts.
 5. **Default Vehicle Resolution**:
    - Every vehicle-scoped tool takes `public var vehicle: VehicleEntity?` (`optionsProvider: SelectedVehicleOptionsProvider()`) and resolves `try await service.resolvedVehicle(vehicle?.id)` so omitting `vehicle` targets the user's selected car while onscreen/notification `VehicleEntity` context binds automatically.
+   - Use **List Cars** for vehicle or capability discovery. Pass the returned `VehicleEntity` through the whole workflow when the user chooses a named car. Commands for the default car can go directly to **Control Car**. An explicitly selected vehicle that disappears must fail before any command is sent.
 6. **Structured Return Values**:
    - Read tools return typed `AppEntity` / `[AppEntity]` / `TransientAppEntity` (`VehicleStatusEntity`, `DriveEntity`, `ChargeSessionEntity`, `DrivingStatsEntity`, `ChargingStatsEntity`, `BatteryHealthEntity`, `SoftwareUpdateEntity`, `ReleaseNoteEntity`) or scalar values (`Int`, `Double`) alongside `ProvidesDialog` (and `@MainActor` `ShowsSnippetView` where appropriate).
    - Every mutation tool returns `ReturnsValue<VehicleCommandResultEntity> & ProvidesDialog` so Siri AI receives machine-readable confirmation (`vehicleName`, `vin`, `action`, `succeeded`, `appliedValue`, `summary`, `executedAt`) for multi-step reasoning.
@@ -44,12 +45,16 @@ Always call `try await requestConfirmation(dialog:)` inside `perform()` before e
 | --- | --- |
 | `UnlockVehicleIntent` | `LockVehicleIntent` |
 | `OpenTrunkIntent` (rear trunk or frunk), Shortcuts-only `OpenFrunkIntent` | `StartClimateIntent`, `StopClimateIntent`, `SetCabinTemperatureIntent`, `ConfigureCabinClimateIntent` (except disabling Dog Mode) |
-| `VentWindowsIntent`, `CloseWindowsIntent` | `SetMaxDefrostIntent`, `SetBioweaponModeIntent`, `SetPetModeIntent(on: true)` |
+| `CloseWindowsIntent` | `VentWindowsIntent`, `SetMaxDefrostIntent`, `SetBioweaponModeIntent`, `SetPetModeIntent(on: true)` |
 | `SetChargePortIntent(action: .open)` | `SetChargePortIntent(action: .close)`, `StartChargingIntent` |
 | `StopChargingIntent`, `SetChargeLimitIntent` | `SetSentryModeIntent(on: true)` |
 | `SetSentryModeIntent(on: false)`, `SetPetModeIntent(on: false)` | `FlashLightsIntent`, `SendNavigationIntent`, `SetSeatClimateIntent`, `SetSteeringWheelHeaterIntent` |
-| `HonkHornIntent` | All read-only telemetry, drive search/details, release notes, and driving/charging/battery stats tools |
+| | `HonkHornIntent` and all read-only telemetry, drive search/details, release notes, and driving/charging/battery stats tools |
 | `InstallSoftwareUpdateIntent`, `CancelSoftwareUpdateIntent` | |
+
+`ControlCarIntent` validates all requested changes, collects the actions in the confirmation column into a single prompt, and obtains that confirmation before dispatching its first command. Keep its action policy aligned with the corresponding single-action tools.
+
+For several requested changes to one car, pass the supported fields together in `CarControlSettings`. The app orders the operations, including starting HVAC once before setting a temperature. After a partial failure, report the accepted steps and the first unconfirmed operation. Resume only on a new user request, using the outstanding changes. Use the specialist tools for software updates and seat cooling.
 
 ## 4. Entities: `SyncableEntity`, `EntityStringQuery`, `@Property`, and `@AppEntity(.generable)`
 

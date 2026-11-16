@@ -37,6 +37,7 @@ final class FleetDataStore {
     @ObservationIgnored private var sessionGeneration = 0
     @ObservationIgnored private var isHydratingCache = false
     @ObservationIgnored private var lastRosterRefresh: Date?
+    @ObservationIgnored private var spotlightRosterScope: String?
     @ObservationIgnored private var loadingCounts: [LoadingKind: Int] = [:]
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var selectionRefreshTask: Task<Void, Never>?
@@ -46,7 +47,11 @@ final class FleetDataStore {
     private(set) var user: FleetUser?
     private(set) var capabilities: FleetCapabilities?
     private(set) var vehicles: [FleetVehicle] = []
-    var selectedVIN: String?
+    var selectedVIN: String? {
+        didSet {
+            if selectedVIN != oldValue { vehicleControlMessage = nil }
+        }
+    }
 
     private(set) var activeCharging: [FleetChargeSession] = []
     private(set) var activeDrivesByVIN: [String: FleetActiveDriveSession] = [:]
@@ -77,6 +82,17 @@ final class FleetDataStore {
 
     private(set) var isRunningControl = false
     private(set) var activeControlAction: String?
+    private struct PendingControl {
+        let expectedState: Bool
+        let startedAt: ContinuousClock.Instant
+    }
+    private var pendingControlsByVIN: [String: [VehicleControlCommand: PendingControl]] = [:]
+    @ObservationIgnored private var lastCommandStartedAt: ContinuousClock.Instant?
+
+    var pendingControls: Set<VehicleControlCommand> {
+        guard let vin = selectedVehicle?.vin, let commands = pendingControlsByVIN[vin] else { return [] }
+        return Set(commands.keys)
+    }
     private(set) var vehicleControlMessage: String?
 
     private(set) var isMutatingSoftware = false
@@ -195,6 +211,7 @@ final class FleetDataStore {
     func loadInitialData(validatedBootstrap: FleetAPIPage<FleetBootstrap>? = nil) async {
         guard !loadState.isLoading else { return }
         let generation = sessionGeneration
+        let rosterScope = FleetIntentService.make().sessionScopeID
         loadState = .loading
         lastErrorMessage = nil
 
@@ -207,6 +224,7 @@ final class FleetDataStore {
             }
             try Task.checkCancellation()
             guard generation == sessionGeneration else { return }
+            spotlightRosterScope = rosterScope
             applyBootstrap(page.data, cursor: page.cursor, requestID: page.requestID, isCached: false)
             await refreshCapabilitiesIfNeeded(generation: generation)
             if generation == sessionGeneration, !Task.isCancelled {
@@ -233,6 +251,7 @@ final class FleetDataStore {
 
         guard !isRefreshing else { return }
         let generation = sessionGeneration
+        let rosterScope = FleetIntentService.make().sessionScopeID
         isRefreshing = true
         lastErrorMessage = nil
         defer {
@@ -244,6 +263,7 @@ final class FleetDataStore {
             guard !Task.isCancelled, generation == sessionGeneration, self.cursor == cursor else { return }
 
             if let roster = page.data.vehicles {
+                spotlightRosterScope = rosterScope
                 applyVehicleRoster(roster)
             } else {
                 mergeLatestSnapshots(page.data.latest)
@@ -302,6 +322,7 @@ final class FleetDataStore {
         isShowingCachedData = false
         lastRefreshDate = nil
         lastRosterRefresh = nil
+        spotlightRosterScope = nil
         lastRequestID = nil
         lastErrorMessage = nil
 
@@ -314,6 +335,8 @@ final class FleetDataStore {
 
         isRunningControl = false
         activeControlAction = nil
+        pendingControlsByVIN.removeAll()
+        lastCommandStartedAt = nil
         vehicleControlMessage = nil
 
         isMutatingSoftware = false
@@ -334,30 +357,33 @@ final class FleetDataStore {
 
     // MARK: - Vehicle Refresh & Control Actions
 
-    func refreshSelectedVehicleLive() async {
+    func refreshSelectedVehicleLive(includingTires: Bool = true) async {
         await performSelectedVehicleRefresh { vin, generation in
-            let page = try await apiClient.latestSnapshot(vin: vin)
+            let page = try await apiClient.latestSnapshot(vin: vin, includingTires: includingTires)
             try validateReadResult(for: vin, generation: generation)
             var snapshot = page.data
             if FleetDataNormalizer.normalizedString(snapshot.vin) == nil {
                 snapshot.vin = vin
             }
+            if !includingTires, let previous = selectedVehicle?.latest?.tires { snapshot.tires = previous }
             mergeLatestSnapshots([snapshot])
             return page.requestID
         }
     }
 
     @discardableResult
-    func runSelectedVehicleControl(
-        action: String,
-        params: [String: JSONValue] = [:]
-    ) async -> Bool {
-        guard let vin = selectedVehicle?.vin, !isRunningControl else {
+    func runSelectedVehicleControl(_ command: VehicleControlCommand, for vin: String) async -> Bool {
+        guard selectedVehicle?.vin == vin, !isRunningControl,
+              !pendingControls.contains(where: { $0.conflicts(with: command) }) else {
             return false
         }
 
         let generation = sessionGeneration
-        activeControlAction = action
+        let expected = command.expectedState(from: selectedVehicle?.latest)
+        lastCommandStartedAt = .now
+        let climateService: FleetIntentService? = if case .climate = command { .make() } else { nil }
+        let climateScope = climateService?.sessionScopeID
+        activeControlAction = command.action
         isRunningControl = true
         vehicleControlMessage = "Sending command…"
         defer {
@@ -368,11 +394,16 @@ final class FleetDataStore {
         }
 
         do {
-            let page = try await apiClient.runControl(action: action, vin: vin, params: params)
-            guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return true }
+            let page = try await apiClient.runControl(action: command.action, vin: vin, params: command.parameters)
+            guard generation == sessionGeneration else { return false }
+            let mode = FleetSandboxStore.shared.mode()
+            if let climateService, let climateScope, climateService.sessionScopeID == climateScope {
+                climateService.recordClimateControl(command.action, vin: vin)
+            }
+            guard selectedVehicle?.vin == vin else { return true }
             lastErrorMessage = nil
             lastRequestID = page.requestID ?? lastRequestID
-            switch FleetSandboxStore.shared.mode() {
+            switch mode {
             case .live:
                 vehicleControlMessage = "Command sent"
             case .dryRun:
@@ -380,7 +411,9 @@ final class FleetDataStore {
             case .demoVehicle:
                 vehicleControlMessage = "Simulated on demo car"
             }
-            await refreshSelectedVehicleLive()
+            if command != .honk, command != .flashLights {
+                reconcileAcknowledgedControl(command, for: vin, expected: expected)
+            }
             return true
         } catch {
             guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return false }
@@ -388,6 +421,43 @@ final class FleetDataStore {
             lastErrorMessage = message
             vehicleControlMessage = message
             return false
+        }
+    }
+
+    func showVehicleStatusSummary(_ summary: String, for vin: String) {
+        guard selectedVehicle?.vin == vin, !isRunningControl else { return }
+        vehicleControlMessage = summary
+    }
+
+    func reconcileAcknowledgedControl(_ command: VehicleControlCommand, for vin: String, expected: Bool?) {
+        guard selectedVehicle?.vin == vin, FleetSandboxStore.shared.mode() != .dryRun else { return }
+        let generation = sessionGeneration
+        let acknowledgedAt = ContinuousClock.now
+        lastCommandStartedAt = acknowledgedAt
+        if let expected, command.observedState(in: selectedVehicle?.latest) != expected {
+            pendingControlsByVIN[vin, default: [:]][command] = PendingControl(expectedState: expected, startedAt: acknowledgedAt)
+        }
+
+        Task {
+            guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return }
+            await refreshSelectedVehicleLive(includingTires: false)
+        }
+        guard pendingControlsByVIN[vin]?[command]?.startedAt == acknowledgedAt else { return }
+        Task {
+            // A sleeping vehicle can keep returning the previous state. Allow a deliberate retry.
+            try? await Task.sleep(until: acknowledgedAt + .seconds(15), clock: .continuous)
+            guard generation == sessionGeneration, pendingControlsByVIN[vin]?[command]?.startedAt == acknowledgedAt else { return }
+            pendingControlsByVIN[vin]?[command] = nil
+            if selectedVehicle?.vin == vin, lastCommandStartedAt == acknowledgedAt, vehicleControlMessage == "Command sent" {
+                vehicleControlMessage = "Command sent. Updated vehicle state is unavailable."
+            }
+        }
+    }
+
+    private func reconcilePendingControls(with snapshot: FleetLatestSnapshot) {
+        guard let pending = pendingControlsByVIN[snapshot.vin] else { return }
+        pendingControlsByVIN[snapshot.vin] = pending.filter { command, pending in
+            command.observedState(in: snapshot) != pending.expectedState
         }
     }
 
@@ -699,7 +769,13 @@ final class FleetDataStore {
             lastErrorMessage = nil
             lastRequestID = page.requestID ?? lastRequestID
             softwareActionMessage = successMessage
-            await refreshSelectedVehicleSoftware(forceRefresh: true)
+            let scope = spotlightRosterScope
+            let readings = await FleetAPIClient.withSharedVehicleState(for: vin) {
+                _ = await self.refreshSelectedVehicleSoftware(forceRefresh: true)
+            }
+            if let scope, generation == sessionGeneration, selectedVehicle?.vin == vin, scope == spotlightRosterScope {
+                publishSpotlight(readings: readings, scope: scope)
+            }
             return true
         } catch {
             guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return false }
@@ -776,6 +852,8 @@ final class FleetDataStore {
 
     private func refreshSelectedVehicleDetails(onlyMissing: Bool = false) async {
         let generation = sessionGeneration
+        let scope = spotlightRosterScope
+        var readings: FleetSpotlightIndexer.DashboardReadings?
         if let vin = selectedVehicle?.vin {
             let steps: [() async -> Void] = [
                 {
@@ -799,15 +877,9 @@ final class FleetDataStore {
                         || self.selectedVehicleRecentDrives.contains(where: self.needsDriveDetails) {
                         await self.refreshSelectedVehicleDrives()
                     }
-                },
-                {
-                    if !onlyMissing || self.locationHistoryByVIN[vin, default: []].isEmpty
-                        || self.telemetrySeriesByVIN[vin, default: []].isEmpty {
-                        await self.refreshSelectedVehicleTelemetry()
-                    }
                 }
             ]
-            await Self.$batchesCacheWrites.withValue(true) {
+            readings = await Self.$batchesCacheWrites.withValue(true) {
                 await FleetAPIClient.withSharedVehicleState(for: vin) {
                     for step in steps {
                         guard !Task.isCancelled, generation == self.sessionGeneration,
@@ -818,8 +890,23 @@ final class FleetDataStore {
             }
         }
         if generation == sessionGeneration, !Task.isCancelled {
+            if let scope, !isShowingCachedData, scope == spotlightRosterScope {
+                publishSpotlight(readings: readings, scope: scope)
+            }
             await saveCurrentState()
         }
+    }
+
+    private func publishSpotlight(readings: FleetSpotlightIndexer.DashboardReadings?, scope: String) {
+        let roster = vehicles.map {
+            FleetVehicleInfo(vin: $0.vin, displayName: $0.displayName, vehicleTag: $0.vehicleTag,
+                             carType: $0.latest?.vehicleConfiguration?.carType,
+                             exteriorColor: $0.latest?.vehicleConfiguration?.exteriorColor,
+                             hasSeatCooling: $0.latest?.vehicleConfiguration?.hasSeatCooling,
+                             canActuateTrunks: $0.latest?.vehicleConfiguration?.canActuateTrunks,
+                             canAcceptNavigationRequests: $0.latest?.vehicleConfiguration?.canAcceptNavigationRequests)
+        }
+        Task(priority: .utility) { await FleetSpotlightIndexer.synchronize(vehicles: roster, readings: readings, scope: scope) }
     }
 
     private func needsDriveDetails(_ drive: FleetDriveSession) -> Bool {
@@ -885,6 +972,9 @@ final class FleetDataStore {
             }
             return vehicle
         }
+        for vehicle in vehicles {
+            if let snapshot = vehicle.latest { reconcilePendingControls(with: snapshot) }
+        }
         if !removedVINs.isEmpty {
             let removedSessionIDs = Set(recentDrives.lazy.filter { removedVINs.contains($0.vin) }.map(\.sessionID))
                 .union(activeDrivesByVIN.values.lazy.filter { removedVINs.contains($0.vin) }.map(\.sessionID))
@@ -898,6 +988,7 @@ final class FleetDataStore {
             activeCharging.removeAll { removedVINs.contains($0.vin) }
             recentDrives.removeAll { removedVINs.contains($0.vin) }
             for vin in removedVINs {
+                pendingControlsByVIN.removeValue(forKey: vin)
                 activeDrivesByVIN.removeValue(forKey: vin)
                 softwareUpdatesByVIN.removeValue(forKey: vin)
                 locationHistoryByVIN.removeValue(forKey: vin)
@@ -982,6 +1073,7 @@ final class FleetDataStore {
             if snapshot.tires == nil { snapshot.tires = previous?.tires }
             if let software = snapshot.software { softwareUpdates[snapshot.vin] = software }
             vehicles[index].latest = snapshot
+            reconcilePendingControls(with: snapshot)
         }
         mergeSoftwareUpdates(softwareUpdates)
     }

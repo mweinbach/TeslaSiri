@@ -150,6 +150,7 @@ public struct StartClimateIntent: AppIntent, PredictableIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
+            let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
             let summary = "Climate is starting in \(resolved.name)."
@@ -160,7 +161,7 @@ public struct StartClimateIntent: AppIntent, PredictableIntent {
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary
+                    appliedSummary: summary, scope: scope, running: true
                 )
             )
         } catch {

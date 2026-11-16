@@ -185,10 +185,52 @@ private final class SnapshotMemoryCache: @unchecked Sendable {
     }
 }
 
+/// A recorded route is independent of map style. Keep only completed paths with usable
+/// GPS samples, so an offline or partial response can be retried on the next render.
+private actor CompletedDrivePathCache {
+    struct Key: Hashable {
+        let scope: String
+        let vin: String
+        let driveID: String
+        let from: Date
+        let to: Date
+    }
+
+    private struct Entry {
+        let points: [FleetDriveRoutePoint]
+        let fetchedAt: ContinuousClock.Instant
+    }
+
+    private var entries: [Key: Entry] = [:]
+    private var loading: [Key: Task<[FleetDriveRoutePoint], Error>] = [:]
+
+    func points(for key: Key, service: FleetIntentService) async -> [FleetDriveRoutePoint] {
+        if let entry = entries[key], entry.fetchedAt.duration(to: .now) < .seconds(300) {
+            return entry.points
+        }
+        if let task = loading[key] {
+            return (try? await task.value) ?? []
+        }
+        let task = Task {
+            try await service.drivePath(vin: key.vin, driveID: key.driveID, from: key.from, to: key.to)
+        }
+        loading[key] = task
+        let points = (try? await task.value) ?? []
+        loading.removeValue(forKey: key)
+        guard points.count >= 2, service.sessionScopeID == key.scope else { return [] }
+        entries[key] = Entry(points: points, fetchedAt: .now)
+        if entries.count > 32, let oldest = entries.min(by: { $0.value.fetchedAt < $1.value.fetchedAt }) {
+            entries.removeValue(forKey: oldest.key)
+        }
+        return points
+    }
+}
+
 /// Renders crisp Apple Maps route and point snapshots for Siri Snippets, with automatic
 /// timeout protection, in-memory caching, and GPS/MKDirections route resolution.
 public enum SiriMapSnapshotRenderer {
     private static let cache = SnapshotMemoryCache()
+    private static let recordedPaths = CompletedDrivePathCache()
 
     /// Resolves GPS route points for a `DriveEntity` and renders an Apple Maps route image.
     public static func renderDriveRoute(
@@ -198,6 +240,7 @@ public enum SiriMapSnapshotRenderer {
         size: CGSize = CGSize(width: 380, height: 172),
         allowNetworkSnapshot: Bool = true
     ) async -> SiriRenderedMapData {
+        let scope = service.sessionScopeID
         let points = await resolveRoutePoints(for: drive, service: service, allowGeocoding: allowNetworkSnapshot)
         guard points.count >= 2, allowNetworkSnapshot, !Task.isCancelled else {
             return SiriRenderedMapData(pngData: nil, points: points, style: style)
@@ -211,6 +254,9 @@ public enum SiriMapSnapshotRenderer {
         }
 
         let pngData = await snapshotRoutePNG(points: points, style: style, size: size)
+        guard service.sessionScopeID == scope else {
+            return SiriRenderedMapData(pngData: nil, points: [], style: style)
+        }
         if let pngData {
             cache.store(pngData, forKey: cacheKey)
         }
@@ -273,18 +319,26 @@ public enum SiriMapSnapshotRenderer {
         service: FleetIntentService = .make(),
         allowGeocoding: Bool = true
     ) async -> [FleetDriveRoutePoint] {
-        let endDate = drive.endedAt ?? drive.startedAt.addingTimeInterval(TimeInterval((drive.durationMinutes ?? 20) * 60))
-        if let fetched = try? await service.drivePath(
-            vin: drive.vin,
-            driveID: drive.id,
-            from: drive.startedAt,
-            to: endDate,
-            maxPoints: 72
-        ), fetched.count >= 2 {
-            return fetched
-        }
-
         guard !Task.isCancelled else { return [] }
+        let scope = service.sessionScopeID
+        let fetched: [FleetDriveRoutePoint]
+        if let scope, let end = drive.endedAt {
+            let key = CompletedDrivePathCache.Key(
+                scope: scope, vin: drive.vin, driveID: drive.id, from: drive.startedAt, to: end
+            )
+            fetched = await recordedPaths.points(for: key, service: service)
+        } else {
+            let end = drive.endedAt ?? drive.startedAt.addingTimeInterval(TimeInterval((drive.durationMinutes ?? 20) * 60))
+            fetched = (try? await service.drivePath(vin: drive.vin, driveID: drive.id, from: drive.startedAt, to: end)) ?? []
+        }
+        guard service.sessionScopeID == scope, !Task.isCancelled else { return [] }
+        if fetched.count >= 2 { return fetched }
+
+        let fallback = await fallbackRoutePoints(for: drive, allowGeocoding: allowGeocoding)
+        return service.sessionScopeID == scope && !Task.isCancelled ? fallback : []
+    }
+
+    private static func fallbackRoutePoints(for drive: DriveEntity, allowGeocoding: Bool) async -> [FleetDriveRoutePoint] {
         var startCoord: CLLocationCoordinate2D?
         if let sLat = drive.startLatitude, let sLon = drive.startLongitude {
             startCoord = CLLocationCoordinate2D(latitude: sLat, longitude: sLon)

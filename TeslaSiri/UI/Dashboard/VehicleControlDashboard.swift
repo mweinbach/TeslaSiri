@@ -41,6 +41,32 @@ enum VehicleControlCommand: Hashable, Identifiable {
         }
     }
 
+    func conflicts(with other: Self) -> Bool {
+        switch (self, other) {
+        case (.climate, .climate), (.lock, .lock), (.chargePort, .chargePort): true
+        default: self == other
+        }
+    }
+
+    func observedState(in snapshot: FleetLatestSnapshot?) -> Bool? {
+        switch self {
+        case .climate: snapshot?.climateOn
+        case .lock: snapshot?.locked
+        case .chargePort: snapshot?.chargePortDoorOpen
+        case .trunk(let front): front ? snapshot?.closures?.frontTrunkOpen : snapshot?.closures?.rearTrunkOpen
+        default: nil
+        }
+    }
+
+    func expectedState(from snapshot: FleetLatestSnapshot?) -> Bool? {
+        switch self {
+        case .climate(let on), .lock(let on), .chargePort(let on): on
+        case .trunk(isFront: true): true
+        case .trunk(isFront: false): snapshot?.closures?.rearTrunkOpen.map { !$0 }
+        default: nil
+        }
+    }
+
     var action: String {
         switch self {
         case .climate(let shouldTurnOn):
@@ -340,6 +366,7 @@ struct VehicleQuickActionBar: View {
     let units: String?
     let isRunningControl: Bool
     let activeControlAction: String?
+    var pendingControls: Set<VehicleControlCommand> = []
     let controlMessage: String?
     let controlsEnabled: Bool
     let onCommand: (VehicleControlCommand) -> Void
@@ -447,6 +474,7 @@ struct VehicleQuickActionBar: View {
             )
         }
         .buttonStyle(QuickActionButtonStyle(isActive: isActive, tint: tint))
+        .disabled(isBusy(command))
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
     }
@@ -467,6 +495,7 @@ struct VehicleQuickActionBar: View {
                     Button("Turn Off Climate", systemImage: "fan.slash") {
                         trigger(.climate(shouldTurnOn: false))
                     }
+                    .disabled(isBusy(.climate(shouldTurnOn: false)))
                 }
             }
 
@@ -493,7 +522,7 @@ struct VehicleQuickActionBar: View {
     }
 
     private func isBusy(_ command: VehicleControlCommand) -> Bool {
-        isRunningControl && activeControlAction == command.action
+        (isRunningControl && activeControlAction == command.action) || pendingControls.contains { $0.conflicts(with: command) }
     }
 
     private func trigger(_ command: VehicleControlCommand) {

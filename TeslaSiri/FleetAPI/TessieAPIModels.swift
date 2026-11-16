@@ -76,6 +76,8 @@ nonisolated struct TessieVehicleState: Decodable, Sendable {
 
     private enum ConfigurationField: String, CodingKey {
         case carType = "car_type", chassisType = "chassis_type", exteriorColor = "exterior_color"
+        case canActuateTrunks = "can_actuate_trunks", canAcceptNavigationRequests = "can_accept_navigation_requests"
+        case hasSeatCooling = "has_seat_cooling"
         case fascia = "fascia_type", interiorTrim = "interior_trim_type", paintOverride = "paint_color_override"
         case rhd, trimBadging, snakeCaseTrimBadging = "trim_badging", wheelType = "wheel_type"
     }
@@ -287,6 +289,9 @@ nonisolated enum TessieModelAdapter {
             vehicleConfiguration: FleetVehicleConfiguration(
                 carType: configuration.string("car_type"),
                 chassisType: configuration.string("chassis_type"),
+                canActuateTrunks: configuration.bool("can_actuate_trunks"),
+                canAcceptNavigationRequests: configuration.bool("can_accept_navigation_requests"),
+                hasSeatCooling: configuration.bool("has_seat_cooling"),
                 exteriorColor: configuration.string("exterior_color"),
                 fasciaType: configuration.string("fascia_type"),
                 interiorTrimType: configuration.string("interior_trim_type"),

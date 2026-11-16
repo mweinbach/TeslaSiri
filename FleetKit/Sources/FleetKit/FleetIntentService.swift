@@ -12,15 +12,20 @@ public struct FleetIntentService: Sendable {
     private let client: FleetIntentClient
     private let tokenStore: FleetSharedTokenStore
     private let sandbox: FleetSandboxStore?
+    private let credentialFingerprint: String?
+    private let initialSessionScope: String?
 
     public init(
         client: FleetIntentClient = FleetIntentClient(),
-        tokenStore: FleetSharedTokenStore = .shared,
+        tokenStore: FleetSharedTokenStore? = nil,
         sandbox: FleetSandboxStore? = nil
     ) {
         self.client = client
-        self.tokenStore = tokenStore
+        self.tokenStore = tokenStore ?? client.tokenStore
         self.sandbox = sandbox
+        let fingerprint = sandbox?.mode() == .demoVehicle ? nil : client.tokenStore.accessToken().map(FleetSharedTokenStore.fingerprint(for:))
+        self.credentialFingerprint = fingerprint
+        self.initialSessionScope = Self.scope(client: client, sandbox: sandbox, fingerprint: fingerprint)
     }
 
     public static func make() -> FleetIntentService {
@@ -31,37 +36,74 @@ public struct FleetIntentService: Sendable {
         sandbox?.mode() ?? .live
     }
 
+    var appGroupIdentifier: String { sandbox?.appGroup ?? client.tokenStore.appGroup }
+
+    /// Opaque identity shared by the app and extension. Changes when credentials or sandbox mode change.
+    public var sessionScopeID: String? {
+        let current = Self.scope(client: client, sandbox: sandbox, fingerprint: credentialFingerprint)
+        return current == initialSessionScope ? current : nil
+    }
+
+    private static func scope(client: FleetIntentClient, sandbox: FleetSandboxStore?, fingerprint: String?) -> String? {
+        let mode = sandbox?.sessionScope ?? "live"
+        if sandbox?.mode() == .demoVehicle { return "demo.\(mode)" }
+        guard let fingerprint else { return nil }
+        return "\(client.tokenStore.sessionScope(fingerprint: fingerprint)).\(mode)"
+    }
+
+    /// Recheck the actual Keychain credential at request construction. Cache hits only check the shared generations.
+    private func withSession<Result>(_ work: () async throws -> Result) async throws -> Result {
+        try await FleetIntentClient.$validateRequest.withValue({ token in
+            guard FleetSharedTokenStore.fingerprint(for: token) == credentialFingerprint,
+                  sessionScopeID != nil else { throw FleetKitError.sessionExpired }
+        }) {
+            try await work()
+        }
+    }
+
+    private func validatedScope() throws -> String {
+        guard let initialSessionScope else { throw FleetKitError.notSignedIn }
+        guard sessionScopeID == initialSessionScope else { throw FleetKitError.sessionExpired }
+        return initialSessionScope
+    }
+
     // MARK: - Resolution
 
-    /// Resolves the vehicle an intent should act on. Falls back to the shared
-    /// selected VIN, then to the first vehicle on the account.
-    public func resolvedVehicle(_ requestedVIN: String?) async throws -> FleetVehicleInfo {
-        let vehicles = try await self.vehicles()
-        let preferred = requestedVIN ?? tokenStore.selectedVIN()
-        if let preferred, let match = vehicles.first(where: { $0.vin == preferred }) {
-            let source = requestedVIN != nil ? "intent parameter" : "shared selected VIN"
-            FleetKitLog.intents.info("Resolved vehicle \(match.name, privacy: .public) (\(FleetKitLog.vin(match.vin), privacy: .public)) via \(source, privacy: .public)")
-            return match
+    public func defaultVehicle(in vehicles: [FleetVehicleInfo]) -> FleetVehicleInfo? {
+        if let selected = tokenStore.selectedVIN(), let vehicle = vehicles.first(where: { $0.vin == selected }) {
+            return vehicle
         }
-        guard let first = vehicles.first else {
-            FleetKitLog.intents.error("Vehicle resolution failed: account returned no vehicles")
+        return vehicles.first
+    }
+
+    public func resolvedVehicle(_ requestedVIN: String?) async throws -> FleetVehicleInfo {
+        let roster = try await vehicles(requiring: requestedVIN)
+        if let requestedVIN {
+            guard let vehicle = roster.first(where: { $0.vin == requestedVIN }) else {
+                throw FleetKitError.api("That vehicle is no longer available on this Tessie account.")
+            }
+            return vehicle
+        }
+        guard let vehicle = defaultVehicle(in: roster) else {
             throw FleetKitError.api("No Tesla vehicles were found on your account.")
         }
-        if let preferred {
-            FleetKitLog.intents.warning("Preferred VIN \(FleetKitLog.vin(preferred), privacy: .public) not on account; falling back to \(first.name, privacy: .public)")
-        } else {
-            FleetKitLog.intents.info("Resolved vehicle \(first.name, privacy: .public) (first of \(vehicles.count, privacy: .public))")
-        }
-        return first
+        return vehicle
     }
 
     // MARK: - Reads
 
     public func vehicles() async throws -> [FleetVehicleInfo] {
+        try await vehicles(requiring: nil)
+    }
+
+    private func vehicles(requiring vin: String?) async throws -> [FleetVehicleInfo] {
+        let scope = try validatedScope()
         if let sandbox, sandbox.mode() == .demoVehicle {
             return [sandbox.demoState().vehicleInfo]
         }
-        return try await client.vehicles()
+        let roster = try await withSession { try await client.vehicles(requiring: vin, scope: scope) }
+        _ = try validatedScope()
+        return roster
     }
 
     public func snapshot(vin: String) async throws -> FleetSnapshotInfo {
@@ -69,6 +111,35 @@ public struct FleetIntentService: Sendable {
             return sandbox.demoState().snapshotInfo
         }
         return try await client.snapshot(vin: vin)
+    }
+
+    func snapshot(for vehicle: FleetVehicleInfo, topics: [VehicleInfoTopic]) async throws -> FleetSnapshotInfo {
+        _ = try validatedScope()
+        if let sandbox, sandbox.mode() == .demoVehicle { return sandbox.demoState().snapshotInfo }
+        if let charge = vehicle.rosterCharge, charge.isRecentRosterObservation,
+           !topics.isEmpty, topics.allSatisfy({ topic in
+               switch topic {
+               case .battery: charge.batteryLevel != nil
+               case .range: charge.batteryRangeMiles != nil
+               default: false
+               }
+           }) {
+            return charge
+        }
+        let snapshot = try await client.snapshot(vin: vehicle.vin, topics: topics)
+        _ = try validatedScope()
+        return snapshot
+    }
+
+    func cachedClimateSnapshot(vin: String) async -> FleetSnapshotInfo? {
+        guard let scope = try? validatedScope() else { return nil }
+        if let sandbox, sandbox.mode() == .demoVehicle {
+            let state = sandbox.demoState()
+            return state.vehicleInfo.vin == vin ? state.snapshotInfo : nil
+        }
+        guard let climate = await client.cachedVehicle(vin: vin, scope: scope)?.rosterClimate,
+              climate.isRecentRosterObservation, sessionScopeID == scope else { return nil }
+        return climate
     }
 
     func snapshotAndSoftware(vin: String) async throws -> (snapshot: FleetSnapshotInfo, software: FleetSoftwareInfo) {
@@ -80,10 +151,8 @@ public struct FleetIntentService: Sendable {
     }
 
     public func units() async throws -> String? {
-        if let sandbox, sandbox.mode() == .demoVehicle {
-            return "imperial"
-        }
-        return try await client.user().units
+        if let sandbox, sandbox.mode() == .demoVehicle { return "imperial" }
+        return try await withSession { try await client.units(scope: validatedScope()) }
     }
 
     public func drives(
@@ -91,7 +160,8 @@ public struct FleetIntentService: Sendable {
         limit: Int,
         from: Date? = nil,
         to: Date? = nil,
-        tag: String? = nil
+        tag: String? = nil,
+        requireCompleteRows: Bool = false
     ) async throws -> [FleetDriveInfo] {
         if let sandbox, sandbox.mode() == .demoVehicle {
             let normalizedTag = tag?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -105,7 +175,7 @@ public struct FleetIntentService: Sendable {
             }
             return Array(filtered.prefix(max(limit, 0)))
         }
-        return try await client.drives(vin: vin, limit: limit, from: from, to: to, tag: tag)
+        return try await client.drives(vin: vin, limit: limit, from: from, to: to, tag: tag, requireCompleteRows: requireCompleteRows)
     }
 
     public func drivePath(
@@ -125,7 +195,8 @@ public struct FleetIntentService: Sendable {
         vin: String,
         limit: Int,
         from: Date? = nil,
-        to: Date? = nil
+        to: Date? = nil,
+        requireCompleteRows: Bool = false
     ) async throws -> [FleetChargeInfo] {
         if let sandbox, sandbox.mode() == .demoVehicle {
             let filtered = FleetDemoVehicleState.demoCharges(vin: vin).filter { charge in
@@ -135,7 +206,7 @@ public struct FleetIntentService: Sendable {
             }
             return Array(filtered.prefix(max(limit, 0)))
         }
-        return try await client.charges(vin: vin, limit: limit, from: from, to: to)
+        return try await client.charges(vin: vin, limit: limit, from: from, to: to, requireCompleteRows: requireCompleteRows)
     }
 
     public func batteryHealth(vin: String) async throws -> FleetBatteryHealthInfo {
@@ -176,90 +247,60 @@ public struct FleetIntentService: Sendable {
 
     // MARK: - Writes
 
-    /// Runs a control action after validating that the backend advertises it.
+    /// Checks membership again at dispatch. A just-resolved VIN reuses the same roster.
+    private func dispatch(
+        vin: String,
+        simulate: (FleetSandboxStore, String) -> Void,
+        send: () async throws -> Void
+    ) async throws {
+        let scope = try validatedScope()
+        let target = try await resolvedVehicle(vin)
+        guard sessionScopeID == scope else { throw FleetKitError.sessionExpired }
+        if let sandbox, sandbox.mode().interceptsWrites {
+            simulate(sandbox, target.name)
+            return
+        }
+        try await withSession(send)
+    }
+
     public func runControl(
         action: String,
         vin: String,
         params: [String: FleetControlValue] = [:],
         humanName: String
     ) async throws {
-        if let sandbox, sandbox.mode().interceptsWrites {
-            let available: FleetControlActionsInfo
-            if sandbox.mode() == .demoVehicle {
-                available = FleetDemoVehicleState.supportedControlActions
-            } else {
-                available = (try? await client.controlActions()) ?? FleetDemoVehicleState.supportedControlActions
+        let available = try await controlActions()
+        guard available.supports(action) else { throw FleetKitError.unsupportedAction(humanName) }
+        try await dispatch(vin: vin) { sandbox, name in
+            sandbox.recordSimulatedControl(action: action, vin: vin, vehicleName: name, params: params, source: "Siri")
+        } send: {
+            try await client.runControl(action: action, vin: vin, params: params)
+            if let scope = initialSessionScope {
+                await client.invalidateRosterTelemetry(vin: vin, scope: scope, action: action)
             }
-            guard available.supports(action) else {
-                FleetKitLog.intents.error("Sandbox control '\(action, privacy: .public)' rejected for \(FleetKitLog.vin(vin), privacy: .public): unsupported")
-                throw FleetKitError.unsupportedAction(humanName)
-            }
-            let vehicleName = await resolveVehicleDisplayName(for: vin, sandbox: sandbox)
-            sandbox.recordSimulatedControl(
-                action: action,
-                vin: vin,
-                vehicleName: vehicleName,
-                params: params,
-                source: "Siri"
-            )
-            FleetKitLog.intents.notice("Sandbox (\(sandbox.mode().rawValue, privacy: .public)) simulated '\(action, privacy: .public)' for \(FleetKitLog.vin(vin), privacy: .public)")
-            return
         }
-
-        let available = try await client.controlActions()
-        guard available.supports(action) else {
-            FleetKitLog.intents.error("Control '\(action, privacy: .public)' rejected for \(FleetKitLog.vin(vin), privacy: .public): backend does not advertise it")
-            throw FleetKitError.unsupportedAction(humanName)
+        if action == "auto_conditioning_start" || action == "auto_conditioning_stop" || action == "set_temps",
+           let scope = initialSessionScope, scope == sessionScopeID {
+            let target = (params["driver_temp"] ?? params["passenger_temp"]).flatMap { Double($0.queryValue) }
+            recordClimateControl(action, vin: vin, targetCelsius: target)
         }
-        let paramKeys = params.keys.sorted().joined(separator: ",")
-        FleetKitLog.intents.notice("Control '\(action, privacy: .public)' running on \(FleetKitLog.vin(vin), privacy: .public) params: [\(paramKeys, privacy: .public)]")
-        try await client.runControl(action: action, vin: vin, params: params)
-        FleetKitLog.intents.notice("Control '\(action, privacy: .public)' accepted for \(FleetKitLog.vin(vin), privacy: .public)")
+        FleetKitLog.intents.notice("Control '\(action, privacy: .public)' completed for \(FleetKitLog.vin(vin), privacy: .public) [\(self.sandboxMode.rawValue, privacy: .public)]")
     }
 
     public func installSoftwareUpdate(vin: String, offsetSec: Int) async throws {
-        if let sandbox, sandbox.mode().interceptsWrites {
-            let vehicleName = await resolveVehicleDisplayName(for: vin, sandbox: sandbox)
-            sandbox.recordSimulatedSoftwareAction(
-                isInstall: true,
-                vin: vin,
-                vehicleName: vehicleName,
-                offsetSec: offsetSec,
-                source: "Siri"
-            )
-            FleetKitLog.intents.notice("Sandbox (\(sandbox.mode().rawValue, privacy: .public)) simulated software install for \(FleetKitLog.vin(vin), privacy: .public)")
-            return
+        try await dispatch(vin: vin) { sandbox, name in
+            sandbox.recordSimulatedSoftwareAction(isInstall: true, vin: vin, vehicleName: name, offsetSec: offsetSec, source: "Siri")
+        } send: {
+            try await client.installSoftwareUpdate(vin: vin, offsetSec: offsetSec)
         }
-        FleetKitLog.intents.notice("Software install requested for \(FleetKitLog.vin(vin), privacy: .public) (offset \(offsetSec, privacy: .public)s)")
-        try await client.installSoftwareUpdate(vin: vin, offsetSec: offsetSec)
-        FleetKitLog.intents.notice("Software install accepted for \(FleetKitLog.vin(vin), privacy: .public)")
     }
 
     public func cancelSoftwareUpdate(vin: String) async throws {
-        if let sandbox, sandbox.mode().interceptsWrites {
-            let vehicleName = await resolveVehicleDisplayName(for: vin, sandbox: sandbox)
-            sandbox.recordSimulatedSoftwareAction(
-                isInstall: false,
-                vin: vin,
-                vehicleName: vehicleName,
-                source: "Siri"
-            )
-            FleetKitLog.intents.notice("Sandbox (\(sandbox.mode().rawValue, privacy: .public)) simulated software cancel for \(FleetKitLog.vin(vin), privacy: .public)")
-            return
+        try await dispatch(vin: vin) { sandbox, name in
+            sandbox.recordSimulatedSoftwareAction(isInstall: false, vin: vin, vehicleName: name, source: "Siri")
+        } send: {
+            try await client.cancelSoftwareUpdate(vin: vin)
         }
-        FleetKitLog.intents.notice("Software install cancel requested for \(FleetKitLog.vin(vin), privacy: .public)")
-        try await client.cancelSoftwareUpdate(vin: vin)
-        FleetKitLog.intents.notice("Software install cancel accepted for \(FleetKitLog.vin(vin), privacy: .public)")
-    }
-
-    private func resolveVehicleDisplayName(for vin: String, sandbox: FleetSandboxStore) async -> String {
-        if sandbox.mode() == .demoVehicle {
-            return sandbox.demoState().displayName
-        }
-        if let match = try? await client.vehicles().first(where: { $0.vin == vin }) {
-            return match.name
-        }
-        return FleetKitLog.vin(vin)
     }
 }
 

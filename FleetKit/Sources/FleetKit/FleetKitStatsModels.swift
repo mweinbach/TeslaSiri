@@ -1,7 +1,7 @@
 import Foundation
 
 /// A completed charging session returned by Tessie's `/{vin}/charges` endpoint.
-public struct FleetChargeInfo: Sendable, Identifiable {
+public struct FleetChargeInfo: Encodable, Sendable, Identifiable {
     public let sessionID: String
     public let vin: String
     public let startedAt: Int64

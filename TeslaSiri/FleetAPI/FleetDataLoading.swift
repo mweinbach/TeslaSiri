@@ -10,7 +10,7 @@ protocol FleetDataLoading {
 
     // MARK: - Live Snapshot & Vehicle Controls
 
-    func latestSnapshot(vin: String) async throws -> FleetAPIPage<FleetLatestSnapshot>
+    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot>
     func runControl(
         action: String,
         vin: String,

@@ -64,9 +64,7 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
                     throw FleetKitError.api("That drive does not belong to an active vehicle on your account.")
                 }
                 vehicleName = matchingVehicle.name
-                let refreshed = try await service.drives(vin: matchingVehicle.vin, limit: 100)
-                    .first(where: { $0.sessionID == providedDrive.id })
-                targetEntity = refreshed.map(DriveEntity.init(info:)) ?? providedDrive
+                targetEntity = providedDrive
             } else {
                 let resolved = try await service.resolvedVehicle(vehicle?.id)
                 vehicleName = resolved.name

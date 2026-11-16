@@ -1,3 +1,4 @@
+import FleetKit
 import Foundation
 import OSLog
 
@@ -144,15 +145,39 @@ struct FleetAPIClient {
         var vin: String?
         var cached: (token: String, baseURL: URL, response: Response<TessieJSONObject>)?
 
+        var readings: FleetSpotlightIndexer.DashboardReadings
+
         init(vin: String) {
             self.vin = vin
+            self.readings = .init(vin: vin)
+        }
+
+        func record(_ data: Data, endpoint: Endpoint) {
+            guard let vin, endpoint.method == .get else { return }
+            let path = endpoint.path.split(separator: "/")
+            guard path.count >= 2, path[0].removingPercentEncoding == vin else { return }
+            let limit = endpoint.queryItems.first { $0.name == "limit" }?.value.flatMap(Int.init)
+            switch path[1] {
+            case "state": readings.state = data
+            case "tire_pressure": readings.tires = data
+            case "drives":
+                readings.drives = data
+                readings.driveLimit = limit
+            case "charges":
+                readings.charges = data
+                readings.chargeLimit = limit
+            case "release_notes":
+                readings.notes = data
+                readings.notesVersion = path.last?.removingPercentEncoding
+            default: break
+            }
         }
     }
 
     @TaskLocal private static var vehicleStateScope: VehicleStateScope?
 
     @MainActor
-    static func withSharedVehicleState(for vin: String, operation: @MainActor () async -> Void) async {
+    static func withSharedVehicleState(for vin: String, operation: @MainActor () async -> Void) async -> FleetSpotlightIndexer.DashboardReadings {
         let scope = VehicleStateScope(vin: vin)
         defer {
             scope.vin = nil
@@ -161,6 +186,7 @@ struct FleetAPIClient {
         await $vehicleStateScope.withValue(scope) {
             await operation()
         }
+        return scope.readings
     }
 
     private static let pathComponentAllowedCharacters: CharacterSet = {
@@ -238,7 +264,11 @@ struct FleetAPIClient {
         return page(vehicle, requestID: response.requestID)
     }
 
-    func latestSnapshot(vin: String) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func latestSnapshot(vin: String, includingTires: Bool = true) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+        if !includingTires {
+            let response = try await vehicleState(vin: vin)
+            return page(TessieModelAdapter.snapshot(vin: vin, state: response.data), requestID: response.requestID)
+        }
         let response = try await snapshotState(vin: vin)
         return page(
             TessieModelAdapter.snapshot(vin: vin, state: response.state, tireState: response.tireState),
@@ -292,6 +322,7 @@ struct FleetAPIClient {
 
     func drives(vin: String, limit: Int? = nil, includeRoute: Bool = true) async throws -> FleetAPIPage<[FleetDriveSession]> {
         var query = [URLQueryItem(name: "distance_format", value: "mi")]
+        if Self.vehicleStateScope != nil { query.append(URLQueryItem(name: "temperature_format", value: "f")) }
         if let limit {
             query.append(URLQueryItem(name: "limit", value: String(limit)))
         }
@@ -818,10 +849,9 @@ struct FleetAPIClient {
         let request = try await makeRequest(for: endpoint, accessToken: accessToken)
         let (data, response) = try await perform(request, endpoint: endpoint)
         do {
-            return Response(
-                data: try await Self.decode(Value.self, from: data),
-                requestID: requestID(from: response)
-            )
+            let decoded = try await Self.decode(Value.self, from: data)
+            Self.vehicleStateScope?.record(data, endpoint: endpoint)
+            return Response(data: decoded, requestID: requestID(from: response))
         } catch {
             let requestID = requestID(from: response)
             Self.logger.error("Tessie decoding failed: \(endpoint.method.rawValue, privacy: .public) \(endpoint.path, privacy: .private) error \(error.localizedDescription, privacy: .private)")

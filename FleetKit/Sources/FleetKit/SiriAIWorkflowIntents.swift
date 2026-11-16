@@ -297,105 +297,17 @@ public struct ConfigureCabinClimateIntent: AppIntent {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
+            let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-
+            let steps = settings.controlSteps(climateOn: nil, startWhenEmpty: true)
             if settings.enablePetMode == false {
                 try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
             }
-
-            var appliedParts: [String] = []
-
-            let seatHeatRequested = [settings.driverSeatHeatLevel, settings.passengerSeatHeatLevel]
-                .contains { ($0 ?? 0) > 0 }
-            let shouldStartHVAC = settings.targetTemperatureCelsius != nil
-                || seatHeatRequested
-                || settings.steeringWheelHeat == true
-                || (settings.enableMaxDefrost == nil && settings.enablePetMode == nil
-                    && settings.enableBioweaponDefenseMode == nil && settings.driverSeatHeatLevel == nil
-                    && settings.passengerSeatHeatLevel == nil && settings.steeringWheelHeat == nil)
-
-            if shouldStartHVAC {
-                try await service.runControl(
-                    action: "auto_conditioning_start",
-                    vin: resolved.vin,
-                    humanName: "starting climate"
-                )
-                appliedParts.append("climate on")
+            for step in steps {
+                try await step.run(service: service, vin: resolved.vin)
             }
 
-            if let requestedCelsius = settings.targetTemperatureCelsius {
-                let targetCelsius = SetCabinTemperatureIntent.targetCelsius(
-                    for: Measurement(value: requestedCelsius, unit: UnitTemperature.celsius)
-                )
-                try await service.runControl(
-                    action: "set_temps",
-                    vin: resolved.vin,
-                    params: [
-                        "driver_temp": .double(targetCelsius),
-                        "passenger_temp": .double(targetCelsius)
-                    ],
-                    humanName: "setting the cabin temperature"
-                )
-                appliedParts.append(String(format: "%.1f°C", targetCelsius))
-            }
-
-            if let defrost = settings.enableMaxDefrost {
-                try await service.runControl(
-                    action: "remote_defrost",
-                    vin: resolved.vin,
-                    params: ["on": .bool(defrost)],
-                    humanName: "setting max defrost"
-                )
-                appliedParts.append(defrost ? "max defrost on" : "max defrost off")
-            }
-
-            let seatLevels: [(seat: String, name: String, level: Int?)] = [
-                ("front_left", "driver seat", settings.driverSeatHeatLevel),
-                ("front_right", "passenger seat", settings.passengerSeatHeatLevel)
-            ]
-            for entry in seatLevels {
-                guard let requested = entry.level else { continue }
-                let level = min(max(requested, 0), 3)
-                try await service.runControl(
-                    action: "set_seat_heat",
-                    vin: resolved.vin,
-                    params: ["seat": .string(entry.seat), "level": .int(level)],
-                    humanName: "the seat heater"
-                )
-                appliedParts.append(level > 0 ? "\(entry.name) heat \(level)" : "\(entry.name) heat off")
-            }
-
-            if let wheelHeat = settings.steeringWheelHeat {
-                try await service.runControl(
-                    action: "steering_wheel_heater",
-                    vin: resolved.vin,
-                    params: ["on": .bool(wheelHeat)],
-                    humanName: "the steering wheel heater"
-                )
-                appliedParts.append(wheelHeat ? "steering wheel heat on" : "steering wheel heat off")
-            }
-
-            if let petMode = settings.enablePetMode {
-                try await service.runControl(
-                    action: "set_pet_mode",
-                    vin: resolved.vin,
-                    params: ["on": .bool(petMode)],
-                    humanName: "setting dog mode"
-                )
-                appliedParts.append(petMode ? "Dog Mode on" : "Dog Mode off")
-            }
-
-            if let bioweapon = settings.enableBioweaponDefenseMode {
-                try await service.runControl(
-                    action: "set_bioweapon_mode",
-                    vin: resolved.vin,
-                    params: ["on": .bool(bioweapon), "manual_override": .bool(false)],
-                    humanName: "setting Bioweapon Defense Mode"
-                )
-                appliedParts.append(bioweapon ? "Bioweapon Defense on" : "Bioweapon Defense off")
-            }
-
-            let detail = appliedParts.joined(separator: ", ")
+            let detail = steps.map(\.label).joined(separator: ", ")
             let summary = "Configured \(resolved.name) (\(detail))."
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -409,7 +321,10 @@ public struct ConfigureCabinClimateIntent: AppIntent {
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: detail.isEmpty ? summary : detail
+                    appliedSummary: detail,
+                    scope: scope,
+                    running: steps.contains { $0.action == "auto_conditioning_start" } ? true : nil,
+                    targetCelsius: settings.roundedTargetCelsius
                 )
             )
         } catch {
