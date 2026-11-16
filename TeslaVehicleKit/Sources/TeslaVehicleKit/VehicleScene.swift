@@ -24,6 +24,9 @@ public struct VehicleManifest: Decodable {
                 let file: String; let bindings: [String:[String]]
                 let wheelMaterials: [String]?
                 let twoSided, paintGraphs: [String]?
+                /// Every studio graph the parked look binds, on the body and the wheels.
+                var graphNames: Set<String> { Set(bindings.keys).union(wheelMaterials ?? []) }
+                var twoSidedNames: Set<String> { Set(twoSided ?? wheelMaterials ?? []) }
             }
             let shader: Shader?
             let panorama, highlight: String
@@ -120,6 +123,9 @@ public enum VehicleError: Error, CustomStringConvertible {
     private var originalPaint: [String:[any Material]] = [:]
     private var factoryPaintDraw=[String:Entity]()
     private var inParkedAppearance = false
+    private var classicLoad: Task<Void, Never>?
+    /// Whether the Classic finishes that the named views (CHARGING, DRIVE) use have loaded.
+    public private(set) var classicFinishesLoaded = true
     private(set) var photo:Northlight?
     private(set) var photoActive=false
     var photographicPaint:NorthlightFinish?
@@ -154,6 +160,13 @@ public enum VehicleError: Error, CustomStringConvertible {
         manifest = try await VehicleManifest.load(from: directory)
         classicTires = try ClassicTires(fleet: fleet, panorama: manifest.rig.panorama)
         classicComponents = ClassicComponents(vehicle: directory, wheelRoots: Set(manifest.wheelMounts.map { $0.socket + "/" + $0.child }))
+        // The studio graphs depend only on the manifest and take longer to import than the
+        // car itself, so they start now and import alongside the USD, tires and panoramas.
+        let studioShader = lighting && VehicleScene.studioShadersRender ? manifest.rig.parked?.shader : nil
+        async let studioGraphs = VehicleScene.importParkedGraphs(
+            studioShader?.graphNames ?? [],
+            from: directory.appendingPathComponent(studioShader?.file ?? ""),
+            twoSided: studioShader?.twoSidedNames ?? [])
         entity = try await Entity(contentsOf: directory.appendingPathComponent(manifest.liveFile ?? manifest.file))
         guard let body = entity.findEntity(named: "Body") else { throw VehicleError.invalid("USDZ has no Body hierarchy") }
         self.body = body
@@ -168,7 +181,12 @@ public enum VehicleError: Error, CustomStringConvertible {
         entity.findEntity(named: "Studio")?.removeFromParent()
         // Collect original material IDs while indexing, before HOME replaces the portable slots.
         let namedIDs = index(body, "Body", collectingMaterials: true)
-        async let namedMaterials: Void? = classicComponents?.prepare(namedIDs)
+        // The Classic finishes light the named views (CHARGING, DRIVE). A build with a parked
+        // studio look opens in that look, so its Classic bank, about a hundred shader graphs,
+        // loads after the scene is ready instead of holding it up. The simulator can't draw
+        // the studio look and opens in a named view, so there the bank loads first.
+        let opensParked = lighting && manifest.rig.parked != nil && VehicleScene.studioShadersRender
+        async let namedMaterials: Void? = opensParked ? nil : classicComponents?.prepare(namedIDs)
         try await classicTires?.prepare(in: manifest.wheelMounts.compactMap { indexed[$0.socket + "/" + $0.child] })
         for clip in manifest.clips.values {for track in clip.tracks where track.channel=="quaternion" || track.channel.hasPrefix("rotation_degrees"){
             restRotation[track.target]=indexed[track.target]?.transform
@@ -209,10 +227,49 @@ public enum VehicleError: Error, CustomStringConvertible {
             }
             studio.components.set(ImageBasedLightComponent(source: .single(parkedEnvironment ?? environment)))
             body.components.set(ImageBasedLightReceiverComponent(imageBasedLight: studio))
-            if manifest.rig.parked != nil { try await applyParkedAppearance() }
+            if manifest.rig.parked != nil, Self.studioShadersRender {
+                let graphs = try await studioGraphs
+                for name in graphs.keys.sorted() {
+                    if let graph = graphs[name] { _ = try await finishParkedMaterial(graph, named: name) }
+                }
+                try await applyParkedAppearance()
+            }
         }
         try await namedMaterials
         if lighting, manifest.rig.parked == nil { try setLighting(view: manifest.rig.defaultView) }
+        if lighting, manifest.rig.parked != nil, !Self.studioShadersRender { try await applyParkedAppearance() }
+        if opensParked { loadClassicFinishes(namedIDs) }
+    }
+
+    /// Loads the Classic bank in the background. A named view applied before it arrives
+    /// shows the washed-out portable materials and picks up its finishes afterwards, so
+    /// callers that can wait should check `classicFinishesLoaded` first.
+    private func loadClassicFinishes(_ identifiers: Set<String>) {
+        guard let classicComponents else { return }
+        classicFinishesLoaded = false
+        classicLoad = Task { [weak self] in
+            try? await classicComponents.prepare(identifiers)
+            guard let self else { return }
+            self.classicFinishesLoaded = true
+            self.bindNamedTree(self.body, path: "Body", bodyPath: "Body")
+        }
+    }
+
+    /// Returns once the Classic finishes for the named views have loaded.
+    public func classicFinishes() async {
+        await classicLoad?.value
+    }
+
+    /// The studio shader graphs bind more buffers than the simulator's Metal driver allows
+    /// (it reports "only 31 buffers are supported"), so nothing they cover draws there.
+    /// Simulator builds light the parked car with Tesla's PARKED named view instead, which
+    /// uses the Classic finishes.
+    static var studioShadersRender: Bool {
+        #if targetEnvironment(simulator)
+        false
+        #else
+        true
+        #endif
     }
 
     public func node(at path: String) -> Entity? { indexed[path] }
@@ -434,11 +491,13 @@ public enum VehicleError: Error, CustomStringConvertible {
     /// Apply the authored, camera-dependent studio shaders to the interactive
     /// entity, including the HOME illumination of the mounted tires.
     public func applyParkedAppearance() async throws {
+        guard Self.studioShadersRender else {
+            try setLighting(view: manifest.rig.presets["PARKED"] != nil ? "PARKED" : manifest.rig.defaultView)
+            return
+        }
         lookGeneration += 1; let token = lookGeneration
         let shader = manifest.rig.parked?.shader
-        if let shader {
-            for name in Set(shader.bindings.keys).union(shader.wheelMaterials ?? []) { _ = try await parkedMaterial(name,file:shader.file) }
-        }
+        if let shader { try await loadParkedMaterials(shader.graphNames, file: shader.file) }
         let preset = parkedTireLighting
         let finishes = try classicTires?.materials(for: preset) ?? [:]
         try Task.checkCancellation()
@@ -468,7 +527,7 @@ public enum VehicleError: Error, CustomStringConvertible {
     // Match the actual USD materials rather than a mounted mesh path.
     func applyParkedWheels(to root: Entity, remember: Bool) async throws {
         if let shader = manifest.rig.parked?.shader {
-            for name in shader.wheelMaterials ?? [] { _ = try await parkedMaterial(name,file:shader.file) }
+            try await loadParkedMaterials(Set(shader.wheelMaterials ?? []), file: shader.file)
         }
         let finishes = try classicTires?.materials(for: parkedTireLighting) ?? [:]
         bindMountedTires(to: root, finishes: finishes, remember: remember)
@@ -601,8 +660,55 @@ public enum VehicleError: Error, CustomStringConvertible {
     func parkedMaterial(_ name: String, file: String) async throws -> ShaderGraphMaterial {
         if let m=recolored[name] { return m }
         if let cached = parkedMaterialCache[name] { return cached }
-        var material = try await ShaderGraphMaterial(named: "/"+name, from: directory.appendingPathComponent(file))
-        if manifest.rig.parked?.shader?.paintGraphs?.contains(name)==true {
+        let graphs = try await Self.importParkedGraphs([name], from: directory.appendingPathComponent(file),
+                                                       twoSided: manifest.rig.parked?.shader?.twoSidedNames ?? [])
+        guard let graph = graphs[name] else { throw VehicleError.invalid("Studio material not loaded: \(name)") }
+        return try await finishParkedMaterial(graph, named: name)
+    }
+
+    /// Loads the studio graphs that aren't cached yet, all in one batch.
+    private func loadParkedMaterials(_ names: Set<String>, file: String) async throws {
+        let missing = names.filter { recolored[$0] == nil && parkedMaterialCache[$0] == nil }
+        guard !missing.isEmpty else { return }
+        let graphs = try await Self.importParkedGraphs(missing, from: directory.appendingPathComponent(file),
+                                                       twoSided: manifest.rig.parked?.shader?.twoSidedNames ?? [])
+        for name in missing.sorted() {
+            if let graph = graphs[name] { _ = try await finishParkedMaterial(graph, named: name) }
+        }
+    }
+
+    /// Imports studio shader graphs from one material file, up to eight at a time. Each
+    /// graph is parsed and compiled separately, so importing them one after another was
+    /// most of a vehicle's load time.
+    nonisolated static func importParkedGraphs(_ names: Set<String>, from file: URL,
+                                               twoSided: Set<String>) async throws -> [String: ShaderGraphMaterial] {
+        guard !names.isEmpty else { return [:] }
+        var jobs = names.sorted().makeIterator()
+        var graphs: [String: ShaderGraphMaterial] = [:]
+        try await withThrowingTaskGroup(of: (String, ShaderGraphMaterial).self) { group in
+            func enqueue() {
+                guard let name = jobs.next() else { return }
+                group.addTask {
+                    try Task.checkCancellation()
+                    var graph = try await ShaderGraphMaterial(named: "/"+name, from: file)
+                    if twoSided.contains(name) { graph.faceCulling = .none }
+                    return (name, graph)
+                }
+            }
+            for _ in 0..<8 { enqueue() }
+            while let (name, graph) = try await group.next() {
+                graphs[name] = graph
+                enqueue()
+            }
+        }
+        return graphs
+    }
+
+    /// Gives an imported paint graph its weight textures and caches the result.
+    private func finishParkedMaterial(_ graph: ShaderGraphMaterial, named name: String) async throws -> ShaderGraphMaterial {
+        var material = graph
+        let isPaint = manifest.rig.parked?.shader?.paintGraphs?.contains(name) == true
+        if isPaint, let file = manifest.rig.parked?.shader?.file {
             // Bind both defaults explicitly. On a persistent renderer an unset
             // texture parameter can otherwise keep the previous paint's GPU binding.
             let dir=directory.appendingPathComponent(file).deletingLastPathComponent()
@@ -611,11 +717,8 @@ public enum VehicleError: Error, CustomStringConvertible {
                 try material.setParameter(name:key,value:.textureResource(tex))
             }
         }
-        if let s=manifest.rig.parked?.shader, (s.twoSided ?? s.wheelMaterials ?? []).contains(name) {
-            material.faceCulling = .none
-        }
         parkedMaterialCache[name] = material
-        if manifest.rig.parked?.shader?.paintGraphs?.contains(name) == true, let weights = customParkedWeights {
+        if isPaint, let weights = customParkedWeights {
             try material.setParameter(name: "SpecWeight", value: .textureResource(weights.specular))
             try material.setParameter(name: "DiffuseWeight", value: .textureResource(weights.diffuse))
             recolored[name] = material

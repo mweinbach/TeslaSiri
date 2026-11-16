@@ -70,10 +70,13 @@ extension View {
             .shadow(color: AppTheme.surfaceShadow, radius: 10, y: 3)
     }
 
-    /// Centers content and caps its width so cards don't stretch edge-to-edge on iPad.
+    /// Centers content horizontally and caps its width so cards don't stretch edge-to-edge
+    /// on iPad. Content stays pinned to the top: a lazy stack inside can grow after these
+    /// frames were measured, and a vertically centered frame would then push its first
+    /// rows up under the navigation bar.
     func readableContentWidth() -> some View {
-        frame(maxWidth: AppTheme.contentMaxWidth)
-            .frame(maxWidth: .infinity)
+        frame(maxWidth: AppTheme.contentMaxWidth, alignment: .top)
+            .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 

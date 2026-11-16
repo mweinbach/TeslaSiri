@@ -31,7 +31,7 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
     @State private var lastMagnification: CGFloat = 1
     @State private var viewSize: CGSize = .zero
 
-    private var isHost: Bool { stage.hostID == ObjectIdentifier(host.anchor) }
+    private var isHost: Bool { stage.hostID == ObjectIdentifier(host) }
     private var isShowingStage: Bool { stage.isReady && isHost }
 
     var body: some View {
@@ -79,7 +79,7 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
         }
         .onDisappear {
             isOnscreen = false
-            stage.detach(from: host.anchor)
+            stage.detach(from: host)
         }
         .onChange(of: state) { _, newValue in
             if isHost { stage.apply(newValue) }
@@ -102,7 +102,7 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
 
     /// Moves the shared stage into this view and applies this view's state.
     private func hostStage() {
-        stage.attach(to: host.anchor, camera: host.camera)
+        stage.attach(to: host)
         if let onFrame {
             let stage = stage
             stage.onFrame = { [weak stage] deltaTime in
@@ -221,31 +221,39 @@ private struct VehicleStageCanvas: View {
     let host: VehicleStageHost
     let isVisible: Bool
 
+    @State private var surface = VehicleStageSurface()
+
     var body: some View {
         RealityView { content in
             content.camera = .virtual
-            let anchor = host.anchor
-            anchor.addChild(host.camera)
+            // SwiftUI builds a new RealityView whenever this canvas comes back (returning to
+            // the tab, scrolling back into view, the app becoming active). Entities that were
+            // in an earlier RealityView don't draw in a later one, so each gets its own
+            // anchor and camera and the stage moves the car across.
+            let anchor = Entity()
+            let camera = PerspectiveCamera()
+            anchor.addChild(camera)
             content.add(anchor)
-            host.subscription = content.subscribe(to: SceneEvents.Update.self) { event in
+            surface.subscription?.cancel()
+            surface.anchor = anchor
+            surface.camera = camera
+            host.surface = surface
+            stage.mount(for: host)
+            surface.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak surface] event in
                 let deltaTime = event.deltaTime
                 // The stage publishes SwiftUI state, so every frame step runs on the main actor.
                 if Thread.isMainThread {
                     MainActor.assumeIsolated {
-                        guard stage.hostID == ObjectIdentifier(anchor) else { return }
+                        guard let surface, host.surface === surface, stage.hostID == ObjectIdentifier(host) else { return }
                         stage.tick(deltaTime)
                     }
                 } else {
                     Task { @MainActor in
-                        guard stage.hostID == ObjectIdentifier(anchor) else { return }
+                        guard let surface, host.surface === surface, stage.hostID == ObjectIdentifier(host) else { return }
                         stage.tick(deltaTime)
                     }
                 }
             }
-        }
-        .onDisappear {
-            host.subscription?.cancel()
-            host.subscription = nil
         }
         .mask { VehicleStageEdgeFade() }
         .opacity(isVisible ? 1 : 0)
@@ -254,12 +262,19 @@ private struct VehicleStageCanvas: View {
     }
 }
 
-/// A view's RealityKit anchor, camera and frame subscription. The entities are created
-/// lazily so that rebuilding the view struct never allocates throwaway RealityKit objects.
+/// Identifies one view that can show a stage, and points at the RealityView it currently
+/// has on screen.
 @MainActor
 final class VehicleStageHost {
-    lazy var anchor = Entity()
-    lazy var camera = PerspectiveCamera()
+    weak var surface: VehicleStageSurface?
+}
+
+/// One RealityView's anchor, camera and frame subscription. It lives exactly as long as
+/// that RealityView, and the entities are created when the RealityView is.
+@MainActor
+final class VehicleStageSurface {
+    var anchor: Entity?
+    var camera: PerspectiveCamera?
     var subscription: EventSubscription?
 
     deinit {

@@ -29,7 +29,7 @@ final class VehicleStage {
     private(set) var paintHighlight: UIColor?
 
     @ObservationIgnored let root = Entity()
-    /// The view anchor currently showing this stage.
+    /// The `VehicleStageHost` of the view currently showing this stage.
     private(set) var hostID: ObjectIdentifier?
     @ObservationIgnored var viewSize: CGSize = .zero
     @ObservationIgnored var reduceMotion = false
@@ -131,23 +131,33 @@ final class VehicleStage {
         camera.camera.far = 400
     }
 
-    /// Moves the car and camera under `anchor`, the root entity of the view taking over.
-    func attach(to anchor: Entity, camera: PerspectiveCamera) {
+    /// Makes `host` the view showing this stage, and moves the car into its RealityView
+    /// if it has one yet.
+    func attach(to host: VehicleStageHost) {
+        if hostID != ObjectIdentifier(host) { root.removeFromParent() }
+        hostID = ObjectIdentifier(host)
+        transition = nil
+        isInteracting = false
+        onFrame = nil
+        driveOverride = nil
+        mount(for: host)
+    }
+
+    /// Moves the car and camera into the host's current RealityView. The host calls this
+    /// whenever SwiftUI builds it a new RealityView. Ignored unless `host` shows this stage.
+    func mount(for host: VehicleStageHost) {
+        guard hostID == ObjectIdentifier(host), let surface = host.surface,
+              let anchor = surface.anchor, let camera = surface.camera else { return }
         if root.parent !== anchor { anchor.addChild(root) }
         Self.configure(camera)
         self.camera = camera
         camera.transform = cameraTransform
         camera.camera.fieldOfViewInDegrees = cameraFOV
-        hostID = ObjectIdentifier(anchor)
         lastProjection = nil
-        transition = nil
-        isInteracting = false
-        onFrame = nil
-        driveOverride = nil
     }
 
-    func detach(from anchor: Entity) {
-        guard root.parent === anchor else { return }
+    func detach(from host: VehicleStageHost) {
+        guard hostID == ObjectIdentifier(host) else { return }
         root.removeFromParent()
         hostID = nil
         onFrame = nil
@@ -367,14 +377,29 @@ final class VehicleStage {
         lightingLook = wanted
         switch wanted {
         case .charging:
-            try? scene.setLighting(view: "CHARGING")
+            applyNamedLighting("CHARGING", for: wanted, on: scene)
         case .driving:
-            try? scene.setLighting(view: "DRIVE")
+            applyNamedLighting("DRIVE", for: wanted, on: scene)
         case .studio:
             Task {
                 guard self.scene === scene, lightingLook == .studio else { return }
                 try? await scene.applyParkedAppearance()
             }
+        }
+    }
+
+    /// The named views use the Classic finishes, which load after the car is on screen.
+    /// Applied before they arrive, a named view shows washed-out portable materials, so
+    /// the car keeps its current look until they have.
+    private func applyNamedLighting(_ view: String, for look: LightingLook, on scene: VehicleScene) {
+        if scene.classicFinishesLoaded {
+            try? scene.setLighting(view: view)
+            return
+        }
+        Task {
+            await scene.classicFinishes()
+            guard self.scene === scene, lightingLook == look else { return }
+            try? scene.setLighting(view: view)
         }
     }
 
