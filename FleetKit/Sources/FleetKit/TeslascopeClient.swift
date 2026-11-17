@@ -70,7 +70,10 @@ public struct TeslascopeClient: Sendable {
                 guard Self.validComponent(vehicle.publicID) else { throw FleetKitError.badResponse }
                 var record = vehicle
                 if record.vin == nil {
-                    record = try await get(TeslascopeVehicleRecord.self, ["vehicle", vehicle.publicID, "detailed"])
+                    let detail = try await vehicleDetail(publicID: vehicle.publicID)
+                    record = try JSONDecoder().decode(
+                        TeslascopeVehicleRecord.self, from: JSONSerialization.data(withJSONObject: detail)
+                    )
                 }
                 guard record.publicID == vehicle.publicID, var entry = record.entry else {
                     throw FleetKitError.api("Teslascope did not return a matching vehicle VIN and public ID.")
@@ -97,6 +100,20 @@ public struct TeslascopeClient: Sendable {
         return try JSONDecoder().decode(TeslascopeEnvelope<Value>.self, from: data).response
     }
 
+    func vehicleDetail(publicID: String) async throws -> [String: Any] {
+        let data = try await request(["vehicle", publicID, "detailed"], allowsUnwrappedSuccess: true)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw FleetKitError.badResponse
+        }
+        // Vehicle details can arrive as a top-level object instead of a status envelope.
+        if object["code"] == nil { return object }
+        guard let code = object["code"] as? Int, (200..<300).contains(code),
+              let detail = object["response"] as? [String: Any] else {
+            throw FleetKitError.badResponse
+        }
+        return detail
+    }
+
     /// Retains the original envelope and HTTP status for the user-requested diagnostics export.
     public func rawRead(_ components: [String]) async throws -> (Data, HTTPURLResponse) {
         try await send(components, method: "GET", query: [], body: nil)
@@ -106,12 +123,22 @@ public struct TeslascopeClient: Sendable {
         _ components: [String],
         method: String = "GET",
         query: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        allowsUnwrappedSuccess: Bool = false
     ) async throws -> Data {
         let (data, http) = try await send(components, method: method, query: query, body: body)
         let header = try? JSONDecoder().decode(TeslascopeResponseStatus.self, from: data)
-        let status = (200..<300).contains(http.statusCode) ? header?.code : http.statusCode
-        guard let status else { throw FleetKitError.badResponse }
+        let status: Int
+        if (200..<300).contains(http.statusCode) {
+            if let header {
+                status = header.code
+            } else {
+                guard allowsUnwrappedSuccess else { throw FleetKitError.badResponse }
+                return data
+            }
+        } else {
+            status = http.statusCode
+        }
         if status == 401 {
             onUnauthorized()
             throw FleetKitError.sessionExpired

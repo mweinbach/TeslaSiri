@@ -73,10 +73,8 @@ extension TeslascopeClient {
 
     public func stateData(vin: String) async throws -> Data {
         let publicID = try await publicID(vin: vin)
-        let data = try await request(["vehicle", publicID, "detailed"])
-        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let detail = envelope["response"] as? [String: Any],
-              detail["public_id"] as? String == publicID,
+        let detail = try await vehicleDetail(publicID: publicID)
+        guard detail["public_id"] as? String == publicID,
               TeslascopeVehicleRecord.normalizedVIN(detail["vin"] as? String) == vin else {
             throw FleetKitError.api("Teslascope returned details for an unrecognized vehicle.")
         }

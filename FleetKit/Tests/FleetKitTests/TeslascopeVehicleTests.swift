@@ -30,7 +30,8 @@ struct TeslascopeVehicleTests {
         Data("{\"code\":200,\"response\":\(response)}".utf8)
     }
 
-    @Test func rosterAndDetailUseDifferentIdentifiersAndNormalizeWireValues() async throws {
+    @Test(arguments: [false, true])
+    func rosterAndDetailUseDifferentIdentifiersAndNormalizeWireValues(wrapped: Bool) async throws {
         try await withTeslascopeFixture { request in
             #expect(request.url?.host == "teslascope.com")
             #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer teslascope-fixture")
@@ -42,14 +43,15 @@ struct TeslascopeVehicleTests {
                 [{"vin":"\(Self.vin)","public_id":"blue","name":"Demo","vehicle_config":{"car_type":"model3","can_actuate_trunks":1}}]
                 """))
             case Self.detail:
-                return (200, Self.envelope("""
+                let detail = """
                 {"public_id":"blue","vin":"\(Self.vin)","name":"Demo",
                  "charge_state":{"battery_level":45,"battery_range":"124.44","updated_at":"2024-01-01T00:00:00.250000Z"},
                  "climate_state":{"inside_temp":"13.50","updated_at":"2023-12-31T23:59:01Z"},
                  "vehicle_state":{"tpms_pressure_fl":"2.875","locked":1,"car_version":"2026.20.1 abc",
                    "software_update_status":"available","software_update_version":"2026.20.2",
                    "software_update_expected_duration":2700,"updated_at":"2024-01-01T00:00:00Z"}}
-                """))
+                """
+                return (200, wrapped ? Self.envelope(detail) : Data(detail.utf8))
             default: throw FleetKitError.badResponse
             }
         } body: { client, requests in
@@ -70,12 +72,17 @@ struct TeslascopeVehicleTests {
         }
     }
 
-    @Test func multipleAccountsResolveVINFromOwnedDetailWhenAbsentFromList() async throws {
+    @Test(arguments: [false, true])
+    func multipleAccountsResolveVINFromOwnedDetailWhenAbsentFromList(wrapped: Bool) async throws {
         try await withTeslascopeFixture { request in
             switch request.url?.path {
             case Self.accounts: return (200, Self.envelope(#"[{"id":1,"scope_vehicle_cmds":true,"scope_vehicle_charging_cmds":false},{"id":2,"scope_vehicle_cmds":false},{"id":3,"enabled":false}]"#))
             case Self.vehicles: return (200, Self.envelope(#"[{"public_id":"blue"}]"#))
-            case Self.detail: return (200, Self.envelope("{\"public_id\":\"blue\",\"vin\":\"\(Self.vin)\",\"name\":\"Blue\"}"))
+            case Self.detail:
+                let detail = """
+                {"public_id":"blue","vin":"\(Self.vin)","name":"Blue","vehicle_config":null}
+                """
+                return (200, wrapped ? Self.envelope(detail) : Data(detail.utf8))
             case "/api/account/tesla-account/2/vehicles":
                 return (200, Self.envelope("[{\"public_id\":\"green\",\"vin\":\"\(Self.secondVIN)\",\"name\":\"Green\"}]"))
             default: throw FleetKitError.badResponse
