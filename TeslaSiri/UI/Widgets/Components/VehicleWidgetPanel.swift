@@ -221,7 +221,7 @@ struct VehicleWidgetPanel: View {
         switch topic {
         case .overview: snapshot.rangeDescription
         case .charging: snapshot.chargingDescription
-        case .climate: snapshot.climateOn.map { $0 ? "Climate on" : "Climate off" } ?? "Climate status unavailable"
+        case .climate: snapshot.climateDescription
         case .security: snapshot.sentryOn.map { $0 ? "Sentry on" : "Sentry off" } ?? "Sentry status unavailable"
         }
     }

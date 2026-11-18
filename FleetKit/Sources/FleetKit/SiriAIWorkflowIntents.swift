@@ -260,7 +260,7 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
 /// Composite Siri AI climate tool that accepts a synthesized `CabinClimateSettings`
 /// value so multi-setting cabin prep requests execute cleanly in one tool call.
 @AppIntent(.tool)
-public struct ConfigureCabinClimateIntent: AppIntent {
+public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Configure Tesla Cabin Climate"
     public static let description = IntentDescription(
         "Warms up or cools down the user's car (or Tesla) in one step: cabin temperature, max defrost, seat heat, the steering wheel heater, Dog Mode, and Bioweapon Defense Mode. Turns climate on. Use when the user asks for more than one climate change, or to warm up, cool down, or precondition their car before leaving.",
@@ -307,28 +307,51 @@ public struct ConfigureCabinClimateIntent: AppIntent {
             if settings.enablePetMode == false {
                 try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
             }
-            for step in steps {
-                try await step.run(service: service, vin: resolved.vin)
+
+            let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
+            let targetCelsius = settings.roundedTargetCelsius
+            let outcome = try await performSandboxAwareBackgroundTask(
+                description: "Configuring cabin climate in \(resolved.name)"
+            ) {
+                try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
             }
 
-            let detail = steps.map(\.label).joined(separator: ", ")
-            let summary = "Configured \(resolved.name) (\(detail))."
+            let detail = outcome.acceptedDetail
+            let deliveryState = outcome.deliveryState
+            let partialSummary = outcome.partialFailureSummary(vehicleName: resolved.name)
+            let summary = partialSummary ?? deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "apply: \(detail)",
+                confirmed: "Configured \(resolved.name) (\(detail))."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "configure_cabin_climate",
+                succeeded: outcome.failure == nil,
+                deliveryState: deliveryState,
                 appliedValue: detail,
                 summary: summary
             )
-            log.success("configured cabin climate on \(resolved.name): \(detail)")
+            if let failure = outcome.failure {
+                _ = log.failure(failure.error)
+            } else {
+                log.success("configured cabin climate on \(resolved.name): \(detail) (\(deliveryState.rawValue))")
+            }
+            let ranClimateStart = outcome.accepted.contains { $0.action == "auto_conditioning_start" }
+            let climateRunning = plan.skippedRedundantStart || ranClimateStart
+            let appliedTarget = outcome.accepted.contains { $0.action == "set_temps" } ? targetCelsius : nil
             return .result(
                 value: result,
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: detail,
+                    appliedSummary: deliveryState == .wakingVehicle || partialSummary != nil ? summary : detail,
                     scope: scope,
-                    running: steps.contains { $0.action == "auto_conditioning_start" } ? true : nil,
-                    targetCelsius: settings.roundedTargetCelsius
+                    running: climateRunning ? true : nil,
+                    targetCelsius: appliedTarget,
+                    deliveryState: deliveryState,
+                    confirmedStart: ranClimateStart,
+                    existingStartAnchor: plan.existingStartAnchor
                 )
             )
         } catch {

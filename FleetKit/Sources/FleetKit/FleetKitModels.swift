@@ -23,6 +23,13 @@ public struct FleetVehicleInfo: Decodable, Sendable, Identifiable {
 
     var rosterCharge: FleetSnapshotInfo?
     var rosterClimate: FleetSnapshotInfo?
+    /// Timestamp of a recent `"online"` state from Tessie's `/vehicles` roster.
+    var rosterAwakeObservedAt: Date?
+
+    var isRecentlyKnownAwake: Bool {
+        guard let observedAt = rosterAwakeObservedAt else { return false }
+        return (0...30).contains(Date.now.timeIntervalSince(observedAt))
+    }
 
     func afterCommand(invalidatingCharge: Bool, invalidatingClimate: Bool) -> Self {
         var vehicle = self

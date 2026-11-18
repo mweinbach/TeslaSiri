@@ -281,49 +281,101 @@ public struct FleetIntentService: Sendable {
         return try await client.controlActions()
     }
 
+    /// Returns `true` when recent Tessie `/vehicles` roster telemetry already confirms the vehicle
+    /// is online (within 30s), avoiding an unnecessary `GET /{vin}/status` round-trip.
+    func isVehicleRecentlyKnownAwake(vin: String) async -> Bool {
+        guard let scope = try? validatedScope() else { return false }
+        if let sandbox, sandbox.mode() == .demoVehicle {
+            return true
+        }
+        guard let cached = await client.cachedVehicle(vin: vin, scope: scope),
+              sessionScopeID == scope else { return false }
+        return cached.isRecentlyKnownAwake
+    }
+
+    /// Returns the timestamp anchoring why cabin HVAC is considered running (either the
+    /// confirmed start time of a recent receipt or the observation timestamp of recent roster
+    /// telemetry), or `nil` when HVAC is not confirmed running.
+    func climateRunningAnchor(vin: String) async -> Date? {
+        guard let scope = try? validatedScope() else { return nil }
+        let observation = await cachedClimateSnapshot(vin: vin)
+        let receipt = ClimateCommandReceipt.latest(vin: vin, scope: scope, group: appGroupIdentifier)
+        if let receipt, receipt.recentlyStarted(observation: observation), let startedAt = receipt.startedAt {
+            return startedAt
+        }
+        if observation?.hvacOn == true {
+            if let receipt, receipt.running == false {
+                if let observedAt = observation?.updatedAtDate {
+                    if receipt.date >= observedAt { return nil }
+                } else {
+                    return nil
+                }
+            }
+            return observation?.updatedAtDate ?? .now
+        }
+        return nil
+    }
+
+    /// Returns `true` when recent local telemetry or a recent confirmed climate receipt
+    /// indicates cabin HVAC is already active, avoiding a redundant `auto_conditioning_start` round-trip.
+    func isClimateLikelyRunning(vin: String) async -> Bool {
+        await climateRunningAnchor(vin: vin) != nil
+    }
+
     // MARK: - Writes
 
     /// Checks membership again at dispatch. A just-resolved VIN reuses the same roster.
-    private func dispatch(
+    private func dispatch<Result>(
         vin: String,
         validate: (FleetVehicleInfo) async throws -> Void,
-        simulate: (FleetSandboxStore, String) -> Void,
-        send: () async throws -> Void
-    ) async throws {
+        simulate: (FleetSandboxStore, String) -> Result,
+        send: () async throws -> Result
+    ) async throws -> Result {
         let scope = try validatedScope()
         let target = try await resolvedVehicle(vin)
         try await validate(target)
         guard sessionScopeID == scope else { throw FleetKitError.sessionExpired }
         if let sandbox, sandbox.mode().interceptsWrites {
-            simulate(sandbox, target.name)
-            return
+            return simulate(sandbox, target.name)
         }
-        try await withSession(send)
+        return try await withSession(send)
     }
 
+    @discardableResult
     public func runControl(
         action: String,
         vin: String,
         params: [String: FleetControlValue] = [:],
-        humanName: String
-    ) async throws {
-        try await dispatch(vin: vin) { target in
+        humanName: String,
+        allowAsyncWake: Bool = false
+    ) async throws -> VehicleCommandDeliveryState {
+        let deliveryState: VehicleCommandDeliveryState = try await dispatch(vin: vin) { target in
             let available = try await controlActions(for: target)
             guard available.supports(action) else { throw FleetKitError.unsupportedAction(humanName) }
         } simulate: { sandbox, name in
             sandbox.recordSimulatedControl(action: action, vin: vin, vehicleName: name, params: params, source: "Siri")
+            return .confirmed
         } send: {
-            try await client.runControl(action: action, vin: vin, params: params)
+            var waitForCompletion = true
+            if allowAsyncWake, !usesTeslascope,
+               !(await isVehicleRecentlyKnownAwake(vin: vin)),
+               let sleepState = try await client.vehicleSleepState(vin: vin),
+               sleepState.needsWake {
+                waitForCompletion = false
+            }
+            try await client.runControl(action: action, vin: vin, params: params, waitForCompletion: waitForCompletion)
             if let scope = initialSessionScope {
                 await client.invalidateRosterTelemetry(vin: vin, scope: scope, action: action)
             }
+            return waitForCompletion ? .confirmed : .wakingVehicle
         }
         if action == "auto_conditioning_start" || action == "auto_conditioning_stop" || action == "set_temps",
            let scope = initialSessionScope, scope == sessionScopeID {
             let target = (params["driver_temp"] ?? params["passenger_temp"]).flatMap { Double($0.queryValue) }
-            recordClimateControl(action, vin: vin, targetCelsius: target)
+            recordClimateControl(action, vin: vin, targetCelsius: target, deliveryState: deliveryState)
         }
-        FleetKitLog.intents.notice("Control '\(action, privacy: .public)' completed for \(FleetKitLog.vin(vin), privacy: .public) [\(self.sandboxMode.rawValue, privacy: .public)]")
+        FleetKitLog.intents.notice("Control '\(action, privacy: .public)' completed (\(deliveryState.rawValue, privacy: .public)) for \(FleetKitLog.vin(vin), privacy: .public) [\(self.sandboxMode.rawValue, privacy: .public)]")
+        return deliveryState
     }
 
     func checkSoftwareCommand(for vehicle: FleetVehicleInfo, installAfter delay: Int?) throws {
@@ -368,15 +420,101 @@ extension AppIntent {
     }
 }
 
+/// Reports periodic updates to a `Progress` instance while a `LongRunningIntent`
+/// awaits slow network wake/command round-trips. The system can cancel a background
+/// runtime extension whose progress stops changing, so the heartbeat keeps the unit
+/// counts moving for as long as the operation runs, however long that is.
+enum IntentProgressHeartbeat {
+    private struct ProgressBox: @unchecked Sendable {
+        let progress: Progress
+    }
+
+    /// Unit count the heartbeat starts from; fine-grained so late ticks still change it.
+    static let initialTotalUnitCount: Int64 = 1_000
+
+    /// The next `(completed, total)` pair. Progress eases toward 99% of the total, then
+    /// grows both counts together so they keep changing without the bar reaching 100%
+    /// or moving backwards.
+    static func nextTick(completed: Int64, total: Int64) -> (completed: Int64, total: Int64) {
+        let softCap = total * 99 / 100
+        if completed < softCap {
+            let step = max(1, (softCap - completed) / 8)
+            return (min(completed + step, softCap), total)
+        }
+        return (completed + 10, total + 10)
+    }
+
+    static func run<T: Sendable>(
+        progress: Progress,
+        description: String,
+        interval: Duration = .seconds(5),
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        let box = ProgressBox(progress: progress)
+        box.progress.totalUnitCount = initialTotalUnitCount
+        box.progress.localizedDescription = description
+        box.progress.completedUnitCount = initialTotalUnitCount / 20
+        box.progress.localizedAdditionalDescription = "Sending command to vehicle…"
+
+        let heartbeat = Task {
+            var ticks = 0
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: interval)
+                } catch {
+                    break
+                }
+                guard !Task.isCancelled else { break }
+                ticks += 1
+                let next = nextTick(
+                    completed: box.progress.completedUnitCount,
+                    total: box.progress.totalUnitCount
+                )
+                box.progress.totalUnitCount = next.total
+                box.progress.completedUnitCount = next.completed
+                box.progress.localizedAdditionalDescription = ticks >= 2
+                    ? "Waiting for the vehicle to respond…"
+                    : "Sending command to vehicle…"
+            }
+        }
+
+        do {
+            let value = try await operation()
+            heartbeat.cancel()
+            await heartbeat.value
+            box.progress.completedUnitCount = box.progress.totalUnitCount
+            return value
+        } catch {
+            heartbeat.cancel()
+            await heartbeat.value
+            throw error
+        }
+    }
+}
+
 extension LongRunningIntent {
-    func performSandboxAwareBackgroundTask(_ work: @escaping @Sendable () async throws -> Void) async throws {
+    func performSandboxAwareBackgroundTask<T: Sendable>(
+        description: String,
+        _ work: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
         let canRunInline = FleetIntentService.testingOverride != nil
             || FleetSandboxStore.shared.mode() != .live
-        if canRunInline, FleetIntentService.sandboxConfirmationRecorder != nil {
-            try await work()
-            return
+        // Commands in a long-running task may wait out a full provider wake; everywhere
+        // else they keep the short timeout that fits the ~30s background window.
+        if canRunInline {
+            return try await FleetKitConfig.$vehicleCommandTimeout.withValue(FleetKitConfig.commandTimeout) {
+                try await work()
+            }
         }
-        try await performBackgroundTask(operation: work)
+        return try await performBackgroundTask {
+            try await FleetKitConfig.$vehicleCommandTimeout.withValue(FleetKitConfig.commandTimeout) {
+                try await IntentProgressHeartbeat.run(
+                    progress: self.progress,
+                    description: description,
+                    operation: work
+                )
+            }
+        }
     }
 }
 

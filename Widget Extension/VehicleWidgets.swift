@@ -44,7 +44,13 @@ struct VehicleWidgetProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: VehicleWidgetConfiguration, in context: Context) async -> Timeline<VehicleWidgetEntry> {
         let entry = await entry(for: configuration)
-        let interval: TimeInterval = entry.snapshot?.isCharging == true ? 900 : 1800
+        let interval: TimeInterval
+        if entry.snapshot?.isClimateStarting() == true {
+            // Check back soon so a climate start sent to a sleeping car resolves to on.
+            interval = FleetWidgetSnapshot.climateStartWindow / 2
+        } else {
+            interval = entry.snapshot?.isCharging == true ? 900 : 1800
+        }
         return Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(interval)))
     }
 

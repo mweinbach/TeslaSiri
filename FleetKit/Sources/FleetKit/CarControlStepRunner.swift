@@ -1,0 +1,91 @@
+import Foundation
+
+/// The steps one intent will send to a car, after dropping a redundant HVAC start.
+struct CarControlPlan: Sendable {
+    let steps: [CarControlStep]
+    /// When HVAC was already running and the implicitly inserted `auto_conditioning_start`
+    /// was dropped, the time that anchors why it is considered running. `nil` otherwise.
+    let existingStartAnchor: Date?
+
+    var skippedRedundantStart: Bool { existingStartAnchor != nil }
+
+    /// Drops an implicit `auto_conditioning_start` prerequisite when recent telemetry or a
+    /// climate receipt shows HVAC already running. An explicit `climateOn: true` is always sent.
+    static func make(_ steps: [CarControlStep], service: FleetIntentService, vin: String) async -> CarControlPlan {
+        guard steps.count > 1, steps.first?.isImplicitHVACStart == true,
+              let anchor = await service.climateRunningAnchor(vin: vin) else {
+            return CarControlPlan(steps: steps, existingStartAnchor: nil)
+        }
+        return CarControlPlan(steps: Array(steps.dropFirst()), existingStartAnchor: anchor)
+    }
+}
+
+/// What happened when a `CarControlPlan` was sent.
+struct CarControlRunOutcome: Sendable {
+    struct Failure: Sendable {
+        let step: CarControlStep
+        let error: any Error
+    }
+
+    /// Steps the provider accepted, in the order they were sent.
+    var accepted: [CarControlStep] = []
+    /// The step that failed after at least one earlier step was accepted.
+    var failure: Failure?
+    /// Steps that were never sent because an earlier step failed.
+    var notSent: [CarControlStep] = []
+    /// `.wakingVehicle` only when a lone step went out before a sleeping car woke.
+    var deliveryState: VehicleCommandDeliveryState = .confirmed
+
+    var acceptedDetail: String { accepted.map(\.label).joined(separator: ", ") }
+
+    /// A spoken summary that names what was applied, what failed, and what was not sent,
+    /// or `nil` when every step was accepted.
+    func partialFailureSummary(vehicleName: String) -> String? {
+        guard let failure else { return nil }
+        var summary = "\(vehicleName) accepted: \(acceptedDetail). I couldn't confirm \(failure.step.label): \(failure.error.localizedDescription)."
+        if !notSent.isEmpty {
+            summary += " Not sent: \(notSent.map(\.label).joined(separator: ", "))."
+        }
+        return summary
+    }
+}
+
+/// The one executor for multi-step car control intents (Control Car, Configure Cabin Climate,
+/// Set Seat Heater).
+///
+/// Steps go out one at a time. Tesla vehicles process commands serially, so overlapping
+/// requests can be rejected as busy, and settings such as Dog Mode and the cabin target would
+/// otherwise land in an unpredictable order. A sequence also stops cleanly at the first
+/// failure, so the user hears exactly which changes were applied and which were never sent.
+enum CarControlStepRunner {
+    /// Sends every step in `plan` in order.
+    ///
+    /// A lone step that is safe to deliver asynchronously (see `CarControlStep.isAsyncWakeEligible`)
+    /// may go out with `wait_for_completion=false` when the car is asleep. Throws when the first
+    /// step fails, because nothing was applied; later failures are returned in the outcome.
+    static func run(_ plan: CarControlPlan, service: FleetIntentService, vin: String) async throws -> CarControlRunOutcome {
+        if plan.steps.count == 1, let sole = plan.steps.first {
+            let deliveryState = try await sole.run(
+                service: service,
+                vin: vin,
+                allowAsyncWake: !plan.skippedRedundantStart && sole.isAsyncWakeEligible
+            )
+            return CarControlRunOutcome(accepted: [sole], deliveryState: deliveryState)
+        }
+
+        var outcome = CarControlRunOutcome()
+        for (index, step) in plan.steps.enumerated() {
+            try Task.checkCancellation()
+            do {
+                try await step.run(service: service, vin: vin)
+                outcome.accepted.append(step)
+            } catch {
+                guard !outcome.accepted.isEmpty, !(error is CancellationError) else { throw error }
+                outcome.failure = .init(step: step, error: error)
+                outcome.notSent = Array(plan.steps[(index + 1)...])
+                return outcome
+            }
+        }
+        return outcome
+    }
+}

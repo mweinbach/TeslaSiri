@@ -109,7 +109,7 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
 }
 
 @AppIntent(.tool)
-public struct StartClimateIntent: AppIntent, PredictableIntent {
+public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Start Car Climate"
     public static let description = IntentDescription(
         "Warms up, cools down, or preconditions the user's car or Tesla by starting cabin HVAC at its current setpoint. Use for requests like \"warm up my car\", \"cool down my car\", or \"warm up my Tesla\". Use Set Car Temperature for a target temperature, or Configure Tesla Cabin Climate for multi-setting prep.",
@@ -152,16 +152,37 @@ public struct StartClimateIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
-            let summary = "Climate is starting in \(resolved.name)."
-            let result = VehicleCommandResultEntity(vehicle: resolved, action: "auto_conditioning_start", summary: summary)
-            log.success("started climate in \(resolved.name)")
+            let deliveryState = try await performSandboxAwareBackgroundTask(
+                description: "Starting climate in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "auto_conditioning_start",
+                    vin: resolved.vin,
+                    humanName: "starting climate",
+                    allowAsyncWake: true
+                )
+            }
+            let summary = deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "start climate",
+                confirmed: "Climate is starting in \(resolved.name)."
+            )
+            let result = VehicleCommandResultEntity(
+                vehicle: resolved,
+                action: "auto_conditioning_start",
+                deliveryState: deliveryState,
+                summary: summary
+            )
+            log.success("started climate in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(
                 value: result,
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary, scope: scope, running: true
+                    appliedSummary: summary,
+                    scope: scope,
+                    running: true,
+                    deliveryState: deliveryState
                 )
             )
         } catch {

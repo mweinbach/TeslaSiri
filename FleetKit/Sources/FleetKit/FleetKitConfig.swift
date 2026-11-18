@@ -54,4 +54,14 @@ public enum FleetKitConfig {
     public static let sandboxCommandLogDefaultsKey = "fleet.sandbox.commandLog"
 
     public static let requestTimeout: TimeInterval = 30
+    /// Synchronous vehicle commands can block up to ~90s while the provider wakes a sleeping car.
+    public static let commandTimeout: TimeInterval = 95
+
+    /// Request timeout for synchronous vehicle commands sent from the current task.
+    ///
+    /// Defaults to `requestTimeout` because ordinary App Intents, widgets, and controls only get
+    /// ~30 seconds of background runtime; a longer request would be killed by the system instead
+    /// of failing with a readable error. `LongRunningIntent` work run through
+    /// `performSandboxAwareBackgroundTask` binds this to `commandTimeout`.
+    @TaskLocal public static var vehicleCommandTimeout: TimeInterval = requestTimeout
 }

@@ -115,6 +115,7 @@ struct FleetAPIClient {
         var requiresAuthorization: Bool
         var accept: String
         var cachePolicy: URLRequest.CachePolicy
+        var timeout: TimeInterval?
 
         init(
             method: HTTPMethod = .get,
@@ -123,7 +124,8 @@ struct FleetAPIClient {
             body: Data? = nil,
             requiresAuthorization: Bool = true,
             accept: String = "application/json",
-            cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy
+            cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
+            timeout: TimeInterval? = nil
         ) {
             self.method = method
             self.path = path
@@ -132,6 +134,7 @@ struct FleetAPIClient {
             self.requiresAuthorization = requiresAuthorization
             self.accept = accept
             self.cachePolicy = cachePolicy
+            self.timeout = timeout
         }
     }
 
@@ -828,7 +831,8 @@ struct FleetAPIClient {
         let response: Response<TessieCommandResponse> = try await send(Endpoint(
             method: .post,
             path: path,
-            queryItems: queryItems
+            queryItems: queryItems,
+            timeout: max(configuration.timeout, FleetKitConfig.commandTimeout)
         ))
         guard response.data.result else {
             throw FleetAPIError.apiFailure(
@@ -905,7 +909,11 @@ struct FleetAPIClient {
 
     private func makeRequest(for endpoint: Endpoint, accessToken: String? = nil) async throws -> URLRequest {
         let url = try makeURL(path: endpoint.path, queryItems: endpoint.queryItems)
-        var request = URLRequest(url: url, cachePolicy: endpoint.cachePolicy, timeoutInterval: configuration.timeout)
+        var request = URLRequest(
+            url: url,
+            cachePolicy: endpoint.cachePolicy,
+            timeoutInterval: endpoint.timeout ?? configuration.timeout
+        )
         request.httpMethod = endpoint.method.rawValue
         request.setValue(endpoint.accept, forHTTPHeaderField: "Accept")
         if let body = endpoint.body {

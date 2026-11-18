@@ -63,6 +63,17 @@ public enum FleetControlValue: Encodable, Sendable {
     }
 }
 
+/// Live wake/sleep status returned by Tessie's sleep-safe `/{vin}/status` endpoint.
+public enum FleetVehicleSleepState: String, Sendable, Equatable {
+    case awake
+    case asleep
+    case waitingForSleep = "waiting_for_sleep"
+
+    public var needsWake: Bool {
+        self == .asleep || self == .waitingForSleep
+    }
+}
+
 /// Extension-safe provider routing for App Intents, Spotlight, and widgets.
 public struct FleetIntentClient: Sendable {
     private static let sharedRoster = FleetRosterCache()
@@ -438,9 +449,32 @@ public struct FleetIntentClient: Sendable {
         )
     }
 
+    /// Queries Tessie's sleep-safe `/{vin}/status` endpoint without waking the car.
+    /// Returns `nil` for Teslascope or when status cannot be determined so callers
+    /// can safely fall back to synchronous command execution.
+    public func vehicleSleepState(vin: String) async throws -> FleetVehicleSleepState? {
+        if try teslascope != nil { return nil }
+        do {
+            let response: TessieVehicleStatusResponse = try await get("/\(encoded(vin))/status")
+            return FleetVehicleSleepState(rawValue: response.status.lowercased())
+        } catch FleetKitError.sessionExpired {
+            throw FleetKitError.sessionExpired
+        } catch FleetKitError.notSignedIn {
+            throw FleetKitError.notSignedIn
+        } catch {
+            try Task.checkCancellation()
+            return nil
+        }
+    }
+
     // MARK: - Writes
 
-    public func runControl(action: String, vin: String, params: [String: FleetControlValue]) async throws {
+    public func runControl(
+        action: String,
+        vin: String,
+        params: [String: FleetControlValue],
+        waitForCompletion: Bool = true
+    ) async throws {
         if let client = try teslascope { return try await client.runControl(action: action, vin: vin, params: params) }
         let command: String
         var query: [URLQueryItem] = []
@@ -515,7 +549,15 @@ public struct FleetIntentClient: Sendable {
             throw FleetKitError.unsupportedAction(action)
         }
 
-        try await postCommand("/\(encoded(vin))/command/\(command)", query: query)
+        if !waitForCompletion {
+            query.append(URLQueryItem(name: "wait_for_completion", value: "false"))
+        }
+
+        try await postCommand(
+            "/\(encoded(vin))/command/\(command)",
+            query: query,
+            timeout: waitForCompletion ? FleetKitConfig.vehicleCommandTimeout : FleetKitConfig.requestTimeout
+        )
     }
 
     public func installSoftwareUpdate(vin: String, offsetSec: Int) async throws {
@@ -544,8 +586,12 @@ public struct FleetIntentClient: Sendable {
         }
     }
 
-    private func postCommand(_ path: String, query: [URLQueryItem] = []) async throws {
-        let request = try authorizedRequest(path: path, query: query, method: "POST")
+    private func postCommand(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        timeout: TimeInterval = FleetKitConfig.vehicleCommandTimeout
+    ) async throws {
+        let request = try authorizedRequest(path: path, query: query, method: "POST", timeout: timeout)
         let data = try await execute(request)
         guard let response = try? JSONDecoder().decode(TessieCommandResponse.self, from: data), response.result else {
             FleetKitLog.client.error("POST \(Self.logPath(path), privacy: .public) command was not accepted")
@@ -605,13 +651,18 @@ public struct FleetIntentClient: Sendable {
         return url
     }
 
-    private func authorizedRequest(path: String, query: [URLQueryItem], method: String) throws -> URLRequest {
+    private func authorizedRequest(
+        path: String,
+        query: [URLQueryItem],
+        method: String,
+        timeout: TimeInterval = FleetKitConfig.requestTimeout
+    ) throws -> URLRequest {
         guard tokenStore.provider == provider else { throw FleetKitError.sessionExpired }
         guard let token = tokenStore.accessToken(for: provider) else { throw FleetKitError.notSignedIn }
         try Self.validateRequest?(token)
         guard provider == .tessie else { throw FleetKitError.badResponse }
         let url = try makeURL(path: path, query: query)
-        var request = URLRequest(url: url, timeoutInterval: FleetKitConfig.requestTimeout)
+        var request = URLRequest(url: url, timeoutInterval: timeout)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -710,6 +761,16 @@ private struct TessieVehicle: Decodable {
                 temperatureInFahrenheit: fahrenheit
             )
         }
+        if lastState?.state?.lowercased() == "online" {
+            let latestMS = [
+                lastState?.climate?.int64("timestamp"),
+                lastState?.charge?.int64("timestamp"),
+                lastState?.vehicleTimestamp
+            ].compactMap { $0 }.map(TessieObject.milliseconds).max()
+            if let latestMS {
+                vehicle.rosterAwakeObservedAt = Date(timeIntervalSince1970: TimeInterval(latestMS) / 1_000)
+            }
+        }
         return vehicle
     }
 
@@ -720,6 +781,7 @@ private struct TessieVehicle: Decodable {
 }
 
 private struct RosterState: Decodable {
+    let state: String?
     let displayName: String?
     let carType: String?
     let exteriorColor: String?
@@ -729,8 +791,10 @@ private struct RosterState: Decodable {
     let canAcceptNavigationRequests: Bool?
     let charge: TessieObject?
     let climate: TessieObject?
+    let vehicleTimestamp: Int64?
 
     private enum Field: String, CodingKey {
+        case state
         case charge = "charge_state", climate = "climate_state", timestamp
         case battery = "battery_level", range = "battery_range"
         case inside = "inside_temp", outside = "outside_temp", target = "driver_temp_setting"
@@ -758,8 +822,10 @@ private struct RosterState: Decodable {
             }
             return selected
         }
+        self.state = try string(.state, in: state)
         charge = readings(.charge, fields: [.timestamp, .battery, .range])
         climate = readings(.climate, fields: [.timestamp, .inside, .outside, .target, .climateOn, .autoConditioning])
+        vehicleTimestamp = try? vehicle?.decodeIfPresent(TessieValue.self, forKey: .timestamp)?.int64Value
         displayName = try string(.displayName, in: state) ?? string(.vehicleName, in: vehicle)
         carType = try string(.carType, in: config)
         exteriorColor = try string(.exteriorColor, in: config)
@@ -805,6 +871,10 @@ private struct TessieReleaseNotes: Decodable {
 
 private struct TessieCommandResponse: Decodable {
     let result: Bool
+}
+
+private struct TessieVehicleStatusResponse: Decodable {
+    let status: String
 }
 
 private enum TessieValue: Decodable {
