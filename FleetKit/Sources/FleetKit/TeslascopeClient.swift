@@ -116,7 +116,7 @@ public struct TeslascopeClient: Sendable {
 
     /// Retains the original envelope and HTTP status for the user-requested diagnostics export.
     public func rawRead(_ components: [String]) async throws -> (Data, HTTPURLResponse) {
-        try await send(components, method: "GET", query: [], body: nil)
+        try await send(components, method: "GET", query: [], body: nil, timeout: FleetKitConfig.requestTimeout)
     }
 
     func request(
@@ -124,9 +124,10 @@ public struct TeslascopeClient: Sendable {
         method: String = "GET",
         query: [URLQueryItem] = [],
         body: Data? = nil,
-        allowsUnwrappedSuccess: Bool = false
+        allowsUnwrappedSuccess: Bool = false,
+        timeout: TimeInterval = FleetKitConfig.requestTimeout
     ) async throws -> Data {
-        let (data, http) = try await send(components, method: method, query: query, body: body)
+        let (data, http) = try await send(components, method: method, query: query, body: body, timeout: timeout)
         let header = try? JSONDecoder().decode(TeslascopeResponseStatus.self, from: data)
         let status: Int
         if (200..<300).contains(http.statusCode) {
@@ -156,7 +157,7 @@ public struct TeslascopeClient: Sendable {
     }
 
     private func send(
-        _ components: [String], method: String, query: [URLQueryItem], body: Data?
+        _ components: [String], method: String, query: [URLQueryItem], body: Data?, timeout: TimeInterval
     ) async throws -> (Data, HTTPURLResponse) {
         guard !components.isEmpty, components.allSatisfy(Self.validComponent) else { throw FleetKitError.badResponse }
         var url = URLComponents()
@@ -165,7 +166,7 @@ public struct TeslascopeClient: Sendable {
         url.path = "/api/" + components.joined(separator: "/")
         url.queryItems = query.isEmpty ? nil : query
         guard let address = url.url else { throw FleetKitError.badResponse }
-        var request = URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: FleetKitConfig.requestTimeout)
+        var request = URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")

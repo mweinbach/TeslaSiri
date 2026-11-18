@@ -86,7 +86,9 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
                 dialog: IntentDialog("Install software update\(version) on \(resolved.name)\(whenText)? The car can't be driven while it installs.")
             )
 
-            try await performSandboxAwareBackgroundTask {
+            try await performSandboxAwareBackgroundTask(
+                description: "Scheduling software update on \(resolved.name)"
+            ) {
                 try await service.installSoftwareUpdate(vin: resolved.vin, offsetSec: offsetSec)
             }
             let summary = offsetSec > 60

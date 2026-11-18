@@ -22,6 +22,8 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     public var updatedAt: Date?
     public var fetchedAt: Date
     public var mode: FleetSandboxMode
+    /// When a climate start was sent to a sleeping car that has not reported HVAC on yet.
+    public var climateStartRequestedAt: Date?
 
     public init(vehicle: FleetVehicleInfo, snapshot: FleetSnapshotInfo, usesMetric: Bool, mode: FleetSandboxMode, fetchedAt: Date = .now) {
         vin = vehicle.vin
@@ -48,6 +50,21 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     }
 
     public var isCharging: Bool { chargingState?.lowercased() == "charging" }
+
+    /// How long a climate start sent to a sleeping car is shown as in progress.
+    public static let climateStartWindow: TimeInterval = 120
+
+    /// `true` while a climate start is waiting on the car to wake, so the widget doesn't
+    /// show "Climate off" right after the user tapped Start Climate.
+    public func isClimateStarting(at now: Date = .now) -> Bool {
+        guard climateOn != true, let climateStartRequestedAt else { return false }
+        return (0..<Self.climateStartWindow).contains(now.timeIntervalSince(climateStartRequestedAt))
+    }
+
+    public var climateDescription: String {
+        if isClimateStarting() { return "Climate starting…" }
+        return climateOn.map { $0 ? "Climate on" : "Climate off" } ?? "Climate status unavailable"
+    }
 
     public var canStartCharging: Bool {
         guard allowsChargingCommands != false, let state = chargingState?.lowercased() else { return false }

@@ -146,9 +146,14 @@ struct ClimateCommandReceipt: Codable, Sendable {
     var running: Bool?
     var startedAt: Date?
     var summary: String
+    var deliveryState: VehicleCommandDeliveryState? = nil
+
+    var isWaking: Bool {
+        deliveryState == .wakingVehicle
+    }
 
     func recentlyStarted(at now: Date = .now, observation: FleetSnapshotInfo? = nil) -> Bool {
-        guard running == true, let startedAt else { return false }
+        guard !isWaking, running == true, let startedAt else { return false }
         if observation?.hvacOn == false, let observedAt = observation?.updatedAtDate, observedAt > startedAt {
             return false
         }
@@ -170,25 +175,54 @@ struct ClimateCommandReceipt: Codable, Sendable {
 }
 
 extension FleetIntentService {
-    /// Keep an existing card current when another Siri tool or the dashboard controls its car.
-    public func recordClimateControl(_ action: String, vin: String, targetCelsius: Double? = nil) {
+    /// Keep climate state current across Siri tools, snippets, and dashboard controls.
+    /// Creates a receipt when none exists so `ControlCarIntent` and dashboard toggles
+    /// stay synchronized with `isClimateLikelyRunning(vin:)`.
+    public func recordClimateControl(
+        _ action: String,
+        vin: String,
+        targetCelsius: Double? = nil,
+        deliveryState: VehicleCommandDeliveryState = .confirmed
+    ) {
         guard action == "auto_conditioning_start" || action == "auto_conditioning_stop" || action == "set_temps",
-              var receipt = ClimateCommandReceipt.latest(vin: vin, scope: sessionScopeID, group: appGroupIdentifier) else { return }
+              let scope = sessionScopeID else { return }
+        let existing = ClimateCommandReceipt.latest(vin: vin, scope: scope, group: appGroupIdentifier)
         let now = Date.now
+        var receipt = existing ?? ClimateCommandReceipt(
+            sessionScope: scope,
+            interactionID: UUID().uuidString,
+            date: now,
+            targetCelsius: nil,
+            targetSetAt: nil,
+            running: nil,
+            startedAt: nil,
+            summary: "",
+            deliveryState: deliveryState
+        )
         if action == "set_temps" {
             guard let targetCelsius, targetCelsius.isFinite else { return }
             receipt.targetCelsius = targetCelsius
             receipt.targetSetAt = now
+            receipt.deliveryState = deliveryState
             receipt.summary = "Cabin target updated."
         } else {
             let running = action == "auto_conditioning_start"
             receipt.running = running
             receipt.date = now
-            receipt.startedAt = running ? now : nil
-            receipt.summary = running ? "Climate is on." : "Climate is off."
+            receipt.deliveryState = deliveryState
+            receipt.startedAt = (running && deliveryState == .confirmed) ? now : nil
+            if deliveryState == .wakingVehicle {
+                receipt.summary = running
+                    ? "Waking car to start climate."
+                    : "Waking car to turn off climate."
+            } else {
+                receipt.summary = running ? "Climate is on." : "Climate is off."
+            }
         }
         receipt.save(vin: vin, group: appGroupIdentifier)
-        ClimateControlSnippetIntent.reload()
+        if existing != nil {
+            ClimateControlSnippetIntent.reload()
+        }
     }
 }
 
@@ -219,7 +253,16 @@ public struct ClimateControlSnippetIntent: SnippetIntent {
         self.sessionScope = FleetIntentService.make().sessionScopeID
     }
 
-    init(vehicle: VehicleEntity, appliedSummary: String, scope: String?, running: Bool?, targetCelsius: Double? = nil) {
+    init(
+        vehicle: VehicleEntity,
+        appliedSummary: String,
+        scope: String?,
+        running: Bool?,
+        targetCelsius: Double? = nil,
+        deliveryState: VehicleCommandDeliveryState = .confirmed,
+        confirmedStart: Bool = true,
+        existingStartAnchor: Date? = nil
+    ) {
         self.vehicle = vehicle
         self.appliedSummary = appliedSummary
         self.sessionScope = scope
@@ -229,10 +272,30 @@ public struct ClimateControlSnippetIntent: SnippetIntent {
         self.interactionID = id
         let now = Date.now
         let previous = ClimateCommandReceipt.latest(vin: vehicle.id, scope: scope, group: service.appGroupIdentifier)
+        let startedAt: Date?
+        if running == true, deliveryState == .confirmed {
+            if confirmedStart {
+                startedAt = now
+            } else if let existingStartAnchor {
+                startedAt = existingStartAnchor
+            } else if previous?.isWaking != true, previous?.running == true {
+                startedAt = previous?.startedAt
+            } else {
+                startedAt = nil
+            }
+        } else {
+            startedAt = nil
+        }
         ClimateCommandReceipt(
-            sessionScope: scope, interactionID: id, date: now, targetCelsius: targetCelsius ?? previous?.targetCelsius,
-            targetSetAt: targetCelsius == nil ? previous?.targetSetAt : now, running: running,
-            startedAt: running == true ? now : nil, summary: appliedSummary
+            sessionScope: scope,
+            interactionID: id,
+            date: now,
+            targetCelsius: targetCelsius ?? previous?.targetCelsius,
+            targetSetAt: targetCelsius == nil ? previous?.targetSetAt : now,
+            running: running,
+            startedAt: startedAt,
+            summary: appliedSummary,
+            deliveryState: deliveryState
         ).save(vin: vehicle.id, group: service.appGroupIdentifier)
     }
 
@@ -329,7 +392,7 @@ public struct SelectSnippetItemIntent: AppIntent {
 }
 
 /// Changes climate from a displayed card, keeping later renders on the acknowledged setting.
-public struct AdjustSnippetClimateIntent: AppIntent {
+public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Adjust Cabin Climate"
     public static let isDiscoverable = false
 
@@ -379,41 +442,93 @@ public struct AdjustSnippetClimateIntent: AppIntent {
         }
         let observation = await service.cachedClimateSnapshot(vin: resolved.vin)
         let previous = ClimateCommandReceipt.latest(vin: resolved.vin, scope: scope, group: service.appGroupIdentifier)
-        var startedAt: Date?
-        var target: Double?
+        let turnOffRequested = turnOff
+        let targetF = targetFahrenheit
+        let cardInteractionID = interactionID
+
+        let startedAt: Date?
+        let target: Double?
         let summary: String
-        if turnOff {
-            try await service.runControl(action: "auto_conditioning_stop", vin: resolved.vin, humanName: "stopping climate")
-            summary = "Climate is off."
-        } else {
-            if let interactionID, previous?.interactionID == interactionID, previous?.recentlyStarted(observation: observation) == true {
-                startedAt = previous?.startedAt
-            } else {
-                try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
-                startedAt = .now
-            }
-            if let targetFahrenheit {
-                let celsius = SetCabinTemperatureIntent.targetCelsius(
-                    for: Measurement(value: targetFahrenheit, unit: .fahrenheit)
+        let deliveryState: VehicleCommandDeliveryState
+
+        if turnOffRequested {
+            deliveryState = try await performSandboxAwareBackgroundTask(
+                description: "Turning off climate in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "auto_conditioning_stop",
+                    vin: resolved.vin,
+                    humanName: "stopping climate",
+                    allowAsyncWake: true
                 )
+            }
+            startedAt = nil
+            target = nil
+            summary = deliveryState == .wakingVehicle
+                ? "Waking \(resolved.name) to turn off climate."
+                : "Climate is off."
+        } else if let targetF {
+            let runningAnchor: Date?
+            if let cardInteractionID, previous?.interactionID == cardInteractionID,
+               previous?.recentlyStarted(observation: observation) == true {
+                runningAnchor = previous?.startedAt
+            } else {
+                runningAnchor = await service.climateRunningAnchor(vin: resolved.vin)
+            }
+            let shouldStartClimate = runningAnchor == nil
+            let celsius = SetCabinTemperatureIntent.targetCelsius(
+                for: Measurement(value: targetF, unit: .fahrenheit)
+            )
+            try await performSandboxAwareBackgroundTask(
+                description: "Updating cabin temperature in \(resolved.name)"
+            ) {
+                if shouldStartClimate {
+                    try await service.runControl(
+                        action: "auto_conditioning_start",
+                        vin: resolved.vin,
+                        humanName: "starting climate"
+                    )
+                }
                 guard scope == service.sessionScopeID else { throw FleetKitError.sessionExpired }
                 try await service.runControl(
-                    action: "set_temps", vin: resolved.vin,
+                    action: "set_temps",
+                    vin: resolved.vin,
                     params: ["driver_temp": .double(celsius), "passenger_temp": .double(celsius)],
                     humanName: "setting the cabin temperature"
                 )
-                target = celsius
-                summary = "Cabin target updated."
-            } else {
-                summary = "Climate is on."
             }
+            startedAt = shouldStartClimate ? .now : runningAnchor
+            target = celsius
+            deliveryState = .confirmed
+            summary = "Cabin target updated."
+        } else {
+            deliveryState = try await performSandboxAwareBackgroundTask(
+                description: "Starting climate in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "auto_conditioning_start",
+                    vin: resolved.vin,
+                    humanName: "starting climate",
+                    allowAsyncWake: true
+                )
+            }
+            startedAt = deliveryState == .confirmed ? .now : nil
+            target = nil
+            summary = deliveryState == .wakingVehicle
+                ? "Waking \(resolved.name) to start climate."
+                : "Climate is on."
         }
         guard scope == service.sessionScopeID else { throw FleetKitError.sessionExpired }
         ClimateCommandReceipt(
-            sessionScope: scope, interactionID: interactionID ?? UUID().uuidString, date: .now,
-            targetCelsius: target ?? previous?.targetCelsius, targetSetAt: target == nil ? previous?.targetSetAt : .now,
-            running: !turnOff,
-            startedAt: startedAt, summary: summary
+            sessionScope: scope,
+            interactionID: cardInteractionID ?? UUID().uuidString,
+            date: .now,
+            targetCelsius: target ?? previous?.targetCelsius,
+            targetSetAt: target == nil ? previous?.targetSetAt : .now,
+            running: !turnOffRequested,
+            startedAt: startedAt,
+            summary: summary,
+            deliveryState: deliveryState
         ).save(vin: resolved.vin, group: service.appGroupIdentifier)
         SiriSnippetStateStore.shared.notifyChanged(.vehicleStatus(vin: resolved.vin))
         // App Intents re-performs the originating climate snippet after the tap.

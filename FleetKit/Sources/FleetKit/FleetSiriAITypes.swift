@@ -1,6 +1,38 @@
 import AppIntents
 import Foundation
 
+/// Whether a vehicle command completed while the car was awake or was dispatched
+/// asynchronously so the provider can wake a sleeping car and apply it.
+public enum VehicleCommandDeliveryState: String, AppEnum, Codable, Sendable {
+    case confirmed
+    case wakingVehicle
+
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Command Delivery State")
+    public static let caseDisplayRepresentations: [VehicleCommandDeliveryState: DisplayRepresentation] = [
+        .confirmed: DisplayRepresentation(
+            title: "Confirmed",
+            subtitle: "The car was awake and the provider confirmed the command"
+        ),
+        .wakingVehicle: DisplayRepresentation(
+            title: "Waking Vehicle",
+            subtitle: "The car was asleep; the provider accepted the request to wake it and apply the command"
+        )
+    ]
+
+    /// The spoken summary for a command. When the provider accepted the command before a
+    /// sleeping car woke, says so instead of claiming the change already happened.
+    /// - Parameters:
+    ///   - wakingAction: What the request will do once the car wakes, phrased to follow
+    ///     "sent the request to wake it and", for example "turn off climate".
+    ///   - confirmed: The sentence to use when the car already acknowledged the command.
+    func summary(vehicleName: String, wakingAction: String, confirmed: String) -> String {
+        switch self {
+        case .wakingVehicle: "\(vehicleName) was asleep — sent the request to wake it and \(wakingAction)."
+        case .confirmed: confirmed
+        }
+    }
+}
+
 /// Structured result returned by every vehicle command and software action tool
 /// so Siri AI and Shortcuts receive machine-readable confirmation alongside
 /// spoken dialog.
@@ -20,8 +52,12 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
     public var action: String
 
     /// Whether the connected provider accepted the command for delivery to the vehicle.
-    @Property(title: "Succeeded", description: "Whether Tessie accepted the command and sent it to the car.")
+    @Property(title: "Succeeded", description: "Whether the vehicle provider accepted the command. Check Delivery State to see whether the car already confirmed it or is waking from sleep.")
     public var succeeded: Bool
+
+    /// Whether the car already confirmed the command or is waking from sleep while the provider applies it.
+    @Property(title: "Delivery State", description: "Confirmed when the car already acknowledged the command, or Waking Vehicle when the car was asleep and the provider accepted the request to wake it and apply the change.")
+    public var deliveryState: VehicleCommandDeliveryState
 
     /// Optional human-readable target value applied by the command (such as `"80%"` or `"70°F (21.1°C)"`).
     @Property(title: "Applied Value", description: "The value the command set, such as \"80%\" or \"21.5°C\". Empty for commands without a value.")
@@ -47,6 +83,7 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
         self.vin = ""
         self.action = ""
         self.succeeded = false
+        self.deliveryState = .confirmed
         self.appliedValue = nil
         self.summary = ""
         self.executedAt = .now
@@ -56,6 +93,7 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
         vehicle: FleetVehicleInfo,
         action: String,
         succeeded: Bool = true,
+        deliveryState: VehicleCommandDeliveryState = .confirmed,
         appliedValue: String? = nil,
         summary: String,
         executedAt: Date = .now
@@ -64,6 +102,7 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
         self.vin = vehicle.vin
         self.action = action
         self.succeeded = succeeded
+        self.deliveryState = deliveryState
         self.appliedValue = appliedValue
         self.summary = summary
         self.executedAt = executedAt

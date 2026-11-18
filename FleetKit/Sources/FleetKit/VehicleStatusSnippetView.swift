@@ -503,18 +503,29 @@ public struct ClimateControlSnippetView: View {
 
     public var body: some View {
         let isRunning = displayedRunning
+        let waking = isWaking
         let unit = displayUnit == .celsius ? "°C" : "°F"
         let currentTargetF = displayedTarget?.converted(to: .fahrenheit).value
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Label(vehicle.name, systemImage: isRunning == false ? "fan.slash.fill" : "fan.fill")
+                Label(vehicle.name, systemImage: waking ? "moon.zzz.fill" : (isRunning == false ? "fan.slash.fill" : "fan.fill"))
                     .font(.headline)
-                    .foregroundStyle(isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
+                    .foregroundStyle(waking ? AnyShapeStyle(Color.orange) : (isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary)))
 
                 Spacer()
 
-                if let isRunning {
+                if waking {
+                    Text("Waking Car…")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.orange)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Color.orange.opacity(0.16),
+                            in: Capsule()
+                        )
+                } else if let isRunning {
                     Text(isRunning ? "Conditioning" : "Climate Off")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.secondary))
@@ -562,16 +573,18 @@ public struct ClimateControlSnippetView: View {
             .padding(12)
             .background(
                 LinearGradient(
-                    colors: isRunning == true
-                        ? [thermalAccent.opacity(0.18), thermalAccent.opacity(0.05)]
-                        : [Color.secondary.opacity(0.10), Color.secondary.opacity(0.04)],
+                    colors: waking
+                        ? [Color.orange.opacity(0.16), Color.orange.opacity(0.05)]
+                        : (isRunning == true
+                            ? [thermalAccent.opacity(0.18), thermalAccent.opacity(0.05)]
+                            : [Color.secondary.opacity(0.10), Color.secondary.opacity(0.04)]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
 
-            if !comfortBadges.isEmpty {
+            if !waking, !comfortBadges.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(comfortBadges, id: \.title) { badge in
                         Label(badge.title, systemImage: badge.icon)
@@ -631,6 +644,10 @@ public struct ClimateControlSnippetView: View {
     private func observationIsNewer(than commandDate: Date?) -> Bool {
         guard let date = status?.updatedAt, let commandDate else { return false }
         return date > commandDate
+    }
+
+    var isWaking: Bool {
+        receipt?.isWaking == true && !observationIsNewer(than: receipt?.date)
     }
 
     var displayedTarget: Measurement<UnitTemperature>? {

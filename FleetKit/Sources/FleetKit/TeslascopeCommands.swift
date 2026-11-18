@@ -42,7 +42,12 @@ extension TeslascopeClient {
 
     private func sendCommand(_ name: String, params: [String: FleetControlValue], publicID: String) async throws {
         let body = params.isEmpty ? nil : try JSONEncoder().encode(params)
-        let data = try await request(["vehicle", publicID, "command", name], method: "POST", body: body)
+        let data = try await request(
+            ["vehicle", publicID, "command", name],
+            method: "POST",
+            body: body,
+            timeout: FleetKitConfig.vehicleCommandTimeout
+        )
         struct Acknowledgement: Decodable {
             let code: Int
             let response: String

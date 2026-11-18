@@ -24,7 +24,12 @@ public struct FleetWidgetActionIntent: AppIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             if let command = action.command {
-                try await service.runControl(action: command, vin: resolved.vin, humanName: action.title)
+                try await service.runControl(
+                    action: command,
+                    vin: resolved.vin,
+                    humanName: action.title,
+                    allowAsyncWake: action == .startClimate
+                )
                 _ = try? await FleetWidgetStore.shared.load(vin: resolved.vin, service: service)
             } else {
                 _ = try await FleetWidgetStore.shared.load(vin: resolved.vin, service: service)

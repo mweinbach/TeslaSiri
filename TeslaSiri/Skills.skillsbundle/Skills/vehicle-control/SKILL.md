@@ -22,6 +22,6 @@ For “If Midnight’s cabin is above 80°F, cool it to 72°F,” read climate o
 
 ## Report the outcome
 
-Say which changes the command result reports as accepted. A cabin target can be accepted before the cabin reaches that temperature. After a partial failure, report the accepted steps and the first unconfirmed step, then stop. If the user asks to continue, check any uncertain outcome that can be observed before acting on the outstanding request. A timeout alone does not establish whether a command ran.
+Say which changes the command result reports as accepted. Check the command result’s Delivery State: if it is Waking Vehicle, tell the user the car was asleep and the request was sent to wake it and apply the change—do not claim climate or settings are already active. A cabin target can be accepted before the cabin reaches that temperature. After a partial failure, report the accepted steps and the first unconfirmed step, then stop. If the user asks to continue, check any uncertain outcome that can be observed before acting on the outstanding request. A timeout alone does not establish whether a command ran.
 
 Use the Set Tesla Seat Heater tool in cooling mode for explicitly requested front-seat cooling. Use prepare-trip for departure preparation, overnight-security-check for a bedtime or away routine, driving-and-energy-insights for past sessions, and software-update-advisor for software questions or installations.

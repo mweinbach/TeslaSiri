@@ -16,12 +16,18 @@ public struct FleetWidgetStore: Sendable {
         let vehicle = try await service.resolvedVehicle(vin)
         async let snapshot = service.snapshot(vin: vehicle.vin)
         async let units = service.units()
-        let value = try await FleetWidgetSnapshot(
+        var value = try await FleetWidgetSnapshot(
             vehicle: vehicle,
             snapshot: snapshot,
             usesMetric: (try? await units) == "metric",
             mode: mode
         )
+        // A Start Climate tap on a sleeping car returns before the car wakes; keep showing it
+        // as starting until the car reports HVAC on or the window passes.
+        if let receipt = ClimateCommandReceipt.latest(vin: vehicle.vin, scope: service.sessionScopeID, group: service.appGroupIdentifier),
+           receipt.isWaking, receipt.running == true {
+            value.climateStartRequestedAt = receipt.date
+        }
         guard mode == FleetSandboxStore.shared.mode(), scope == sessionScope(mode: mode) else {
             throw CancellationError()
         }

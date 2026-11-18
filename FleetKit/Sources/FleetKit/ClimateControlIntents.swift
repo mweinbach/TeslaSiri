@@ -8,7 +8,7 @@ import Foundation
 // mode OFF, which prompts because a pet may be relying on it.
 
 @AppIntent(.tool)
-public struct StopClimateIntent: AppIntent, PredictableIntent {
+public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Turn Off Tesla Climate"
     public static let description = IntentDescription(
         "Turns off cabin heating and air conditioning in the user's car (or Tesla), such as after preconditioning. Doesn't affect charging. Use the Stop Tesla Charging tool to end a charging session.",
@@ -47,16 +47,38 @@ public struct StopClimateIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "auto_conditioning_stop", vin: resolved.vin, humanName: "stopping climate")
-            let summary = "Climate is turning off in \(resolved.name)."
-            let result = VehicleCommandResultEntity(vehicle: resolved, action: "auto_conditioning_stop", summary: summary)
-            log.success("stopped climate in \(resolved.name)")
+            let deliveryState = try await performSandboxAwareBackgroundTask(
+                description: "Turning off climate in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "auto_conditioning_stop",
+                    vin: resolved.vin,
+                    humanName: "stopping climate",
+                    allowAsyncWake: true
+                )
+            }
+            let summary = deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "turn off climate",
+                confirmed: "Climate is turning off in \(resolved.name)."
+            )
+            let result = VehicleCommandResultEntity(
+                vehicle: resolved,
+                action: "auto_conditioning_stop",
+                deliveryState: deliveryState,
+                summary: summary
+            )
+            log.success("stopped climate in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(
                 value: result,
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary, scope: scope, running: false
+                    appliedSummary: summary,
+                    scope: scope,
+                    running: false,
+                    deliveryState: deliveryState,
+                    confirmedStart: false
                 )
             )
         } catch {
@@ -66,7 +88,7 @@ public struct StopClimateIntent: AppIntent, PredictableIntent {
 }
 
 @AppIntent(.tool)
-public struct SetCabinTemperatureIntent: AppIntent, PredictableIntent {
+public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Car Temperature"
     public static let description = IntentDescription(
         "Starts cabin climate and sets the driver and passenger HVAC temperature in the user's car or Tesla (15°C–28°C / 59°F–82.4°F). Use when warming up or cooling down the car to a specific temperature; use Configure Tesla Cabin Climate when combining temperature with seat heat, defrost, or Dog Mode.",
@@ -130,39 +152,57 @@ public struct SetCabinTemperatureIntent: AppIntent, PredictableIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
 
             let targetCelsius = Self.targetCelsius(for: temperature)
+            let runningAnchor = await service.climateRunningAnchor(vin: resolved.vin)
+            let shouldStartClimate = runningAnchor == nil
 
-            try await service.runControl(
-                action: "auto_conditioning_start",
-                vin: resolved.vin,
-                humanName: "starting climate"
-            )
-            try await service.runControl(
-                action: "set_temps",
-                vin: resolved.vin,
-                params: [
-                    "driver_temp": .double(targetCelsius),
-                    "passenger_temp": .double(targetCelsius)
-                ],
-                humanName: "setting the cabin temperature"
-            )
+            // Keep this two-step sequence synchronous (under `LongRunningIntent` + `commandTimeout`)
+            // rather than firing two `wait_for_completion=false` requests at a sleeping car,
+            // which could race or drop `set_temps` before HVAC starts.
+            try await performSandboxAwareBackgroundTask(
+                description: "Setting cabin temperature in \(resolved.name)"
+            ) {
+                if shouldStartClimate {
+                    try await service.runControl(
+                        action: "auto_conditioning_start",
+                        vin: resolved.vin,
+                        humanName: "starting climate"
+                    )
+                }
+                try await service.runControl(
+                    action: "set_temps",
+                    vin: resolved.vin,
+                    params: [
+                        "driver_temp": .double(targetCelsius),
+                        "passenger_temp": .double(targetCelsius)
+                    ],
+                    humanName: "setting the cabin temperature"
+                )
+            }
 
             let applied = Measurement(value: targetCelsius, unit: UnitTemperature.celsius)
                 .converted(to: temperature.unit)
                 .formatted(.measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1))))
-            let summary = "Started climate and set \(resolved.name)'s cabin to \(applied)."
+            let summary = shouldStartClimate
+                ? "Started climate and set \(resolved.name)'s cabin to \(applied)."
+                : "Set \(resolved.name)'s cabin to \(applied)."
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_temps",
                 appliedValue: applied,
                 summary: summary
             )
-            log.success("started climate and set \(resolved.name) cabin to \(targetCelsius)°C")
+            log.success("\(shouldStartClimate ? "started climate and " : "")set \(resolved.name) cabin to \(targetCelsius)°C")
             return .result(
                 value: result,
                 dialog: IntentDialog("\(summary)"),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
-                    appliedSummary: summary, scope: scope, running: true, targetCelsius: targetCelsius
+                    appliedSummary: summary,
+                    scope: scope,
+                    running: true,
+                    targetCelsius: targetCelsius,
+                    confirmedStart: shouldStartClimate,
+                    existingStartAnchor: runningAnchor
                 )
             )
         } catch {
@@ -172,7 +212,7 @@ public struct SetCabinTemperatureIntent: AppIntent, PredictableIntent {
 }
 
 @AppIntent(.tool)
-public struct SetMaxDefrostIntent: AppIntent, PredictableIntent {
+public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Max Defrost"
     public static let description = IntentDescription(
         "Turns maximum windshield and cabin defrost on or off in the user's car (or Tesla). Omit the vehicle parameter to target the user's selected car.",
@@ -218,20 +258,33 @@ public struct SetMaxDefrostIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(
-                action: "remote_defrost",
-                vin: resolved.vin,
-                params: ["on": .bool(on)],
-                humanName: "setting max defrost"
+            let enable = on
+            let deliveryState = try await performSandboxAwareBackgroundTask(
+                description: enable
+                    ? "Turning on max defrost in \(resolved.name)"
+                    : "Turning off max defrost in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "remote_defrost",
+                    vin: resolved.vin,
+                    params: ["on": .bool(enable)],
+                    humanName: "setting max defrost",
+                    allowAsyncWake: true
+                )
+            }
+            let summary = deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "turn \(enable ? "on" : "off") max defrost",
+                confirmed: enable ? "Max defrost is on in \(resolved.name)." : "Max defrost is off in \(resolved.name)."
             )
-            let summary = on ? "Max defrost is on in \(resolved.name)." : "Max defrost is off in \(resolved.name)."
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "remote_defrost",
-                appliedValue: on ? "on" : "off",
+                deliveryState: deliveryState,
+                appliedValue: enable ? "on" : "off",
                 summary: summary
             )
-            log.success("max defrost \(on ? "on" : "off") in \(resolved.name)")
+            log.success("max defrost \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(value: result, dialog: IntentDialog("\(summary)"))
         } catch {
             throw log.failure(error)
@@ -240,7 +293,7 @@ public struct SetMaxDefrostIntent: AppIntent, PredictableIntent {
 }
 
 @AppIntent(.tool)
-public struct SetPetModeIntent: AppIntent, PredictableIntent {
+public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Dog Mode"
     public static let description = IntentDescription(
         "Turns Dog Mode (pet climate keeper) on or off in a Tesla vehicle. Turning Dog Mode off requires user confirmation so a pet inside is not inadvertently left without climate control."
@@ -285,24 +338,37 @@ public struct SetPetModeIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            if !on {
+            let enable = on
+            if !enable {
                 // Turning dog mode off remotely could leave a pet without climate.
                 try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
             }
-            try await service.runControl(
-                action: "set_pet_mode",
-                vin: resolved.vin,
-                params: ["on": .bool(on)],
-                humanName: "setting dog mode"
+            let deliveryState = try await performSandboxAwareBackgroundTask(
+                description: enable
+                    ? "Turning on Dog Mode in \(resolved.name)"
+                    : "Turning off Dog Mode in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "set_pet_mode",
+                    vin: resolved.vin,
+                    params: ["on": .bool(enable)],
+                    humanName: "setting dog mode",
+                    allowAsyncWake: true
+                )
+            }
+            let summary = deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "turn \(enable ? "on" : "off") Dog Mode",
+                confirmed: enable ? "Dog mode is on in \(resolved.name)." : "Dog mode is off in \(resolved.name)."
             )
-            let summary = on ? "Dog mode is on in \(resolved.name)." : "Dog mode is off in \(resolved.name)."
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_pet_mode",
-                appliedValue: on ? "on" : "off",
+                deliveryState: deliveryState,
+                appliedValue: enable ? "on" : "off",
                 summary: summary
             )
-            log.success("dog mode \(on ? "on" : "off") in \(resolved.name)")
+            log.success("dog mode \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(value: result, dialog: IntentDialog("\(summary)"))
         } catch {
             throw log.failure(error)
@@ -311,7 +377,7 @@ public struct SetPetModeIntent: AppIntent, PredictableIntent {
 }
 
 @AppIntent(.tool)
-public struct SetBioweaponModeIntent: AppIntent, PredictableIntent {
+public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Bioweapon Defense"
     public static let description = IntentDescription(
         "Turns Bioweapon Defense Mode positive-pressure HEPA cabin filtration on or off on supported Tesla vehicles. Omit the vehicle parameter to target the user's selected car."
@@ -356,20 +422,33 @@ public struct SetBioweaponModeIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(
-                action: "set_bioweapon_mode",
-                vin: resolved.vin,
-                params: ["on": .bool(on), "manual_override": .bool(false)],
-                humanName: "setting Bioweapon Defense Mode"
+            let enable = on
+            let deliveryState = try await performSandboxAwareBackgroundTask(
+                description: enable
+                    ? "Turning on Bioweapon Defense in \(resolved.name)"
+                    : "Turning off Bioweapon Defense in \(resolved.name)"
+            ) {
+                try await service.runControl(
+                    action: "set_bioweapon_mode",
+                    vin: resolved.vin,
+                    params: ["on": .bool(enable), "manual_override": .bool(false)],
+                    humanName: "setting Bioweapon Defense Mode",
+                    allowAsyncWake: true
+                )
+            }
+            let summary = deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "turn \(enable ? "on" : "off") Bioweapon Defense Mode",
+                confirmed: enable ? "Bioweapon Defense Mode is on in \(resolved.name)." : "Bioweapon Defense Mode is off in \(resolved.name)."
             )
-            let summary = on ? "Bioweapon Defense Mode is on in \(resolved.name)." : "Bioweapon Defense Mode is off in \(resolved.name)."
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_bioweapon_mode",
-                appliedValue: on ? "on" : "off",
+                deliveryState: deliveryState,
+                appliedValue: enable ? "on" : "off",
                 summary: summary
             )
-            log.success("Bioweapon Defense \(on ? "on" : "off") in \(resolved.name)")
+            log.success("Bioweapon Defense \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(value: result, dialog: IntentDialog("\(summary)"))
         } catch {
             throw log.failure(error)

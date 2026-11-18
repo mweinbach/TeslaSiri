@@ -33,7 +33,7 @@ Include the most complete address or place name in the same control request. If 
 
 ## 4. Report
 
-Summarize in a few lines: battery and range, cabin settings that were applied, any low tire, and the destination that was sent.
+Summarize in a few lines: battery and range, cabin settings that were applied, any low tire, and the destination that was sent. If a command result’s Delivery State is Waking Vehicle, say the car was asleep and the request was sent to wake it rather than claiming climate is already running.
 
 ## Don't
 

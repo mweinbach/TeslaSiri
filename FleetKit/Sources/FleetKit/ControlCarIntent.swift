@@ -49,7 +49,7 @@ public struct CarControlSettings: TransientAppEntity {
 }
 
 @AppIntent(.tool)
-public struct ControlCarIntent: AppIntent {
+public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
         "Apply several changes to one car, such as starting HVAC at 72°F and locking the doors. Send all requested settings together. Wattie orders the commands and confirms sensitive changes before starting. Omit the vehicle for the default car. Use List Cars to discover vehicles and controls. Software updates have dedicated tools.",
@@ -79,25 +79,38 @@ public struct ControlCarIntent: AppIntent {
                 try await confirmWithSafetyGate(dialog: IntentDialog("Confirm these changes to \(resolved.name): \(description)?"))
             }
 
-            var accepted: [String] = []
-            for step in steps {
-                do {
-                    try Task.checkCancellation()
-                    try await step.run(service: service, vin: resolved.vin)
-                    accepted.append(step.label)
-                } catch {
-                    guard !accepted.isEmpty else { throw error }
-                    let detail = accepted.joined(separator: ", ")
-                    let summary = "\(resolved.name) accepted: \(detail). I couldn't confirm \(step.label): \(error.localizedDescription). The sequence stopped there."
-                    let result = VehicleCommandResultEntity(vehicle: resolved, action: "control_car", succeeded: false, appliedValue: detail, summary: summary)
-                    _ = log.failure(error)
-                    return .result(value: result, dialog: IntentDialog("\(summary)"))
-                }
+            let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
+            let outcome = try await performSandboxAwareBackgroundTask(
+                description: "Controlling \(resolved.name)"
+            ) {
+                try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
             }
-            let detail = accepted.joined(separator: ", ")
-            let summary = "\(resolved.name) accepted: \(detail)."
-            let result = VehicleCommandResultEntity(vehicle: resolved, action: "control_car", appliedValue: detail, summary: summary)
-            log.success("completed \(accepted.count) requested car controls")
+
+            let detail = outcome.acceptedDetail
+            if let failure = outcome.failure, let summary = outcome.partialFailureSummary(vehicleName: resolved.name) {
+                let result = VehicleCommandResultEntity(
+                    vehicle: resolved,
+                    action: "control_car",
+                    succeeded: false,
+                    appliedValue: detail,
+                    summary: summary
+                )
+                _ = log.failure(failure.error)
+                return .result(value: result, dialog: IntentDialog("\(summary)"))
+            }
+            let summary = outcome.deliveryState.summary(
+                vehicleName: resolved.name,
+                wakingAction: "apply: \(detail)",
+                confirmed: "\(resolved.name) accepted: \(detail)."
+            )
+            let result = VehicleCommandResultEntity(
+                vehicle: resolved,
+                action: "control_car",
+                deliveryState: outcome.deliveryState,
+                appliedValue: detail,
+                summary: summary
+            )
+            log.success("completed \(outcome.accepted.count) requested car controls (\(outcome.deliveryState.rawValue))")
             return .result(value: result, dialog: IntentDialog("\(summary)"))
         } catch {
             throw log.failure(error)
@@ -105,21 +118,56 @@ public struct ControlCarIntent: AppIntent {
     }
 }
 
-struct CarControlStep {
+struct CarControlStep: Sendable {
     let action: String
     let label: String
     let params: [String: FleetControlValue]
     let needsConfirmation: Bool
+    /// `true` when `auto_conditioning_start` was inserted automatically as a prerequisite
+    /// for another cabin setting rather than explicitly requested via `climateOn = true`.
+    let isImplicitHVACStart: Bool
 
-    init(_ action: String, _ label: String, _ params: [String: FleetControlValue] = [:], confirm: Bool = false) {
+    init(
+        _ action: String,
+        _ label: String,
+        _ params: [String: FleetControlValue] = [:],
+        confirm: Bool = false,
+        isImplicitHVACStart: Bool = false
+    ) {
         self.action = action
         self.label = label
         self.params = params
         self.needsConfirmation = confirm
+        self.isImplicitHVACStart = isImplicitHVACStart
     }
 
-    func run(service: FleetIntentService, vin: String) async throws {
-        try await service.runControl(action: action, vin: vin, params: params, humanName: label)
+    /// Commands safe to dispatch with `wait_for_completion=false` when Tessie reports the car is
+    /// asleep and the command is the only one being sent. A lone seat or steering wheel heat
+    /// step only happens when turning it off (turning one on also starts HVAC) or when HVAC is
+    /// already running, in which case the car is awake and the command goes out synchronously.
+    var isAsyncWakeEligible: Bool {
+        switch action {
+        case "auto_conditioning_start", "auto_conditioning_stop", "remote_defrost", "set_pet_mode",
+             "set_bioweapon_mode", "set_seat_heat", "set_seat_cool", "steering_wheel_heater":
+            true
+        default:
+            false
+        }
+    }
+
+    @discardableResult
+    func run(
+        service: FleetIntentService,
+        vin: String,
+        allowAsyncWake: Bool = false
+    ) async throws -> VehicleCommandDeliveryState {
+        try await service.runControl(
+            action: action,
+            vin: vin,
+            params: params,
+            humanName: label,
+            allowAsyncWake: allowAsyncWake
+        )
     }
 }
 
@@ -155,7 +203,8 @@ extension CabinClimateSettings {
         let seatHeatRequested = (driverSeatHeatLevel ?? 0) > 0 || (passengerSeatHeatLevel ?? 0) > 0
         let requiresHVAC = targetTemperatureCelsius != nil || seatHeatRequested || steeringWheelHeat == true
         if climateOn == true || requiresHVAC || (startWhenEmpty && steps.isEmpty) {
-            steps.insert(.init("auto_conditioning_start", "climate on"), at: 0)
+            let isImplicit = climateOn != true && !steps.isEmpty
+            steps.insert(.init("auto_conditioning_start", "climate on", isImplicitHVACStart: isImplicit), at: 0)
         } else if climateOn == false {
             steps.append(.init("auto_conditioning_stop", "climate off"))
         }
