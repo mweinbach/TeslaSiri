@@ -221,7 +221,11 @@ private struct DashboardPostureContainer: View {
                             units: store.user?.units,
                             activeDrive: store.selectedVehicleActiveDrive,
                             chargingSessions: store.selectedVehicleChargingSessions,
-                            includeLocation: false
+                            includeLocation: false,
+                            isRunningControl: store.isRunningControl,
+                            activeControlAction: store.activeControlAction,
+                            pendingControls: store.pendingControls,
+                            onCommand: onCommand
                         )
 
                         DashboardSoftwareAndSiri(store: store, vehicle: vehicle)
@@ -253,7 +257,11 @@ private struct DashboardPostureContainer: View {
                         units: store.user?.units,
                         activeDrive: store.selectedVehicleActiveDrive,
                         chargingSessions: store.selectedVehicleChargingSessions,
-                        includeLocation: true
+                        includeLocation: true,
+                        isRunningControl: store.isRunningControl,
+                        activeControlAction: store.activeControlAction,
+                        pendingControls: store.pendingControls,
+                        onCommand: onCommand
                     )
 
                     DashboardSoftwareAndSiri(store: store, vehicle: vehicle)
@@ -281,7 +289,7 @@ private struct DashboardScroll<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 content
             }
             .padding(.bottom, 28)
@@ -314,7 +322,7 @@ private struct DashboardShowroom: View {
     let onCommand: (VehicleControlCommand) -> Void
 
     var body: some View {
-        VStack(spacing: compactHero ? 14 : 20) {
+        VStack(spacing: compactHero ? 14 : 18) {
             VehicleHeroStage(
                 vehicle: vehicle,
                 units: store.user?.units,
@@ -372,32 +380,44 @@ private struct SandboxModeBanner: View {
     let mode: FleetSandboxMode
     let onOpenSettings: () -> Void
 
+    private var tint: Color {
+        mode == .dryRun ? AppTheme.alertAmber : AppTheme.accent
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: mode == .dryRun ? "shield.lefthalf.filled" : "sparkles")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(mode == .dryRun ? .orange : .blue)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(tint)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(mode == .dryRun ? "Dry-Run Mode Active" : "Demo Car Mode Active")
-                    .font(.subheadline.weight(.semibold))
-                Text(mode == .dryRun ? "Commands are simulated and logged—your car is untouched." : "Testing with a simulated Model Y for Siri and app controls.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(mode == .dryRun ? "Dry-Run Mode · Commands simulated" : "Demo Car · Simulated Model Y")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
-            Button("Sandbox") {
+            Button {
                 onOpenSettings()
+            } label: {
+                HStack(spacing: 3) {
+                    Text("Sandbox")
+                    Image(systemName: "chevron.forward")
+                        .font(.caption2.weight(.bold))
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(tint.opacity(0.12), in: Capsule())
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.plain)
         }
-        .padding(14)
-        .appSurface(cornerRadius: 18)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .appSurface(cornerRadius: 16)
     }
 }
 
@@ -428,28 +448,28 @@ private struct CachedDataNotice: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.orange)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppTheme.alertAmber)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Showing cached data")
-                    .font(.subheadline.weight(.semibold))
-                Group {
-                    if let cacheDate {
-                        RelativeTimeText(date: cacheDate, style: .updated)
-                    } else {
-                        Text("Refreshing live vehicle data…")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+            Text("Showing cached data")
+                .font(.footnote.weight(.semibold))
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+
+            Group {
+                if let cacheDate {
+                    RelativeTimeText(date: cacheDate, style: .updated)
+                } else {
+                    Text("Refreshing…")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .padding(14)
-        .appSurface(cornerRadius: 18)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .appSurface(cornerRadius: 16)
         .accessibilityElement(children: .combine)
     }
 }
@@ -465,7 +485,7 @@ private struct DashboardStandaloneStateScroll: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 20) {
+            LazyVStack(spacing: 16) {
                 if !isSignedIn, sandboxMode != .demoVehicle {
                     SignInBanner(
                         provider: store.provider,
@@ -476,16 +496,22 @@ private struct DashboardStandaloneStateScroll: View {
                     .padding(.top, 12)
                     .duoSingleCardStage()
 
-                    CardContainer(title: "Test without a car", systemImage: "sparkles") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Try Siri climate, security, and trip preparation with a simulated Model Y.")
+                    CardContainer(title: "Explore without a car", systemImage: "sparkles") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Preview the 3D showroom, live controls, drives, and Siri workflows with a simulated Model Y.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                            Button("Try Demo Car Mode", systemImage: "car.fill") {
+                            Button {
                                 onEnableDemoCar()
+                            } label: {
+                                Label("Try Demo Car Mode", systemImage: "car.fill")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
                             .controlSize(.large)
                         }
                     }

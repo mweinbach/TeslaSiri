@@ -79,6 +79,7 @@ struct AppRootView: View {
                 }
             }
         }
+        .tint(AppTheme.accent)
         .onAppIntentExecution(OpenVehicleIntent.self) { intent in
             openVehicle(intent.target.id, tab: .dashboard)
         }
@@ -212,12 +213,14 @@ struct AppRootView: View {
                 provider: store.provider,
                 isSignedIn: diagnostics.isSignedIn,
                 isAuthenticating: isAuthenticating,
+                sandboxMode: sandboxMode,
                 vehicleCount: store.vehicles.count,
                 selectedVehicleName: store.selectedVehicle?.name,
                 lastUpdated: store.selectedVehicle?.latest?.updatedAtDate,
                 onSelectProvider: onSelectProvider,
                 onSignIn: { token in Task { await signIn(accessToken: token) } },
-                onSignOut: { Task { await signOut() } }
+                onSignOut: { Task { await signOut() } },
+                onOpenSandboxSettings: { selectedTab = .diagnostics }
             )
         case .drives:
             DrivesView(

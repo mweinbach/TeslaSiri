@@ -81,7 +81,7 @@ struct WidgetGalleryView: View {
                     .font(.title3.weight(.semibold))
                 Spacer(minLength: 8)
                 if let snapshot, !isUsingSample {
-                    StatusBadge(snapshot.name, systemImage: "car.fill", tint: .blue)
+                    StatusBadge(snapshot.name, systemImage: "car.fill", tint: AppTheme.accent)
                 } else if isUsingSample {
                     StatusBadge("Sample", systemImage: "sparkles", tint: .secondary)
                 }
@@ -122,21 +122,21 @@ struct WidgetGalleryView: View {
                 instructionRow(
                     "Home & Lock Screen",
                     symbol: "square.grid.2x2",
-                    tint: .blue,
+                    tint: AppTheme.accent,
                     text: "Touch and hold your Home Screen, tap Edit, then Add Widget and search for Wattie. Each widget follows your selected car or pins to a specific vehicle."
                 )
                 Divider()
                 instructionRow(
                     "Apple HomeView",
                     symbol: "house",
-                    tint: .orange,
+                    tint: AppTheme.alertAmber,
                     text: "Pick Wattie’s small widgets from your connected iPhone in HomeView to keep charging, climate, and security visible together."
                 )
                 Divider()
                 instructionRow(
                     "Control Center & Action Button",
                     symbol: "switch.2",
-                    tint: .green,
+                    tint: AppTheme.chargeGreen,
                     text: "Add Lock Car, Start Car Climate, or Start Car Charging in Control Center, Lock Screen controls, or the Action button."
                 )
                 Divider()

@@ -701,9 +701,9 @@ final class VehicleStage {
         reflection.addChild(mirror)
 
         // Fade smoothly from the tires down toward the rocker panels so only the lower body
-        // and wheels reflect into the floor.
+        // and wheels reflect into the floor without ever clipping the bottom edge of the stage.
         let reach = max(frame.length, frame.width) * 0.75 + 1
-        let fadeHeight = frame.height * 0.48
+        let fadeHeight = frame.height * 0.30
         var clipping = ClippingComponent(bounds: BoundingBox(
             min: [frame.origin.x - reach, groundY - 0.04, frame.origin.z - reach],
             max: [frame.origin.x + reach, groundY + fadeHeight, frame.origin.z + reach]
@@ -730,7 +730,7 @@ final class VehicleStage {
         }
     }
 
-    private var reflectionStrength: Float { isDarkAppearance ? 0.15 : 0 }
+    private var reflectionStrength: Float { isDarkAppearance ? 0.13 : 0 }
 
     /// Ground contact shadow positioned just below the tires (`origin.y - 0.001`), sorted
     /// directly above `reflection` (`order: 1`) so it cleanly anchors the car from every angle.
@@ -821,7 +821,7 @@ private struct CameraPose {
         guard let fitDirection else { return transform }
         let tanVertical = tan(verticalFOV * .pi / 360)
         let tanHorizontal = tanVertical * max(aspect, 0.3)
-        let distance = max(fitRadius * 0.67 * fitMargin / tanHorizontal, fitRadius * 0.44 / tanVertical)
+        let distance = max(fitRadius * 0.67 * fitMargin / tanHorizontal, fitRadius * 0.48 / tanVertical)
         // Camera basis looking from the eye toward the pivot (cameras look down -Z).
         let back = simd_normalize(fitDirection)
         let side = simd_normalize(simd_cross([0, 1, 0], back))
@@ -1132,7 +1132,7 @@ extension VehicleStage {
         frame: VehicleFrame,
         anchors: [VehicleHotspot: SIMD3<Float>]
     ) -> [PoseKind: CameraPose] {
-        let showroomPivot = frame.origin + frame.up * (frame.height * 0.42)
+        let showroomPivot = frame.origin + frame.up * (frame.height * 0.50)
         let radius = 0.5 * sqrt(frame.length * frame.length + frame.width * frame.width + frame.height * frame.height)
         func showroom(_ direction: SIMD3<Float>, margin: Float = 1, pivot: SIMD3<Float>? = nil) -> CameraPose {
             CameraPose(
@@ -1153,7 +1153,7 @@ extension VehicleStage {
         var homeFlat = SIMD3<Float>(home.x, 0, home.z)
         if simd_length(homeFlat) < 0.1 { homeFlat = frame.forward - frame.right }
         var poses: [PoseKind: CameraPose] = [
-            .parked: showroom(simd_normalize(simd_normalize(homeFlat) + frame.forward * 0.14) + frame.up * 0.17)
+            .parked: showroom(simd_normalize(simd_normalize(homeFlat) + frame.forward * 0.14) + frame.up * 0.17, margin: 1.15)
         ]
 
         // Charging: rear three-quarter from the charge-port side at ~14° elevation so the

@@ -557,6 +557,10 @@ struct FleetAPIClient {
             queryItems = [try queryItem("on", params: params)]
         case "charge_port_door_open": commandName = "open_charge_port"
         case "charge_port_door_close": commandName = "close_charge_port"
+        case "charge_start": commandName = "start_charging"
+        case "charge_stop": commandName = "stop_charging"
+        case "set_sentry_mode":
+            commandName = params["on"]?.tessieBoolValue == false ? "disable_sentry" : "enable_sentry"
         case "flash_lights": commandName = "flash"
         case "honk_horn": commandName = "honk"
         case "navigation_request":

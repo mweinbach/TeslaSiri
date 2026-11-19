@@ -3,6 +3,7 @@ import FleetKit
 import SwiftUI
 
 enum VehicleControlCommand: Hashable, Identifiable {
+    case charge(shouldStart: Bool)
     case chargePort(open: Bool)
     case climate(shouldTurnOn: Bool)
     case defrost(shouldTurnOn: Bool)
@@ -12,10 +13,14 @@ enum VehicleControlCommand: Hashable, Identifiable {
     case petMode(shouldTurnOn: Bool)
     case openFrunk
     case rearTrunk(open: Bool)
+    case sentryMode(shouldTurnOn: Bool)
+    case setCabinTemperature(celsius: Double)
+    case setChargeLimit(percent: Int)
     case ventWindows
 
     var id: String {
         switch self {
+        case .charge(let shouldStart): "charge-\(shouldStart)"
         case .chargePort(let open): "charge-port-\(open)"
         case .climate(let shouldTurnOn): "climate-\(shouldTurnOn)"
         case .defrost(let shouldTurnOn): "defrost-\(shouldTurnOn)"
@@ -25,12 +30,16 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .petMode(let shouldTurnOn): "pet-mode-\(shouldTurnOn)"
         case .openFrunk: "front-trunk"
         case .rearTrunk(let open): open ? "open-rear-trunk" : "close-rear-trunk"
+        case .sentryMode(let shouldTurnOn): "sentry-\(shouldTurnOn)"
+        case .setCabinTemperature(let celsius): "set-temp-\(Int((celsius * 10).rounded()))"
+        case .setChargeLimit(let percent): "charge-limit-\(percent)"
         case .ventWindows: "vent-windows"
         }
     }
 
     var title: LocalizedStringResource {
         switch self {
+        case .charge(let shouldStart): shouldStart ? "Start charging" : "Stop charging"
         case .chargePort(let open): open ? "Open charge port" : "Close charge port"
         case .climate(let shouldTurnOn): shouldTurnOn ? "Start climate" : "Stop climate"
         case .defrost(let shouldTurnOn): shouldTurnOn ? "Start defrost" : "Stop defrost"
@@ -40,31 +49,45 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .petMode(let shouldTurnOn): shouldTurnOn ? "Turn on Dog Mode" : "Turn off Dog Mode"
         case .openFrunk: "Open front trunk"
         case .rearTrunk(let open): open ? "Open rear trunk" : "Close rear trunk"
+        case .sentryMode(let shouldTurnOn): shouldTurnOn ? "Turn on Sentry Mode" : "Turn off Sentry Mode"
+        case .setCabinTemperature: "Set cabin temperature"
+        case .setChargeLimit(let percent): "Set charge limit to \(percent)%"
         case .ventWindows: "Vent windows"
         }
     }
 
     func conflicts(with other: Self) -> Bool {
         switch (self, other) {
-        case (.climate, .climate), (.lock, .lock), (.chargePort, .chargePort), (.rearTrunk, .rearTrunk): true
-        default: self == other
+        case (.charge, .charge),
+             (.climate, .climate),
+             (.lock, .lock),
+             (.chargePort, .chargePort),
+             (.rearTrunk, .rearTrunk),
+             (.sentryMode, .sentryMode),
+             (.setChargeLimit, .setChargeLimit),
+             (.setCabinTemperature, .setCabinTemperature):
+            true
+        default:
+            self == other
         }
     }
 
     func observedState(in snapshot: FleetLatestSnapshot?) -> Bool? {
         switch self {
+        case .charge: snapshot?.isActivelyCharging
         case .climate: snapshot?.climateOn
         case .lock: snapshot?.locked
         case .chargePort: snapshot?.chargePortDoorOpen
         case .openFrunk: snapshot?.closures?.frontTrunkOpen
         case .rearTrunk: snapshot?.closures?.rearTrunkOpen
+        case .sentryMode: snapshot?.sentryMode
         default: nil
         }
     }
 
     var expectedState: Bool? {
         switch self {
-        case .climate(let on), .lock(let on), .chargePort(let on): on
+        case .charge(let on), .climate(let on), .lock(let on), .chargePort(let on), .sentryMode(let on): on
         case .openFrunk: true
         case .rearTrunk(let open): open
         default: nil
@@ -73,6 +96,7 @@ enum VehicleControlCommand: Hashable, Identifiable {
 
     var action: String {
         switch self {
+        case .charge(let shouldStart): shouldStart ? "charge_start" : "charge_stop"
         case .climate(let shouldTurnOn):
             shouldTurnOn ? "auto_conditioning_start" : "auto_conditioning_stop"
         case .chargePort(let open): open ? "charge_port_door_open" : "charge_port_door_close"
@@ -82,6 +106,9 @@ enum VehicleControlCommand: Hashable, Identifiable {
         case .lock(let shouldLock): shouldLock ? "door_lock" : "door_unlock"
         case .petMode: "set_pet_mode"
         case .openFrunk, .rearTrunk: "actuate_trunk"
+        case .sentryMode: "set_sentry_mode"
+        case .setCabinTemperature: "set_temps"
+        case .setChargeLimit: "set_charge_limit"
         case .ventWindows: "window_control"
         }
     }
@@ -94,6 +121,12 @@ enum VehicleControlCommand: Hashable, Identifiable {
             ["on": .bool(shouldTurnOn)]
         case .openFrunk: ["which_trunk": "front"]
         case .rearTrunk(let open): ["which_trunk": "rear", "command": .string(open ? "open" : "close")]
+        case .sentryMode(let shouldTurnOn):
+            ["on": .bool(shouldTurnOn)]
+        case .setCabinTemperature(let celsius):
+            ["driver_temp": .double(celsius), "passenger_temp": .double(celsius)]
+        case .setChargeLimit(let percent):
+            ["percent": .integer(percent)]
         case .ventWindows:
             ["command": .string("vent")]
         default:
@@ -103,16 +136,32 @@ enum VehicleControlCommand: Hashable, Identifiable {
 
     var requiresConfirmation: Bool {
         switch self {
-        case .lock(shouldLock: false), .openFrunk, .rearTrunk, .chargePort:
+        case .lock(shouldLock: false),
+             .openFrunk,
+             .rearTrunk,
+             .chargePort(open: true),
+             .charge(shouldStart: false),
+             .setChargeLimit,
+             .sentryMode(shouldTurnOn: false):
             true
-        case .climate, .defrost, .flashLights, .honk, .lock, .petMode, .ventWindows:
+        case .charge(shouldStart: true),
+             .chargePort(open: false),
+             .climate,
+             .defrost,
+             .flashLights,
+             .honk,
+             .lock(shouldLock: true),
+             .petMode,
+             .sentryMode(shouldTurnOn: true),
+             .setCabinTemperature,
+             .ventWindows:
             false
         }
     }
 
     var buttonRole: ButtonRole? {
         switch self {
-        case .lock(shouldLock: false):
+        case .lock(shouldLock: false), .charge(shouldStart: false), .sentryMode(shouldTurnOn: false):
             .destructive
         default:
             nil
@@ -131,6 +180,12 @@ enum VehicleControlCommand: Hashable, Identifiable {
             open
                 ? "Open the charge port on \(vehicleName)?"
                 : "Close the charge port on \(vehicleName)?"
+        case .charge(shouldStart: false):
+            "Stop charging \(vehicleName)?"
+        case .setChargeLimit(let percent):
+            "Set the charge limit on \(vehicleName) to \(percent)%?"
+        case .sentryMode(shouldTurnOn: false):
+            "Turn off Sentry Mode on \(vehicleName)?"
         default:
             "Send this command to \(vehicleName)?"
         }
@@ -138,8 +193,12 @@ enum VehicleControlCommand: Hashable, Identifiable {
 }
 extension FleetVehicle {
     func allows(_ command: VehicleControlCommand) -> Bool {
-        if case .chargePort = command { return allowsChargingControls }
-        return allowsVehicleControls
+        switch command {
+        case .charge, .chargePort, .setChargeLimit:
+            return allowsChargingControls
+        default:
+            return allowsVehicleControls
+        }
     }
 }
 
@@ -307,9 +366,9 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.batteryLevel, fractionLength: 0),
             unit: "%",
-            valueTint: snapshot.isActivelyCharging ? .green : .primary,
+            valueTint: snapshot.isActivelyCharging ? AppTheme.chargeGreen : .primary,
             caption: snapshot.isActivelyCharging
-                ? Text("\(Image(systemName: "bolt.fill")) Charging").foregroundStyle(.green)
+                ? Text("\(Image(systemName: "bolt.fill")) Charging").foregroundStyle(AppTheme.chargeGreen)
                 : Text("Battery"),
             accessibilityLabel: snapshot.isActivelyCharging ? "Battery, charging" : "Battery"
         )
@@ -319,9 +378,9 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"),
             unit: nil,
-            valueTint: snapshot.climateOn == true ? .blue : .primary,
+            valueTint: snapshot.climateOn == true ? AppTheme.climateBlue : .primary,
             caption: snapshot.climateOn == true
-                ? Text("Climate On").foregroundStyle(.blue)
+                ? Text("Climate On").foregroundStyle(AppTheme.climateBlue)
                 : Text("Inside"),
             accessibilityLabel: snapshot.climateOn == true ? "Cabin temperature, climate on" : "Cabin temperature"
         )
@@ -330,7 +389,7 @@ private struct VehicleHeroStats: View {
     private var separator: some View {
         Rectangle()
             .fill(.quaternary)
-            .frame(width: 1, height: compact ? 28 : 36)
+            .frame(width: 1, height: compact ? 26 : 34)
             .accessibilityHidden(true)
     }
 
@@ -404,6 +463,7 @@ struct VehicleQuickActionBar: View {
     private var isClimateOn: Bool { snapshot.climateOn == true }
     private var isFrunkOpen: Bool { snapshot.closures?.frontTrunkOpen == true }
     private var isTrunkOpen: Bool { snapshot.closures?.rearTrunkOpen == true }
+    private var isSentryOn: Bool { snapshot.sentryMode == true }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -449,7 +509,7 @@ struct VehicleQuickActionBar: View {
             systemImage: isLocked ? "lock.fill" : "lock.open.fill",
             command: .lock(shouldLock: !isLocked),
             isActive: !isLocked,
-            tint: .orange,
+            tint: AppTheme.alertAmber,
             accessibilityLabel: isLocked ? "Unlock vehicle" : "Lock vehicle",
             accessibilityValue: isLocked ? "Locked" : "Unlocked"
         )
@@ -459,7 +519,7 @@ struct VehicleQuickActionBar: View {
             systemImage: isClimateOn ? "fan.fill" : "fan",
             command: .climate(shouldTurnOn: !isClimateOn),
             isActive: isClimateOn,
-            tint: .blue,
+            tint: AppTheme.climateBlue,
             rotates: isClimateOn && !reduceMotion,
             accessibilityLabel: isClimateOn ? "Stop climate" : "Start climate",
             accessibilityValue: climateAccessibilityValue
@@ -470,7 +530,7 @@ struct VehicleQuickActionBar: View {
             systemImage: "car.side.front.open",
             command: .openFrunk,
             isActive: isFrunkOpen,
-            tint: .orange,
+            tint: AppTheme.alertAmber,
             accessibilityLabel: isFrunkOpen ? "Front trunk" : "Open front trunk",
             accessibilityValue: isFrunkOpen ? "Open" : "Closed"
         )
@@ -480,7 +540,7 @@ struct VehicleQuickActionBar: View {
             systemImage: "car.side.rear.open",
             command: .rearTrunk(open: !isTrunkOpen),
             isActive: isTrunkOpen,
-            tint: .orange,
+            tint: AppTheme.alertAmber,
             accessibilityLabel: isTrunkOpen ? "Close rear trunk" : "Open rear trunk",
             accessibilityValue: isTrunkOpen ? "Open" : "Closed"
         )
@@ -534,7 +594,13 @@ struct VehicleQuickActionBar: View {
                 }
             }
 
-            Section("Vehicle") {
+            Section("Security & Alerts") {
+                Button(
+                    isSentryOn ? "Turn Off Sentry Mode" : "Turn On Sentry Mode",
+                    systemImage: isSentryOn ? "eye.slash" : "eye.fill"
+                ) {
+                    trigger(.sentryMode(shouldTurnOn: !isSentryOn))
+                }
                 Button("Flash Lights", systemImage: "light.max") {
                     trigger(.flashLights)
                 }
@@ -573,25 +639,25 @@ private struct QuickActionLabel: View {
     var rotates: Bool = false
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 6) {
             Group {
                 if isBusy {
                     ProgressView()
                         .controlSize(.small)
                 } else {
                     Image(systemName: systemImage)
-                        .font(.title3.weight(.medium))
+                        .font(.system(size: 19, weight: .medium))
                         .symbolEffect(.rotate, options: .repeat(.continuous), isActive: rotates)
                 }
             }
-            .frame(height: 26)
+            .frame(height: 24)
 
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.75)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 6)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .contentShape(.rect(cornerRadius: QuickActionButtonStyle.cornerRadius))
@@ -600,7 +666,7 @@ private struct QuickActionLabel: View {
 
 /// Liquid Glass tile for quick controls. Active controls get a tinted glass fill.
 private struct QuickActionButtonStyle: ButtonStyle {
-    static let cornerRadius: CGFloat = 20
+    static let cornerRadius: CGFloat = 18
 
     let isActive: Bool
     let tint: Color
@@ -689,11 +755,11 @@ private struct VehicleControlStatusLine: View {
                     .controlSize(.mini)
             } else if isError {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.alertAmber)
                     .accessibilityHidden(true)
             } else {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.chargeGreen)
                     .accessibilityHidden(true)
             }
             Text(message)
@@ -701,11 +767,11 @@ private struct VehicleControlStatusLine: View {
                 .multilineTextAlignment(.center)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        .foregroundStyle(isError ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.secondary))
         .padding(.horizontal, 12)
         .padding(.vertical, 5)
         .background(
-            (isError ? Color.orange.opacity(0.12) : AppTheme.insetSurface),
+            (isError ? AppTheme.alertAmber.opacity(0.12) : AppTheme.insetSurface),
             in: Capsule()
         )
     }

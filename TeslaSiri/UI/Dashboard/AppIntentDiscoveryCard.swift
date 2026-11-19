@@ -83,7 +83,7 @@ struct AppIntentDiscoveryCard: View {
             HStack(spacing: 8) {
                 Image(systemName: isAdded ? "checkmark" : item.systemImage)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(isAdded ? AnyShapeStyle(.green) : AnyShapeStyle(.tint))
+                    .foregroundStyle(isAdded ? AnyShapeStyle(AppTheme.chargeGreen) : AnyShapeStyle(.tint))
                     .frame(width: 18)
 
                 Text("\"\(existing?.invocationPhrase ?? item.phrase)\"")
@@ -261,7 +261,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(AppScreenBackground())
         .navigationTitle("Siri Dynamic Widgets")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
