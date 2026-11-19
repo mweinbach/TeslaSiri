@@ -22,17 +22,17 @@ struct DriveRouteMap: View {
             if let geometry {
                 Map(position: $cameraPosition) {
                     MapPolyline(geometry.polyline)
-                        .stroke(.blue, lineWidth: 5)
+                        .stroke(AppTheme.climateBlue, lineWidth: 5)
 
                     Marker("Start", systemImage: "flag.fill", coordinate: geometry.start)
-                        .tint(.green)
+                        .tint(AppTheme.chargeGreen)
 
                     Marker("End", systemImage: "flag.checkered", coordinate: geometry.end)
                         .tint(.black)
 
                     if let selectedCoordinate = route[safe: selectedPointIndex]?.coordinate {
-                        Marker("Selected position", systemImage: "mappin.circle.fill", coordinate: selectedCoordinate)
-                            .tint(.red)
+                        Marker("Vehicle", systemImage: "car.fill", coordinate: selectedCoordinate)
+                            .tint(AppTheme.accent)
                     }
                 }
                 .mapStyle(.standard(elevation: .realistic))
@@ -88,23 +88,15 @@ private struct RouteGeometry {
         for coordinate in coordinates.dropFirst() {
             rect = rect.union(MKMapRect(origin: MKMapPoint(coordinate), size: MKMapSize(width: 1, height: 1)))
         }
-        let widthPadding = max(rect.size.width * 0.18, 1_200)
-        let heightPadding = max(rect.size.height * 0.18, 1_200)
-        cameraRect = rect.insetBy(dx: -widthPadding, dy: -heightPadding)
+        let widthPadding = max(rect.size.width * 0.24, 1_500)
+        let topPadding = max(rect.size.height * 0.48, 2_600)
+        let bottomPadding = max(rect.size.height * 0.24, 1_500)
+        cameraRect = MKMapRect(
+            x: rect.minX - widthPadding,
+            y: rect.minY - topPadding,
+            width: rect.size.width + widthPadding * 2,
+            height: rect.size.height + topPadding + bottomPadding
+        )
     }
-}
-
-#Preview("With route") {
-    DriveRouteMap(route: PreviewData.previewRoute, selectedPointIndex: 0)
-        .frame(height: 260)
-        .padding()
-        .background(AppScreenBackground())
-}
-
-#Preview("Empty route") {
-    DriveRouteMap(route: [], selectedPointIndex: 0)
-        .frame(height: 260)
-        .padding()
-        .background(AppScreenBackground())
 }
 

@@ -168,6 +168,29 @@ enum FleetIntentDonations {
             intent.vehicle = vehicleEntity
             intent.on = shouldTurnOn
             await donate(intent, label: "dashboard pet mode")
+        case .charge(shouldStart: true):
+            let intent = StartChargingIntent()
+            intent.vehicle = vehicleEntity
+            await donate(intent, label: "dashboard start charging")
+        case .charge(shouldStart: false):
+            let intent = StopChargingIntent()
+            intent.vehicle = vehicleEntity
+            await donate(intent, label: "dashboard stop charging")
+        case .setChargeLimit(let percent):
+            let intent = SetChargeLimitIntent()
+            intent.vehicle = vehicleEntity
+            intent.percent = percent
+            await donate(intent, label: "dashboard set charge limit")
+        case .setCabinTemperature(let celsius):
+            let intent = SetCabinTemperatureIntent()
+            intent.vehicle = vehicleEntity
+            intent.temperature = Measurement(value: celsius, unit: .celsius)
+            await donate(intent, label: "dashboard set cabin temperature")
+        case .sentryMode(let shouldTurnOn):
+            let intent = SetSentryModeIntent()
+            intent.vehicle = vehicleEntity
+            intent.on = shouldTurnOn
+            await donate(intent, label: "dashboard sentry mode")
         case .flashLights:
             let intent = FlashLightsIntent()
             intent.vehicle = vehicleEntity

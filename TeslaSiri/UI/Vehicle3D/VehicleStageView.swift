@@ -155,12 +155,14 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
                     context.stroke(
                         path,
                         with: .linearGradient(
-                            Gradient(colors: [.primary.opacity(0.24), .primary.opacity(0.05)]),
+                            Gradient(colors: [.primary.opacity(0.28), .primary.opacity(0.08)]),
                             startPoint: leader.start,
                             endPoint: leader.end
                         ),
                         lineWidth: 0.75
                     )
+                    let dotRect = CGRect(x: leader.end.x - 1.75, y: leader.end.y - 1.75, width: 3.5, height: 3.5)
+                    context.fill(Path(ellipseIn: dotRect), with: .color(.primary.opacity(0.28)))
                 }
             }
             .allowsHitTesting(false)
@@ -200,16 +202,16 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
         guard !placements.isEmpty else { return [] }
         let width = max(viewWidth, 1)
         let horizontalInset: CGFloat = 14
-        let gap: CGFloat = 8
+        let gap: CGFloat = 10
 
         var items = placements.map { placement -> ResolvedCallout in
             let estimatedWidth: CGFloat = switch placement.hotspot {
-            case .lock: 32
-            case .frunk: 46
-            case .trunk: 46
-            case .chargePort: 54
+            case .lock: 36
+            case .frunk: 52
+            case .trunk: 52
+            case .chargePort: 56
             }
-            let rowY: CGFloat = placement.hotspot == .lock ? 18 : 24
+            let rowY: CGFloat = placement.hotspot == .lock ? 16 : 20
             let clampedX = min(max(placement.point.x, horizontalInset + estimatedWidth / 2), width - horizontalInset - estimatedWidth / 2)
             return ResolvedCallout(
                 hotspot: placement.hotspot,
@@ -249,7 +251,7 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
             let center = items[index].labelCenter
             let anchor = items[index].anchor
             let startY = center.y + 16
-            if anchor.y > startY + 10 {
+            if anchor.y > startY + 8 {
                 items[index].leader = (
                     start: CGPoint(x: center.x, y: startY),
                     end: CGPoint(x: anchor.x, y: anchor.y - 3)
@@ -307,7 +309,15 @@ private struct VehicleStageCanvas: View {
             if fadesEdges {
                 VehicleStageEdgeFade()
             } else {
-                Color.black
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.88),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
         }
         .opacity(isVisible ? 1 : 0)

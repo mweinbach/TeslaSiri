@@ -72,11 +72,18 @@ struct SignInBanner: View {
     }
 
     private var bannerIcon: some View {
-        Image(systemName: "car.side.fill")
+        Image(systemName: "bolt.car.fill")
             .font(.title3.weight(.semibold))
             .foregroundStyle(.white)
             .frame(width: 48, height: 48)
-            .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(
+                LinearGradient(
+                    colors: [AppTheme.accent, AppTheme.accent.opacity(0.78)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 
@@ -87,8 +94,8 @@ struct SignInBanner: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             Text(provider == .tessie
-                 ? "Paste a Tessie access token to see your vehicle and drive history."
-                 : "Create a personal access token with the tesla-accounts and vehicles scopes. For vehicle controls, add the controls scope and use a Teslascope premium subscription.")
+                 ? "Paste a Tessie access token to view live telemetry, controls, and drive history."
+                 : "Create a personal access token with the tesla-accounts and vehicles scopes. Add controls with a Teslascope premium subscription.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -133,25 +140,5 @@ struct SignInBanner: View {
     private func connect() {
         guard !trimmedToken.isEmpty, !isAuthenticating else { return }
         onSignIn(trimmedToken)
-    }
-}
-
-#Preview("Idle") {
-    ScrollView {
-        SignInBanner(onSignIn: { _ in }, isAuthenticating: false)
-            .padding()
-    }
-    .background {
-        AppScreenBackground()
-    }
-}
-
-#Preview("Authenticating") {
-    ScrollView {
-        SignInBanner(onSignIn: { _ in }, isAuthenticating: true)
-            .padding()
-    }
-    .background {
-        AppScreenBackground()
     }
 }

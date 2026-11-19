@@ -521,14 +521,22 @@ private struct DriveMapCard: View {
             maxHeight: fillsPane ? .infinity : compactHeight
         )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
-        .overlay(alignment: .topLeading) {
+        .overlay(alignment: .topTrailing) {
             if !route.isEmpty {
-                Label(formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi route"), systemImage: "map.fill")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(12)
+                HStack(spacing: 6) {
+                    Image(systemName: "map.fill")
+                        .foregroundStyle(.tint)
+                    Text(routeBadgeText)
+                        .monospacedDigit()
+                }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule().strokeBorder(AppTheme.hairline, lineWidth: 0.75)
+                }
+                .padding(10)
             }
         }
         .overlay {
@@ -543,24 +551,12 @@ private struct DriveMapCard: View {
             }
         }
     }
-}
 
-#Preview("Drive detail — Light") {
-    NavigationStack {
-        DrivesView(store: FleetDataStore.previewLoaded())
+    private var routeBadgeText: String {
+        let distance = formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi")
+        if let durationMS = drive.durationMS, durationMS > 0 {
+            return "\(distance) · \(formattedDuration(milliseconds: durationMS))"
+        }
+        return "\(distance) route"
     }
-}
-
-#Preview("Drive detail — Dark") {
-    NavigationStack {
-        DrivesView(store: FleetDataStore.previewLoaded())
-    }
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Drive detail — Accessibility") {
-    NavigationStack {
-        DrivesView(store: FleetDataStore.previewLoaded())
-    }
-    .environment(\.dynamicTypeSize, .accessibility2)
 }

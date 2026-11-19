@@ -45,10 +45,10 @@ struct DrivePlacesStrip: View {
                             }
                         }
                     }
+                    .padding(.vertical, 2)
                     .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
-                .scrollClipDisabled()
             }
         }
         .animation(.snappy, value: selectedPlaceID)
@@ -70,18 +70,18 @@ private struct PlaceChip: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.tint))
                     .frame(width: 20)
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(place.displayName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     Text(place.visitCount == 1 ? "1 visit" : "\(place.visitCount) visits")
-                        .font(.caption)
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
                 }
             }
             .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
             .background {
                 Capsule()
                     .fill(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(AppTheme.surface))

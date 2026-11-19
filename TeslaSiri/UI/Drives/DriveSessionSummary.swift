@@ -47,18 +47,20 @@ struct DriveSessionSummary: View {
 
                 Divider()
 
-                VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 0) {
                     DriveEndpointRow(
                         title: "Start",
                         address: endpointAddresses?.start ?? drive.startAddress ?? "Unknown location",
                         systemImage: "circle.fill",
-                        tint: .green
+                        tint: AppTheme.chargeGreen,
+                        showsTrailingConnector: true
                     )
                     DriveEndpointRow(
                         title: "Destination",
                         address: endpointAddresses?.end ?? drive.endAddress ?? "Unknown location",
                         systemImage: "flag.checkered",
-                        tint: .red
+                        tint: AppTheme.accent,
+                        showsTrailingConnector: false
                     )
                 }
             }
@@ -72,16 +74,26 @@ private struct DriveEndpointRow: View {
     let address: String
     let systemImage: String
     let tint: Color
+    let showsTrailingConnector: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background(tint.opacity(0.11), in: Circle())
+            VStack(spacing: 0) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+                    .background(tint.opacity(0.12), in: Circle())
 
-            VStack(alignment: .leading, spacing: 3) {
+                if showsTrailingConnector {
+                    Rectangle()
+                        .fill(AppTheme.hairline)
+                        .frame(width: 1.5, height: 18)
+                        .padding(.vertical, 2)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -90,34 +102,9 @@ private struct DriveEndpointRow: View {
                     .font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.bottom, showsTrailingConnector ? 10 : 0)
 
             Spacer(minLength: 0)
         }
-    }
-}
-
-#Preview("With route") {
-    ZStack {
-        AppScreenBackground()
-
-        DriveSessionSummary(
-            drive: PreviewData.driveSession,
-            endpointAddresses: nil,
-            hasRoute: true
-        )
-        .padding()
-    }
-}
-
-#Preview("Missing route") {
-    ZStack {
-        AppScreenBackground()
-
-        DriveSessionSummary(
-            drive: PreviewData.driveSession,
-            endpointAddresses: nil,
-            hasRoute: false
-        )
-        .padding()
     }
 }

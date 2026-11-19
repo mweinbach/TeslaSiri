@@ -29,17 +29,14 @@ struct SandboxDebugSection: View {
     }
 
     var body: some View {
-        CardContainer(title: "Siri & Command Sandbox", systemImage: "checkmark.shield") {
+        DashboardCard("Siri & Command Sandbox", systemImage: "checkmark.shield", tint: badgeTint) {
+            StatusBadge(
+                badgeText,
+                systemImage: badgeSymbol,
+                tint: badgeTint
+            )
+        } content: {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 8) {
-                    StatusBadge(
-                        badgeText,
-                        systemImage: badgeSymbol,
-                        tint: badgeTint
-                    )
-                    Spacer(minLength: 0)
-                }
-
                 Picker("Sandbox Mode", selection: modeBinding) {
                     ForEach(FleetSandboxMode.allCases) { candidate in
                         Text(candidate.shortTitle)
@@ -74,11 +71,11 @@ struct SandboxDebugSection: View {
     private var badgeText: String {
         switch mode {
         case .live:
-            "Live Car Commands Enabled"
+            "Live"
         case .dryRun:
-            "Dry-Run · Car Protected"
+            "Dry-Run"
         case .demoVehicle:
-            "Demo Car · Car Protected"
+            "Demo Car"
         }
     }
 
@@ -98,9 +95,9 @@ struct SandboxDebugSection: View {
         case .live:
             .secondary
         case .dryRun:
-            .orange
+            AppTheme.alertAmber
         case .demoVehicle:
-            .blue
+            AppTheme.accent
         }
     }
 
@@ -160,14 +157,20 @@ struct SandboxDebugSection: View {
         }
         .pickerStyle(.menu)
         .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(.primary)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var resetScenarioButton: some View {
-        Button("Reset Scenario", systemImage: "arrow.counterclockwise") {
+        Button("Reset", systemImage: "arrow.counterclockwise") {
             onResetPreset()
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var demoClimateSummary: String {

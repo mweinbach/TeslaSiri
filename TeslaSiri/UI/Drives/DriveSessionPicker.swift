@@ -97,18 +97,23 @@ struct DriveSessionChip: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.duoPosture) private var duoPosture
 
+    private var compactDate: String {
+        drive.startedAtDate.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Label {
-                    Text(drive.startedAtDate.formatted(date: .abbreviated, time: .shortened))
-                } icon: {
-                    Image(systemName: "steeringwheel")
-                }
-                .font(.caption.weight(.semibold))
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            HStack(spacing: 6) {
+                Image(systemName: "steeringwheel")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
 
-                Spacer()
+                Text(compactDate)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+
+                Spacer(minLength: 4)
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
@@ -123,64 +128,38 @@ struct DriveSessionChip: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
                 .foregroundStyle(.secondary)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 4)
 
-            Text(formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi"))
-                .font(.headline.weight(.semibold))
-                .monospacedDigit()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi"))
+                    .font(.headline.weight(.semibold))
+                    .monospacedDigit()
+
+                if let durationMS = drive.durationMS, durationMS > 0 {
+                    Text(formattedDuration(milliseconds: durationMS))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
         }
-        .padding(12)
+        .padding(13)
         .frame(
-            width: dynamicTypeSize.isAccessibilitySize ? 320 : (duoPosture.prefersCompactHero ? 212 : 234),
+            width: dynamicTypeSize.isAccessibilitySize ? 320 : (duoPosture.prefersCompactHero ? 216 : 238),
             alignment: .leading
         )
-        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 148 : 104, alignment: .leading)
+        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 148 : 106, alignment: .leading)
         .appSurface(cornerRadius: AppTheme.tileCornerRadius)
         .overlay {
             if isSelected {
                 RoundedRectangle(cornerRadius: AppTheme.tileCornerRadius, style: .continuous)
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .fill(AppTheme.accent.opacity(0.05))
+                    .allowsHitTesting(false)
+                RoundedRectangle(cornerRadius: AppTheme.tileCornerRadius, style: .continuous)
+                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                    .allowsHitTesting(false)
             }
         }
         .appEntityIdentifier(EntityIdentifier(for: DriveEntity.self, identifier: drive.sessionID))
-    }
-}
-
-#Preview("Picker") {
-    ZStack {
-        AppScreenBackground()
-
-        DriveSessionPicker(
-            drives: [PreviewData.driveSession],
-            endpointAddresses: [:],
-            selectedSessionID: .constant(PreviewData.driveSession.sessionID)
-        )
-        .padding()
-    }
-}
-
-#Preview("Chip - selected") {
-    ZStack {
-        AppScreenBackground()
-
-        DriveSessionChip(
-            drive: PreviewData.driveSession,
-            endpointAddresses: nil,
-            isSelected: true
-        )
-        .padding()
-    }
-}
-
-#Preview("Chip - unselected") {
-    ZStack {
-        AppScreenBackground()
-
-        DriveSessionChip(
-            drive: PreviewData.driveSession,
-            endpointAddresses: nil,
-            isSelected: false
-        )
-        .padding()
     }
 }

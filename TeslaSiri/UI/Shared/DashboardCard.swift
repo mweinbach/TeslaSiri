@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// At-a-glance card used on the Vehicle tab: a quiet symbol + title header (in the style of
-/// Weather and Health), an optional trailing accessory, and free-form content below.
+/// At-a-glance showroom card used across the app: quiet symbol + title header,
+/// optional trailing status/action accessory, and free-form content below.
 struct DashboardCard<Content: View, Accessory: View>: View {
     let title: String
     let systemImage: String
@@ -24,8 +24,8 @@ struct DashboardCard<Content: View, Accessory: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 8) {
                 DashboardCardHeader(title: title, systemImage: systemImage, tint: tint)
                 Spacer(minLength: 8)
                 accessory
@@ -50,27 +50,28 @@ extension DashboardCard where Accessory == EmptyView {
     }
 }
 
-/// Small symbol + title header shared by dashboard cards and `CardContainer`.
+/// Quiet automotive-styled symbol + title header shared by dashboard and detail cards.
 struct DashboardCardHeader: View {
     let title: String
     let systemImage: String
     var tint: Color = .secondary
 
     var body: some View {
-        Label {
-            Text(title)
-                .foregroundStyle(.secondary)
-        } icon: {
+        HStack(spacing: 6) {
             Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(tint)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
-        .font(.footnote.weight(.semibold))
-        .labelStyle(.titleAndIcon)
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// Large rounded numeral with a smaller trailing unit, used for headline metrics.
+/// Large rounded tabular numeral with a smaller trailing unit, used for headline metrics.
 struct MetricValueText: View {
     let value: String
     var unit: String? = nil
@@ -102,7 +103,12 @@ struct DashboardCardLinkLabel: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Label(title, systemImage: systemImage)
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            Text(title)
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
             if let detail {
@@ -111,11 +117,12 @@ struct DashboardCardLinkLabel: View {
                     .monospacedDigit()
             }
             Image(systemName: "chevron.forward")
-                .font(.footnote.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
                 .accessibilityHidden(true)
         }
-        .font(.subheadline)
+        .font(.subheadline.weight(.medium))
         .contentShape(.rect)
     }
 }
+

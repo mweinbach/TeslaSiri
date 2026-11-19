@@ -40,7 +40,7 @@ struct VehicleShowroomStage: View {
     var body: some View {
         let state = stageState
         stageView(for: state)
-        .aspectRatio(stageAspectRatio * 0.86, contentMode: .fit)
+        .aspectRatio(stageAspectRatio * 0.80, contentMode: .fit)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topLeading) {
             if state.mode == .driving {
@@ -149,7 +149,7 @@ struct VehicleHotspotLabel: View {
             let unlocked = snapshot.locked == false
             Image(systemName: unlocked ? "lock.open.fill" : "lock.fill")
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(unlocked ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                .foregroundStyle(unlocked ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.secondary))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 28, height: 28)
         case .chargePort:
@@ -161,10 +161,10 @@ struct VehicleHotspotLabel: View {
             VStack(spacing: 1) {
                 Text(isOpen ? (hotspot == .frunk ? "Open" : "Close") : "Open")
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(isOpen ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(isOpen ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.secondary))
                 Text(hotspot == .frunk ? "Frunk" : "Trunk")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(isOpen ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary.opacity(0.85)))
+                    .foregroundStyle(isOpen ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.primary.opacity(0.88)))
             }
             .lineLimit(1)
         }
@@ -227,9 +227,9 @@ struct VehicleChargeBadge: View {
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 0.75)
+                        Capsule().strokeBorder(AppTheme.chargeGreen.opacity(0.45), lineWidth: 0.75)
                     }
-                    .shadow(color: .black.opacity(0.14), radius: 5, y: 2)
+                    .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
             }
         }
     }
@@ -238,7 +238,7 @@ struct VehicleChargeBadge: View {
         ZStack {
             if isCharging && !reduceMotion {
                 Circle()
-                    .stroke(Color.green, lineWidth: 1.5)
+                    .stroke(AppTheme.chargeGreen, lineWidth: 1.5)
                     .phaseAnimator([false, true]) { ring, expanded in
                         ring
                             .scaleEffect(expanded ? 1.9 : 1)
@@ -259,8 +259,8 @@ struct VehicleChargeBadge: View {
     }
 
     private var discFill: AnyShapeStyle {
-        if isCharging { return AnyShapeStyle(Color.green.gradient) }
-        if isPortOpen { return AnyShapeStyle(Color.blue.gradient) }
+        if isCharging { return AnyShapeStyle(AppTheme.chargeGreen.gradient) }
+        if isPortOpen { return AnyShapeStyle(AppTheme.climateBlue.gradient) }
         return AnyShapeStyle(.quaternary)
     }
 

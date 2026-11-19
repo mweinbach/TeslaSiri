@@ -17,7 +17,7 @@ struct DriveRoutePositionScrubber: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Start", systemImage: "circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppTheme.chargeGreen)
 
                 Spacer()
 
@@ -27,9 +27,9 @@ struct DriveRoutePositionScrubber: View {
                 Spacer()
 
                 Label("End", systemImage: "flag.checkered")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.accent)
             }
-            .font(.caption)
+            .font(.caption.weight(.medium))
 
             Slider(
                 value: Binding(
@@ -43,14 +43,16 @@ struct DriveRoutePositionScrubber: View {
                         )
                     }
                 ),
-                in: 0...Double(max(sampleCount - 1, 0)),
-                step: 1
-            )
+                in: 0...Double(max(sampleCount - 1, 0))
+            ) {
+                Text("Route position")
+            }
             .disabled(sampleCount < 2)
 
             Text("Point \(min(selectedSampleIndex + 1, sampleCount)) of \(sampleCount)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .appEntityIdentifier(driveEntityIdentifier)
@@ -106,35 +108,4 @@ private func routeProgress(index: Int, count: Int) -> String {
     }
     let percent = Double(index) / Double(count - 1) * 100
     return percent.formatted(.number.precision(.fractionLength(0))) + "%"
-}
-
-#Preview("Scrubber") {
-    @Previewable @State var index = 3
-
-    return ZStack {
-        AppScreenBackground()
-
-        CardContainer(title: "Route position", systemImage: "mappin.and.ellipse") {
-            DriveRoutePositionScrubber(
-                sampleCount: 20,
-                selectedSampleIndex: $index
-            )
-        }
-        .padding()
-    }
-}
-
-#Preview("Summary") {
-    ZStack {
-        AppScreenBackground()
-
-        CardContainer(title: "Selected position", systemImage: "scope") {
-            DriveRoutePositionSummary(
-                point: PreviewData.previewRoute[3],
-                index: 3,
-                count: PreviewData.previewRoute.count
-            )
-        }
-        .padding()
-    }
 }

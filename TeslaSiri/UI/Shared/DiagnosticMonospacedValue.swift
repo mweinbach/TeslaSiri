@@ -38,7 +38,7 @@ struct DiagnosticMonospacedValue: View {
     }
 }
 
-/// Small uppercase-free group label used to split long diagnostic cards into scannable sections.
+/// Quiet section label used to split diagnostic cards into scannable engineering groups.
 struct DiagnosticGroupHeader: View {
     let title: String
 
@@ -48,23 +48,12 @@ struct DiagnosticGroupHeader: View {
 
     var body: some View {
         Text(title)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.tint)
-            .padding(.top, 6)
+            .font(.caption.weight(.semibold))
+            .textCase(.uppercase)
+            .tracking(0.6)
+            .foregroundStyle(.secondary)
+            .padding(.top, 4)
             .accessibilityAddTraits(.isHeader)
     }
 }
 
-#Preview {
-    CardContainer(title: "Diagnostics") {
-        VStack(alignment: .leading, spacing: 12) {
-            DiagnosticGroupHeader("Connection")
-            DiagnosticMonospacedValue(title: "Device ID", value: "device-abc-123")
-            DiagnosticMonospacedValue(title: "Request ID", value: "req_8f3a1b2c4d5e6f7g")
-            DiagnosticMonospacedValue(title: "Cursor", value: "1781000000000")
-            DiagnosticMonospacedValue(title: "Long URL", value: "https://api.tessie.com/vehicles")
-        }
-    }
-    .padding()
-    .background(AppScreenBackground())
-}

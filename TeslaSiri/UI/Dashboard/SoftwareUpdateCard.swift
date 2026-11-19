@@ -310,6 +310,8 @@ private struct SoftwareReleaseNotesListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AppScreenBackground())
         .navigationTitle("Release Notes")
         .navigationSubtitle(version ?? "")
         .navigationBarTitleDisplayMode(.inline)
@@ -348,6 +350,7 @@ private struct SoftwareReleaseNoteDetailView: View {
             .frame(maxWidth: AppTheme.contentMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(AppScreenBackground())
         .navigationTitle(note.title)
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -13,11 +13,11 @@ struct DriveMetricTile: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.tint)
                 .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.11), in: Circle())
+                .background(AppTheme.accent.opacity(0.11), in: Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
 
@@ -31,49 +31,11 @@ struct DriveMetricTile: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
         .background(
             AppTheme.insetSurface,
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
         .accessibilityElement(children: .combine)
-    }
-}
-
-#Preview("Grid") {
-    ZStack {
-        AppScreenBackground()
-
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                DriveMetricTile(
-                    title: "Distance",
-                    value: "12.4 mi",
-                    systemImage: "point.topleft.down.to.point.bottomright.curvepath"
-                )
-                DriveMetricTile(title: "Duration", value: "27 min", systemImage: "timer")
-            }
-            HStack(spacing: 12) {
-                DriveMetricTile(title: "Average", value: "34 mph", systemImage: "speedometer")
-                DriveMetricTile(title: "Route", value: "Mapped", systemImage: "map")
-            }
-        }
-        .padding()
-    }
-}
-
-#Preview("Missing data") {
-    ZStack {
-        AppScreenBackground()
-
-        HStack(spacing: 12) {
-            DriveMetricTile(
-                title: "Distance",
-                value: "--",
-                systemImage: "point.topleft.down.to.point.bottomright.curvepath"
-            )
-            DriveMetricTile(title: "Route", value: "Missing", systemImage: "map")
-        }
-        .padding()
     }
 }
