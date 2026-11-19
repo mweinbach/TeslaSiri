@@ -779,6 +779,112 @@ public enum VehicleError: Error, CustomStringConvertible {
         }
     }
 
+    /// World-space contact shadow baked from Tesla's per-model `FloorMask.r8`.
+    public struct GroundShadow {
+        public let texture: TextureResource
+        public let center: SIMD3<Float>
+        public let width: Float
+        public let depth: Float
+    }
+
+    /// Builds a world-aligned opacity mask texture from the model's bundled `FloorMask.r8`
+    /// contact shadow so live RealityKit stages use the exact tire and underbody silhouette.
+    public func bakedGroundShadow() -> GroundShadow? {
+        guard let ground = manifest.rig.parked?.ground,
+              ground.width > 0, ground.height > 0,
+              ground.bounds.count == 4,
+              ground.uvFromXZ.count == 2,
+              ground.uvFromXZ[0].count == 3,
+              ground.uvFromXZ[1].count == 3,
+              let raw = try? Data(contentsOf: directory.appendingPathComponent(ground.mask)),
+              raw.count == ground.width * ground.height else {
+            return nil
+        }
+
+        let minX = ground.bounds[0]
+        let minZ = ground.bounds[1]
+        let maxX = ground.bounds[2]
+        let maxZ = ground.bounds[3]
+        let width = maxX - minX
+        let depth = maxZ - minZ
+        guard width > 0.1, depth > 0.1 else { return nil }
+
+        let uRow = ground.uvFromXZ[0]
+        let vRow = ground.uvFromXZ[1]
+        let srcW = ground.width
+        let srcH = ground.height
+        let outSize = 512
+        var rgba = [UInt8](repeating: 0, count: outSize * outSize * 4)
+
+        raw.withUnsafeBytes { bytes in
+            guard let src = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
+            func sampleBilinear(u: Float, v: Float) -> Float {
+                let fx = u * Float(srcW) - 0.5
+                let fy = v * Float(srcH) - 0.5
+                let x0 = Int(floor(fx))
+                let y0 = Int(floor(fy))
+                let tx = fx - Float(x0)
+                let ty = fy - Float(y0)
+                let cx0 = min(max(x0, 0), srcW - 1)
+                let cx1 = min(max(x0 + 1, 0), srcW - 1)
+                let cy0 = min(max(y0, 0), srcH - 1)
+                let cy1 = min(max(y0 + 1, 0), srcH - 1)
+                let p00 = Float(src[cy0 * srcW + cx0])
+                let p10 = Float(src[cy0 * srcW + cx1])
+                let p01 = Float(src[cy1 * srcW + cx0])
+                let p11 = Float(src[cy1 * srcW + cx1])
+                let top = p00 + (p10 - p00) * tx
+                let bot = p01 + (p11 - p01) * tx
+                return (top + (bot - top) * ty) / 255.0
+            }
+
+            for row in 0..<outSize {
+                let z = minZ + (Float(row) + 0.5) / Float(outSize) * depth
+                for col in 0..<outSize {
+                    let x = minX + (Float(col) + 0.5) / Float(outSize) * width
+                    let rawU = uRow[0] * x + uRow[1] * z + uRow[2]
+                    let rawV = vRow[0] * x + vRow[1] * z + vRow[2]
+                    let u = rawU - floor(rawU)
+                    let v = rawV - floor(rawV)
+                    let value = sampleBilinear(u: u, v: v)
+                    // Gentle gamma tightens the penumbra slightly while keeping tire contact crisp.
+                    let shaped = pow(min(max(value, 0), 1), 1.15)
+                    let byte = UInt8((shaped * 255).rounded())
+                    let idx = (row * outSize + col) * 4
+                    rgba[idx] = byte
+                    rgba[idx + 1] = byte
+                    rgba[idx + 2] = byte
+                    rgba[idx + 3] = 255
+                }
+            }
+        }
+
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let provider = CGDataProvider(data: Data(rgba) as CFData),
+              let image = CGImage(
+                width: outSize,
+                height: outSize,
+                bitsPerComponent: 8,
+                bitsPerPixel: 32,
+                bytesPerRow: outSize * 4,
+                space: space,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: true,
+                intent: .defaultIntent
+              ),
+              let texture = try? TextureResource(image: image, options: .init(semantic: .raw)) else {
+            return nil
+        }
+        return GroundShadow(
+            texture: texture,
+            center: SIMD3((minX + maxX) * 0.5, 0, (minZ + maxZ) * 0.5),
+            width: width,
+            depth: depth
+        )
+    }
+
     /// Hermes MOVE_CAMERA's tablet override, expressed in the life-size USD world.
     /// Recenter on the vehicle rather than reproducing the app sidebar's off-axis frustum.
     public func parkedCamera() -> PerspectiveCamera {

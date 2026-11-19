@@ -95,17 +95,17 @@ final class VehicleRoadScene {
         root.name = "VehicleRoad"
 
         pool.components.set(ModelComponent(mesh: .generatePlane(width: 30, depth: 190), materials: []))
-        pool.position = frame.origin + frame.forward * 40 + frame.up * 0.001
+        pool.position = frame.origin + frame.forward * 40 - frame.up * 0.006
         pool.orientation = frame.orientation(heading: 0)
         root.addChild(pool)
 
-        let dashMesh = MeshResource.generatePlane(width: 0.15, depth: Self.dashLength)
+        let dashMesh = MeshResource.generatePlane(width: 0.11, depth: Self.dashLength)
         let dashCount = Int((Self.farLimit - Self.nearLimit) / Self.dashPeriod) + 2
         for _ in 0..<dashCount {
             dividers.append(makeLanePair(mesh: dashMesh))
         }
 
-        let edgeMesh = MeshResource.generatePlane(width: 0.16, depth: Self.edgeSegment + 0.05)
+        let edgeMesh = MeshResource.generatePlane(width: 0.10, depth: Self.edgeSegment)
         let edgeCount = Int((Self.farLimit - Self.nearLimit) / Self.edgeSegment) + 1
         for index in 0..<edgeCount {
             let pair = makeLanePair(mesh: edgeMesh)
@@ -117,7 +117,7 @@ final class VehicleRoadScene {
 
         root.addChild(ribbon)
         ribbon.isEnabled = false
-        let pathMesh = MeshResource.generatePlane(width: 1.7, depth: Self.pathSegment + 0.02)
+        let pathMesh = MeshResource.generatePlane(width: 1.55, depth: Self.pathSegment)
         for _ in 0..<26 {
             let segment = ModelEntity(mesh: pathMesh, materials: [])
             ribbon.addChild(segment)
@@ -136,10 +136,10 @@ final class VehicleRoadScene {
     }
 
     func setAppearance(dark: Bool) {
-        let road = dark ? UIColor(white: 0.13, alpha: 1) : UIColor(white: 0.80, alpha: 1)
-        let line = dark ? UIColor(white: 1, alpha: 0.85) : UIColor(white: 1, alpha: 1)
-        let edge = dark ? UIColor(white: 0.75, alpha: 0.7) : UIColor(white: 0.98, alpha: 1)
-        let ribbon = UIColor(red: 0.23, green: 0.45, blue: 1.0, alpha: dark ? 0.85 : 0.75)
+        let road = dark ? UIColor(white: 0.10, alpha: 1) : UIColor(white: 0.85, alpha: 1)
+        let line = dark ? UIColor(white: 1, alpha: 0.72) : UIColor(white: 1, alpha: 0.92)
+        let edge = dark ? UIColor(white: 0.65, alpha: 0.45) : UIColor(white: 0.96, alpha: 0.85)
+        let ribbon = UIColor(red: 0.16, green: 0.52, blue: 1.0, alpha: dark ? 0.82 : 0.68)
 
         pool.components[ModelComponent.self]?.materials = [UnlitMaterial.stageSprite(VehicleStageTextures.roadPool, color: road)]
         let dashMaterial = UnlitMaterial.stageSprite(VehicleStageTextures.dash, color: line)
@@ -152,7 +152,7 @@ final class VehicleRoadScene {
             pair.left.components[ModelComponent.self]?.materials = [edgeMaterial]
             pair.right.components[ModelComponent.self]?.materials = [edgeMaterial]
         }
-        let pathMaterial = UnlitMaterial.stageSprite(nil, color: ribbon)
+        let pathMaterial = UnlitMaterial.stageSprite(VehicleStageTextures.pathRibbon, color: ribbon)
         for segment in path { segment.components[ModelComponent.self]?.materials = [pathMaterial] }
     }
 
@@ -167,7 +167,7 @@ final class VehicleRoadScene {
         if shapeChanged || travelled != previousPhase {
             for (index, pair) in dividers.enumerated() {
                 let s = Self.nearLimit + Float(index) * Self.dashPeriod - travelled
-                place(pair, at: shape.point(at: s), lateral: 0.5 * Self.laneWidth, lift: 0.010)
+                place(pair, at: shape.point(at: s), lateral: 0.5 * Self.laneWidth, lift: -0.004)
                 let opacity = OpacityComponent(opacity: Self.distanceFade(at: s))
                 pair.left.components.set(opacity)
                 pair.right.components.set(opacity)
@@ -176,7 +176,7 @@ final class VehicleRoadScene {
 
         if shapeChanged {
             for (index, pair) in edges.enumerated() {
-                place(pair, at: shape.point(at: Self.edgeDistance(index)), lateral: 1.5 * Self.laneWidth, lift: 0.009)
+                place(pair, at: shape.point(at: Self.edgeDistance(index)), lateral: 1.5 * Self.laneWidth, lift: -0.0045)
             }
             lastShape = shape
         }
@@ -191,7 +191,7 @@ final class VehicleRoadScene {
                 let point = shape.point(at: s)
                 segment.transform = Transform(
                     rotation: frame.orientation(heading: point.z),
-                    translation: center(of: point, lift: 0.012)
+                    translation: center(of: point, lift: -0.0035)
                 )
             }
             let shimmer = 0.78 + 0.22 * sin(s * 0.32 - time * 3.2)

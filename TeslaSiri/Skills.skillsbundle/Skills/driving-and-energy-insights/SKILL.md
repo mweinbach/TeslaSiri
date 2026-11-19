@@ -1,34 +1,34 @@
 ---
 name: driving-and-energy-insights
-description: Answer questions about the user's past car or Tesla drives and charging sessions, and their driving efficiency, charging costs, and battery health. Use when the user asks where or when they drove their car, how far or how efficiently they drove, to list or look up past trips or charges, what charging my car cost, how much energy they added at a Supercharger or at home, or about battery degradation or phantom drain. Not for live readings like the current battery level or tire pressure, and not for controlling the car.
+description: Answer questions about past drives, charging sessions, driving efficiency, charging spend, and battery health. Use when the user asks where or when they drove, how far or efficiently they went, to look up past trips or Supercharger stops, how much charging cost, or about battery degradation and phantom drain. Not for live readings like current battery or tire pressure, and not for controlling the car.
 ---
 
-# Drive, Charging, and Battery Insights
+# Driving, Charging & Battery Insights
 
-The user wants to understand what their car has done, not change anything. Every tool here is read-only.
+Everything here is read-only—the user wants answers about what their car has done, not to change anything.
 
-## Finding a specific drive or charge
+## Looking up a specific trip or charge
 
-1. If the user means a drive or charge that's already on screen, or that a previous step returned, use it directly.
+1. If the drive or charging session is already on screen or came back from an earlier step, use it directly.
 2. Otherwise find it first:
-   - Drives: use the Find Tesla Drives tool. Put place names in the destination or origin fields ("when did I last drive to Tahoe" is a destination). Turn relative dates ("yesterday", "last weekend", "in March") into a start and end date.
-   - Charges: use the Get Tesla Charging History tool. "Supercharger stops" means Superchargers only. "At home" usually means non-Supercharger sessions; also try the location filter with "Home" if the user's history uses that label.
-3. If more than one result matches and the user asked about one ("my drive to the airport"), use the most recent match unless the user's words point to another one. If it's still ambiguous, list the matches briefly (date, place, distance or energy) and ask which one.
-4. Then use the Get Tesla Drive Details tool or the Get Tesla Charge Details tool with the drive or charge you found to answer follow-up questions about it.
+   - **Drives**: call the Find Tesla Drives tool. Put place names in destination or origin when the direction is clear ("when did I last drive to Tahoe?" is a destination), and translate relative dates ("yesterday," "last weekend") into start and end dates.
+   - **Charges**: call the Get Tesla Charging History tool. Use Superchargers only for Supercharger stops; for home charging, filter to AC/non-Supercharger sessions (and try the location filter "Home" if needed).
+3. If several sessions match and the user asked about one ("my drive to the airport"), pick the most recent match unless their wording points elsewhere. If it's genuinely ambiguous, briefly list the matches (date, place, distance or energy) and ask which one.
+4. For deep follow-up questions on a specific trip or charge, pass it to the Get Tesla Drive Details tool or the Get Tesla Charge Details tool.
 
-## Totals and trends
+## Totals, recaps & battery health
 
-- For "how much did I drive", "what was my efficiency", or "how much Autopilot", use the Get Tesla Driving Stats tool with the period the user named. "This week" means the last 7 days. "Since I charged" means since the last charge.
-- For "how much did charging cost" or "how much energy did I add", use the Get Tesla Charging Stats tool.
-- For a weekly or monthly recap, use both stats tools with the same period, then compare energy used driving with energy added charging, and give the total cost.
-- For battery health, degradation, capacity, or phantom drain, use the Get Tesla Battery Health & Stats tool.
+- **Driving totals & efficiency** ("how much did I drive this week?", "my Autopilot miles", "since I last charged"): call the Get Tesla Driving Stats tool ("this week" → Last 7 Days; "since I charged" → Since Last Charge).
+- **Charging totals & spend**: call the Get Tesla Charging Stats tool.
+- **Weekly or monthly recap**: call both stats tools for the same period, compare energy driven vs. energy added charging, and include the total recorded cost.
+- **Battery health, degradation, capacity, or phantom drain**: call the Get Tesla Battery Health & Stats tool.
 
-## How to answer
+## Keep answers clear and grounded
 
-- Lead with the number the user asked for, then one or two supporting details. Don't read every field.
-- Use miles, kWh, Wh/mi, and dollars as returned. Don't convert costs to another currency.
-- If a charge has no recorded cost, say the cost wasn't recorded. Don't say it was free.
+- Lead with the number the user asked for, followed by one or two helpful details—don't recite every field.
+- Keep units (miles, kWh, Wh/mi) and currency exactly as returned; never convert costs to another currency.
+- If a session has no recorded cost, say the cost wasn't recorded—never say it was free.
 
 ## Don't
 
-- Don't call any control or charging command tool from this skill. If the user then asks to change something, such as the charge limit, that's a separate request.
+- Don't send any car control or charging commands here. If the user follows up asking to change something like the charge limit, treat that as a new control request.

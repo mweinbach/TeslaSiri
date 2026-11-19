@@ -7,7 +7,7 @@ import SwiftUI
 /// Answers questions about one or more live readings in a single call, such as
 /// "what's my tire pressure and mileage?" or "how much range do I have and is it locked?".
 @AppIntent(.tool)
-public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
+public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent {
     public static let title: LocalizedStringResource = "Get Tesla Vehicle Info"
     public static let description = IntentDescription(
         "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions.",

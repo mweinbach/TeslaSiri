@@ -19,50 +19,11 @@ struct AppIntentDiscoveryCard: View {
 
     var body: some View {
         DashboardCard("Siri & Shortcuts", systemImage: "waveform") {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Say \"Warm up my car\", \"Show my last drive\", or \"How's my car?\" for live Apple Maps route and telemetry widgets right inside Siri.")
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Ask Siri to check status, warm up your car, lock up, or review drives.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Button {
-                    isShowingWidgetGallery = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "map.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(
-                                LinearGradient(
-                                    colors: [.blue, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Preview Dynamic Siri Widgets")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text("Embedded Apple Maps drive routes, live cabin & charger cards")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer(minLength: 4)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
 
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(CarSiriVoicePhrase.allCases) { item in
@@ -72,6 +33,19 @@ struct AppIntentDiscoveryCard: View {
 
                 SiriTipView(intent: climateIntent, isVisible: $isStatusTipVisible)
                     .siriTipViewStyle(.automatic)
+
+                Divider()
+
+                Button {
+                    isShowingWidgetGallery = true
+                } label: {
+                    DashboardCardLinkLabel(
+                        title: "Preview Siri Cards",
+                        systemImage: "rectangle.stack"
+                    )
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.plain)
 
                 ShortcutsLink()
                     .shortcutsLinkStyle(.automatic)
@@ -120,10 +94,10 @@ struct AppIntentDiscoveryCard: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(AppTheme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isAdded ? "Edit Siri phrase \(existing?.invocationPhrase ?? item.phrase)" : "Add Siri phrase \(item.phrase)")

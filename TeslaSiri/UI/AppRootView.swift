@@ -104,6 +104,9 @@ struct AppRootView: View {
         .onAppIntentExecution(OpenReleaseNoteIntent.self) { intent in
             openVehicle(intent.target.vin, tab: .dashboard)
         }
+        .onAppIntentExecution(OpenChargeSessionIntent.self) { intent in
+            openVehicle(intent.target.vin, tab: .dashboard)
+        }
         .onAppIntentExecution(OpenDriveIntent.self) { intent in
             requestedDriveSessionID = intent.target.id
             openVehicle(intent.target.vin, tab: .drives)
@@ -154,7 +157,7 @@ struct AppRootView: View {
             if newPhase == .active {
                 Task { await FleetTokenBridge.sync(store: store) }
                 refreshSandboxSnapshot()
-                if sandboxMode == .demoVehicle {
+                if (diagnostics.isSignedIn || sandboxMode == .demoVehicle), !store.vehicles.isEmpty {
                     Task { await store.refresh() }
                 }
             }
@@ -195,7 +198,7 @@ struct AppRootView: View {
                     Task { await signIn(accessToken: token) }
                 },
                 onReload: {
-                    await reloadFleet()
+                    await reloadFleet(wakeVehicle: true)
                 },
                 onOpenSandboxSettings: {
                     selectedTab = .diagnostics
@@ -209,6 +212,9 @@ struct AppRootView: View {
                 provider: store.provider,
                 isSignedIn: diagnostics.isSignedIn,
                 isAuthenticating: isAuthenticating,
+                vehicleCount: store.vehicles.count,
+                selectedVehicleName: store.selectedVehicle?.name,
+                lastUpdated: store.selectedVehicle?.latest?.updatedAtDate,
                 onSelectProvider: onSelectProvider,
                 onSignIn: { token in Task { await signIn(accessToken: token) } },
                 onSignOut: { Task { await signOut() } }
@@ -218,7 +224,7 @@ struct AppRootView: View {
                 store: store,
                 requestedSessionID: requestedDriveSessionID,
                 onReload: {
-                    await reloadFleet()
+                    await reloadFleet(wakeVehicle: false)
                 }
             )
         case .diagnostics:
@@ -236,7 +242,7 @@ struct AppRootView: View {
                         Task { await runBackendProbe() }
                     },
                     onReloadFleet: {
-                        await reloadFleet()
+                        await reloadFleet(wakeVehicle: true)
                         await store.refreshSelectedVehicleTelemetry()
                     },
                     onExportRawData: {
@@ -321,8 +327,8 @@ struct AppRootView: View {
         }
     }
 
-    private func reloadFleet() async {
-        await store.refresh()
+    private func reloadFleet(wakeVehicle: Bool = true) async {
+        await store.refresh(wake: wakeVehicle)
         guard isCurrentSession() else { return }
         await FleetTokenBridge.sync(store: store)
         guard isCurrentSession() else { return }

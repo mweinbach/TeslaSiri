@@ -1,10 +1,7 @@
 import AppIntents
 import FleetKit
 
-/// Surfaces the App Intents defined in the shared `FleetKit` package to this
-/// extension so the system can perform them in the extension's process.
-extension TeslaSiriAppIntentsExtension: AppIntentsPackage {
-    static var includedPackages: [any AppIntentsPackage.Type] {
-        [FleetKitPackage.self]
-    }
-}
+/// `FleetKit` is statically linked into this extension, so its App Intents
+/// metadata is merged directly into the extension bundle without listing it in
+/// `includedPackages`.
+extension TeslaSiriAppIntentsExtension: AppIntentsPackage {}

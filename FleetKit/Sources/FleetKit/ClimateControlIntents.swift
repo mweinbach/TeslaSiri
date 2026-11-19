@@ -7,7 +7,7 @@ import Foundation
 // Confirmation policy: climate changes run immediately, except turning dog
 // mode OFF, which prompts because a pet may be relying on it.
 
-@AppIntent(.tool)
+/// Shortcuts and App Shortcuts intent. Siri AI uses the Control Car tool.
 public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Turn Off Tesla Climate"
     public static let description = IntentDescription(
@@ -91,7 +91,7 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
 public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Car Temperature"
     public static let description = IntentDescription(
-        "Starts cabin climate and sets the driver and passenger HVAC temperature in the user's car or Tesla (15°C–28°C / 59°F–82.4°F). Use when warming up or cooling down the car to a specific temperature; use Configure Tesla Cabin Climate when combining temperature with seat heat, defrost, or Dog Mode.",
+        "Starts cabin climate and sets the target temperature in the user's car (15°C–28°C / 59°F–82.4°F), showing an interactive temperature card. Use for standalone temperature requests like \"set my car to 72\"; use Control Car when combining temperature with locks, defrost, seat heat, or other controls.",
         searchKeywords: [
             "warm up", "warm up my car", "cool down", "cool down my car",
             "set temperature", "set car temperature", "heat car", "cool car", "AC", "air conditioning"
@@ -211,7 +211,7 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Max Defrost"
     public static let description = IntentDescription(
@@ -292,7 +292,7 @@ public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableInte
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Dog Mode"
     public static let description = IntentDescription(
@@ -376,7 +376,7 @@ public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent 
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Bioweapon Defense"
     public static let description = IntentDescription(

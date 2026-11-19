@@ -73,10 +73,25 @@ public struct OpenReleaseNoteIntent: OpenIntent {
     }
 }
 
+@AppIntent(schema: .system.open)
+public struct OpenChargeSessionIntent: OpenIntent {
+    public static let title: LocalizedStringResource = "Open Charging Session"
+
+    @Parameter(title: "Charging Session")
+    public var target: ChargeSessionEntity
+
+    public init() {}
+
+    public init(target: ChargeSessionEntity) {
+        self.target = target
+    }
+}
+
 #if os(iOS)
 extension OpenVehicleIntent: TargetContentProvidingIntent {}
 extension OpenVehicleStatusIntent: TargetContentProvidingIntent {}
 extension OpenDriveIntent: TargetContentProvidingIntent {}
 extension OpenSoftwareUpdateIntent: TargetContentProvidingIntent {}
 extension OpenReleaseNoteIntent: TargetContentProvidingIntent {}
+extension OpenChargeSessionIntent: TargetContentProvidingIntent {}
 #endif

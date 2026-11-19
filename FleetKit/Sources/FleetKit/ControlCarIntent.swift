@@ -6,7 +6,8 @@ public enum CarWindowAction: String, AppEnum {
 
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Window Action")
     public static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .vent: "Vent", .close: "Close"
+        .vent: DisplayRepresentation(title: "Vent", subtitle: "Crack all four windows slightly to air out the cabin"),
+        .close: DisplayRepresentation(title: "Close", subtitle: "Roll all windows fully up (asks for confirmation)")
     ]
 }
 
@@ -52,8 +53,14 @@ public struct CarControlSettings: TransientAppEntity {
 public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
-        "Apply several changes to one car, such as starting HVAC at 72°F and locking the doors. Send all requested settings together. Wattie orders the commands and confirms sensitive changes before starting. Omit the vehicle for the default car. Use List Cars to discover vehicles and controls. Software updates have dedicated tools.",
-        searchKeywords: ["control my car", "multiple car controls", "set up my car", "prepare my Tesla"]
+        "Applies one or more changes to a Tesla in one call: locks, climate, defrost, front seat heat, steering wheel, Dog Mode, Bioweapon Defense, Sentry Mode, charging, charge limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for the default car; software updates and seat cooling have dedicated tools.",
+        searchKeywords: [
+            "control my car", "lock my car", "unlock my car", "warm up my car", "cool down my car",
+            "precondition", "turn off climate", "defrost", "dog mode", "bioweapon defense",
+            "sentry mode", "start charging", "stop charging", "charge limit", "charging amps",
+            "charge port", "vent windows", "close windows", "open trunk", "open frunk",
+            "flash lights", "honk horn", "steering wheel heater", "prepare my Tesla"
+        ]
     )
 
     @Parameter(title: "Vehicle", description: "The car to change. Omit for the selected or default car; pass a vehicle from List Cars if the user specifies another one.", optionsProvider: SelectedVehicleOptionsProvider())
@@ -62,6 +69,14 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public var changes: CarControlSettings
 
     public init() {}
+
+    public static var parameterSummary: some ParameterSummary {
+        When(\.$vehicle, .hasAnyValue) {
+            Summary("Control \(\.$vehicle) with \(\.$changes)")
+        } otherwise: {
+            Summary("Control my car with \(\.$changes)")
+        }
+    }
 
     public func perform() async throws -> some IntentResult & ReturnsValue<VehicleCommandResultEntity> & ProvidesDialog {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)

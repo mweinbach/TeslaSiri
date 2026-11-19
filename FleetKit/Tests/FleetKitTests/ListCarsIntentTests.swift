@@ -26,10 +26,11 @@ struct ListCarsIntentTests {
             let controls = try #require(listed[0].controls)
             #expect(controls.contains { $0.contains("target temperature") })
             #expect(controls.contains("Send a navigation destination"))
-            #expect(listed[0].additionalControls?.contains("Set Tesla Seat Heater: adjust front seat cooling") == true)
+            #expect(listed[0].additionalControls?.contains("Set Tesla Seat Climate: adjust front seat cooling") == true)
             #expect(listed[1].additionalControls?.contains { $0.contains("cooling") } == false)
             #expect(listed[1].controls?.contains { $0.contains("frunk") } == false)
             #expect(listed[2].controls?.contains { $0.contains("navigation") } == false)
+            #expect(listed[2].additionalControls?.contains { $0.contains("navigation") } == false)
             #expect(listed[2].additionalControls?.contains { $0.contains("cooling if equipped") } == true)
             #expect(requests().count == 1)
 

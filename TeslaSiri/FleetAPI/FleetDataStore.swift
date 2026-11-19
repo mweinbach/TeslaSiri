@@ -50,7 +50,9 @@ final class FleetDataStore {
     private(set) var vehicles: [FleetVehicle] = []
     var selectedVIN: String? {
         didSet {
-            if selectedVIN != oldValue { vehicleControlMessage = nil }
+            if selectedVIN != oldValue {
+                setVehicleControlMessage(nil)
+            }
         }
     }
 
@@ -75,6 +77,7 @@ final class FleetDataStore {
     // MARK: - Loading & Action State
 
     private(set) var isRefreshing = false
+    private(set) var isWakingVehicle = false
     private(set) var isLoadingActiveDrive = false
     private(set) var isLoadingCharging = false
     private(set) var isLoadingDrives = false
@@ -95,6 +98,8 @@ final class FleetDataStore {
         return Set(commands.keys)
     }
     private(set) var vehicleControlMessage: String?
+    private(set) var vehicleControlMessageIsError = false
+    @ObservationIgnored private var controlMessageClearTask: Task<Void, Never>?
 
     private(set) var isMutatingSoftware = false
     private(set) var softwareActionMessage = "Not run"
@@ -245,11 +250,12 @@ final class FleetDataStore {
         }
     }
 
-    func refresh() async {
-        guard let cursor else {
+    func refresh(wake: Bool = false) async {
+        if cursor == nil {
             await loadInitialData()
-            return
+            guard wake, cursor != nil, !Task.isCancelled else { return }
         }
+        guard let cursor else { return }
 
         guard !isRefreshing else { return }
         let generation = sessionGeneration
@@ -257,11 +263,45 @@ final class FleetDataStore {
         isRefreshing = true
         lastErrorMessage = nil
         defer {
-            if generation == sessionGeneration { isRefreshing = false }
+            if generation == sessionGeneration {
+                isWakingVehicle = false
+                isRefreshing = false
+            }
+        }
+
+        var wakeErrorMessage: String?
+        let preWakeVIN = selectedVehicle?.vin
+        let preWakeUpdatedAt = selectedVehicle?.latest?.updatedAt
+        if wake, let vin = preWakeVIN {
+            isWakingVehicle = true
+            do {
+                try await apiClient.wakeVehicle(vin: vin)
+                guard !Task.isCancelled, generation == sessionGeneration, self.cursor == cursor else { return }
+                if vehicleControlMessageIsError {
+                    setVehicleControlMessage(nil)
+                }
+            } catch {
+                guard !Task.isCancelled, generation == sessionGeneration, self.cursor == cursor else { return }
+                if error is CancellationError { return }
+                if case FleetAPIError.missingAccessToken = error {
+                    lastErrorMessage = error.localizedDescription
+                    return
+                }
+                if case FleetAPIError.unacceptableStatus(statusCode: 401, _, _, _) = error {
+                    lastErrorMessage = error.localizedDescription
+                    return
+                }
+                if case FleetKitError.sessionExpired = error {
+                    lastErrorMessage = error.localizedDescription
+                    return
+                }
+                wakeErrorMessage = error.localizedDescription
+            }
+            if generation == sessionGeneration { isWakingVehicle = false }
         }
 
         do {
-            let page = try await apiClient.changes(since: cursor)
+            let page = try await apiClient.changes(since: cursor, refresh: wake)
             guard !Task.isCancelled, generation == sessionGeneration, self.cursor == cursor else { return }
 
             if let roster = page.data.vehicles {
@@ -276,7 +316,28 @@ final class FleetDataStore {
             lastRefreshDate = Date()
             lastRosterRefresh = lastRefreshDate
             loadState = .loaded
-            await refreshSelectedVehicleDetails()
+            await refreshSelectedVehicleDetails(forceFresh: wake)
+            // After waking a sleeping car, Fleet Telemetry can take a couple of seconds to publish
+            // its first live packet. If the timestamp hasn't moved yet, do one follow-up live read.
+            if wake, wakeErrorMessage == nil, let preWakeVIN,
+               generation == sessionGeneration, !Task.isCancelled,
+               selectedVehicle?.vin == preWakeVIN,
+               let preWakeUpdatedAt,
+               (selectedVehicle?.latest?.updatedAt ?? 0) <= preWakeUpdatedAt {
+                try? await Task.sleep(for: .seconds(2.5))
+                if generation == sessionGeneration, !Task.isCancelled, selectedVehicle?.vin == preWakeVIN {
+                    await refreshSelectedVehicleLive(includingTires: true, forceFresh: true)
+                }
+            }
+            if generation == sessionGeneration, !Task.isCancelled {
+                FleetWidgetStore.reload()
+            }
+            if let wakeErrorMessage, generation == sessionGeneration {
+                lastErrorMessage = wakeErrorMessage
+                if !isRunningControl {
+                    setVehicleControlMessage(wakeErrorMessage, isError: true)
+                }
+            }
         } catch {
             guard !Task.isCancelled, generation == sessionGeneration, self.cursor == cursor else { return }
             let message = error.localizedDescription
@@ -327,6 +388,7 @@ final class FleetDataStore {
         spotlightRosterScope = nil
         lastRequestID = nil
         lastErrorMessage = nil
+        isWakingVehicle = false
 
         isRefreshing = false
         isLoadingActiveDrive = false
@@ -339,7 +401,7 @@ final class FleetDataStore {
         activeControlAction = nil
         pendingControlsByVIN.removeAll()
         lastCommandStartedAt = nil
-        vehicleControlMessage = nil
+        setVehicleControlMessage(nil)
 
         isMutatingSoftware = false
         softwareActionMessage = "Not run"
@@ -359,9 +421,9 @@ final class FleetDataStore {
 
     // MARK: - Vehicle Refresh & Control Actions
 
-    func refreshSelectedVehicleLive(includingTires: Bool = true) async {
+    func refreshSelectedVehicleLive(includingTires: Bool = true, forceFresh: Bool = false) async {
         await performSelectedVehicleRefresh { vin, generation in
-            let page = try await apiClient.latestSnapshot(vin: vin, includingTires: includingTires)
+            let page = try await apiClient.latestSnapshot(vin: vin, includingTires: includingTires, refresh: forceFresh)
             try validateReadResult(for: vin, generation: generation)
             var snapshot = page.data
             if FleetDataNormalizer.normalizedString(snapshot.vin) == nil {
@@ -387,7 +449,7 @@ final class FleetDataStore {
         let climateScope = climateService?.sessionScopeID
         activeControlAction = command.action
         isRunningControl = true
-        vehicleControlMessage = "Sending command…"
+        setVehicleControlMessage("Sending command…")
         defer {
             if generation == sessionGeneration {
                 activeControlAction = nil
@@ -407,11 +469,11 @@ final class FleetDataStore {
             lastRequestID = page.requestID ?? lastRequestID
             switch mode {
             case .live:
-                vehicleControlMessage = "Command sent"
+                setVehicleControlMessage("Command sent", autoClearAfter: (command == .honk || command == .flashLights) ? 3.5 : nil)
             case .dryRun:
-                vehicleControlMessage = "Simulated (Dry-Run) — car untouched"
+                setVehicleControlMessage("Simulated (Dry-Run) — car untouched", autoClearAfter: 4)
             case .demoVehicle:
-                vehicleControlMessage = "Simulated on demo car"
+                setVehicleControlMessage("Simulated on demo car", autoClearAfter: 3.5)
             }
             if command != .honk, command != .flashLights {
                 reconcileAcknowledgedControl(command, for: vin, expected: expected)
@@ -421,14 +483,30 @@ final class FleetDataStore {
             guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return false }
             let message = error.localizedDescription
             lastErrorMessage = message
-            vehicleControlMessage = message
+            setVehicleControlMessage(message, isError: true)
             return false
         }
     }
 
     func showVehicleStatusSummary(_ summary: String, for vin: String) {
         guard selectedVehicle?.vin == vin, !isRunningControl else { return }
-        vehicleControlMessage = summary
+        setVehicleControlMessage(summary, autoClearAfter: 5)
+    }
+
+    private func setVehicleControlMessage(_ message: String?, isError: Bool = false, autoClearAfter seconds: TimeInterval? = nil) {
+        controlMessageClearTask?.cancel()
+        controlMessageClearTask = nil
+        vehicleControlMessage = message
+        vehicleControlMessageIsError = message != nil && isError
+        guard let message, let seconds else { return }
+        let generation = sessionGeneration
+        controlMessageClearTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled, self.sessionGeneration == generation,
+                  self.vehicleControlMessage == message else { return }
+            self.vehicleControlMessage = nil
+            self.vehicleControlMessageIsError = false
+        }
     }
 
     func reconcileAcknowledgedControl(_ command: VehicleControlCommand, for vin: String, expected: Bool?) {
@@ -438,20 +516,31 @@ final class FleetDataStore {
         lastCommandStartedAt = acknowledgedAt
         if let expected, command.observedState(in: selectedVehicle?.latest) != expected {
             pendingControlsByVIN[vin, default: [:]][command] = PendingControl(expectedState: expected, startedAt: acknowledgedAt)
+        } else {
+            setVehicleControlMessage("Command sent", autoClearAfter: 3.5)
         }
 
         Task {
-            guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return }
-            await refreshSelectedVehicleLive(includingTires: false)
-        }
-        guard pendingControlsByVIN[vin]?[command]?.startedAt == acknowledgedAt else { return }
-        Task {
-            // A sleeping vehicle can keep returning the previous state. Allow a deliberate retry.
-            try? await Task.sleep(until: acknowledgedAt + .seconds(15), clock: .continuous)
+            // Poll with short backoff so fresh post-command telemetry lands instead of
+            // giving up after a single immediate read before the vehicle reports back.
+            let delays: [Duration] = [.seconds(1.5), .seconds(3.5), .seconds(5), .seconds(5)]
+            for delay in delays {
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled, generation == sessionGeneration, selectedVehicle?.vin == vin else { return }
+                await refreshSelectedVehicleLive(includingTires: false, forceFresh: true)
+                guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return }
+                if pendingControlsByVIN[vin]?[command]?.startedAt != acknowledgedAt {
+                    FleetWidgetStore.reload()
+                    if lastCommandStartedAt == acknowledgedAt, vehicleControlMessage == "Command sent" {
+                        setVehicleControlMessage("Updated", autoClearAfter: 2.5)
+                    }
+                    return
+                }
+            }
             guard generation == sessionGeneration, pendingControlsByVIN[vin]?[command]?.startedAt == acknowledgedAt else { return }
             pendingControlsByVIN[vin]?[command] = nil
             if selectedVehicle?.vin == vin, lastCommandStartedAt == acknowledgedAt, vehicleControlMessage == "Command sent" {
-                vehicleControlMessage = "Command sent. Updated vehicle state is unavailable."
+                setVehicleControlMessage("Command sent — waiting for car to report state", isError: false, autoClearAfter: 6)
             }
         }
     }
@@ -856,7 +945,7 @@ final class FleetDataStore {
         await refresh()
     }
 
-    private func refreshSelectedVehicleDetails(onlyMissing: Bool = false) async {
+    private func refreshSelectedVehicleDetails(onlyMissing: Bool = false, forceFresh: Bool = false) async {
         let generation = sessionGeneration
         let scope = spotlightRosterScope
         var readings: FleetSpotlightIndexer.DashboardReadings?
@@ -864,7 +953,7 @@ final class FleetDataStore {
             let steps: [() async -> Void] = [
                 {
                     if !onlyMissing || self.selectedVehicle?.latest?.tires == nil {
-                        await self.refreshSelectedVehicleLive()
+                        await self.refreshSelectedVehicleLive(forceFresh: forceFresh)
                     }
                 },
                 {
@@ -874,8 +963,8 @@ final class FleetDataStore {
                 },
                 { await self.refreshSelectedVehicleChargingSessions() },
                 {
-                    if onlyMissing || self.selectedVehicleSoftwareUpdate?.releaseNotesCount == nil {
-                        await self.refreshSelectedVehicleSoftware()
+                    if forceFresh || onlyMissing || self.selectedVehicleSoftwareUpdate?.releaseNotesCount == nil {
+                        await self.refreshSelectedVehicleSoftware(forceRefresh: forceFresh)
                     }
                 },
                 {

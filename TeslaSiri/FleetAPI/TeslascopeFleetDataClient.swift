@@ -68,7 +68,7 @@ final class TeslascopeFleetDataClient: FleetDataLoading {
                     cursor: Self.nowMS)
     }
 
-    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges> {
+    func changes(since cursor: Int64, refresh: Bool) async throws -> FleetAPIPage<FleetSyncChanges> {
         let vehicles = try await roster()
         return page(FleetSyncChanges(vehicles: vehicles), cursor: max(Self.nowMS, cursor + 1))
     }
@@ -91,8 +91,12 @@ final class TeslascopeFleetDataClient: FleetDataLoading {
         try JSONDecoder().decode(TessieVehicleState.self, from: data).fields
     }
 
-    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
-        let state = try await state(vin: vin, connection: transport())
+    func wakeVehicle(vin: String) async throws {
+        // Teslascope's documented vehicle API does not expose a separate wake endpoint.
+    }
+
+    func latestSnapshot(vin: String, includingTires: Bool, refresh: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+        let state = try await state(vin: vin, connection: transport(), refresh: refresh)
         return page(TessieModelAdapter.snapshot(vin: vin, state: state))
     }
 

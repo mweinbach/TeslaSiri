@@ -7,7 +7,7 @@ import AppIntents
 // Confirmation policy: unlock, trunk, frunk, and charge-limit changes prompt
 // for confirmation; lock, climate, and vent run immediately.
 
-@AppIntent(.tool)
+/// Shortcuts, App Shortcuts, and snippet button intent. Siri AI uses the Control Car tool.
 public struct LockVehicleIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Lock Tesla"
     public static let description = IntentDescription(
@@ -57,7 +57,7 @@ public struct LockVehicleIntent: AppIntent, PredictableIntent {
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts, App Shortcuts, and snippet button intent. Siri AI uses the Control Car tool.
 public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Unlock Tesla"
     public static let description = IntentDescription(
@@ -108,7 +108,7 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts, App Shortcuts, and snippet button intent. Siri AI uses Control Car or Set Car Temperature.
 public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Start Car Climate"
     public static let description = IntentDescription(
@@ -191,7 +191,7 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts and App Shortcuts intent. Siri AI uses the Control Car tool.
 public struct VentWindowsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Vent Tesla Windows"
     public static let description = IntentDescription(
@@ -278,7 +278,7 @@ public enum TrunkPosition: String, AppEnum, Sendable {
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts and App Shortcuts intent. Siri AI uses the Control Car tool.
 public struct OpenTrunkIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Open Tesla Trunk or Frunk"
     public static let description = IntentDescription(
@@ -409,7 +409,7 @@ public struct OpenFrunkIntent: AppIntent, PredictableIntent {
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetChargeLimitIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Charge Limit"
     public static let description = IntentDescription(

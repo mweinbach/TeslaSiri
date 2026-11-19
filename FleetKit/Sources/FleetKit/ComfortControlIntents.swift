@@ -58,10 +58,10 @@ public enum SeatClimateMode: String, AppEnum, Sendable {
 
 @AppIntent(.tool)
 public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Set Tesla Seat Heater"
+    public static let title: LocalizedStringResource = "Set Tesla Seat Climate"
     public static let description = IntentDescription(
-        "Warms (or cools, on cars with ventilated seats) one of the car's physical seats, from 0 (off) to 3 (high). Turns the car's climate on, since seat heat only runs while climate is on. To set the cabin temperature or several climate settings at once, use the Configure Tesla Cabin Climate tool instead.",
-        searchKeywords: ["seat warmer", "heated seat", "seat heat", "cooled seat", "ventilated seat", "butt warmer"]
+        "Heats any physical seat (front or rear) or cools the ventilated front seats on supported cars, from 0 (off) to 3 (high). Starts climate automatically when turning seat climate on. Use for seat cooling, rear-row seat heaters, or a standalone seat adjustment; when combining front seat heat with other vehicle controls, use the Control Car tool instead.",
+        searchKeywords: ["seat warmer", "heated seat", "seat heat", "cooled seat", "ventilated seat", "seat cooling", "rear seat heat", "butt warmer"]
     )
     public static let isDiscoverable = true
 
@@ -191,7 +191,7 @@ public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableInt
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Steering Wheel Heater"
     public static let description = IntentDescription(
@@ -281,7 +281,7 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct SetChargingAmpsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Charging Amps"
     public static let description = IntentDescription(

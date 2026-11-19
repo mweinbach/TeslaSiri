@@ -297,25 +297,18 @@ struct FleetSiriAIExpansionTests {
             "vehicle-control"
         ])
 
-        let allTools: [any AppIntent.Type] = [
-            LockVehicleIntent.self, UnlockVehicleIntent.self, StartClimateIntent.self,
-            StopClimateIntent.self, SetCabinTemperatureIntent.self, SetMaxDefrostIntent.self,
-            SetPetModeIntent.self, SetBioweaponModeIntent.self, VentWindowsIntent.self,
-            CloseWindowsIntent.self, OpenTrunkIntent.self, SetChargeLimitIntent.self,
-            SetSeatClimateIntent.self, SetSteeringWheelHeaterIntent.self, SetChargingAmpsIntent.self,
-            FlashLightsIntent.self, HonkHornIntent.self, SendNavigationIntent.self,
-            StartChargingIntent.self, StopChargingIntent.self, SetChargePortIntent.self,
-            SetSentryModeIntent.self, ConfigureCabinClimateIntent.self, ControlCarIntent.self,
+        let allTools: [any ToolIntent.Type] = [
             ListCarsIntent.self, GetVehicleInfoIntent.self, GetVehicleStatusIntent.self,
-            FindDrivesIntent.self, GetDriveDetailsIntent.self, GetRecentChargesIntent.self,
-            GetChargeDetailsIntent.self, GetDrivingStatsIntent.self, GetChargingStatsIntent.self,
-            GetBatteryHealthIntent.self, GetSoftwareStatusIntent.self, GetReleaseNotesIntent.self,
-            InstallSoftwareUpdateIntent.self, CancelSoftwareUpdateIntent.self
+            ControlCarIntent.self, SetCabinTemperatureIntent.self, SetSeatClimateIntent.self,
+            SendNavigationIntent.self, InstallSoftwareUpdateIntent.self, CancelSoftwareUpdateIntent.self,
+            FindDrivesIntent.self, GetDriveDetailsIntent.self, GetDrivingStatsIntent.self,
+            GetRecentChargesIntent.self, GetChargeDetailsIntent.self, GetChargingStatsIntent.self,
+            GetBatteryHealthIntent.self, GetSoftwareStatusIntent.self, GetReleaseNotesIntent.self
         ]
         let toolTitles: Set<String> = allTools.reduce(into: []) {
             $0.insert(String(localized: $1.title))
         }
-        #expect(allTools.count == 38)
+        #expect(allTools.count == 18)
         #expect(toolTitles.count == allTools.count, "Every @AppIntent(.tool) must have a unique title")
 
         let namePattern = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -345,7 +338,8 @@ struct FleetSiriAIExpansionTests {
             #expect(!referenced.isEmpty)
             if name == "vehicle-control" {
                 let requiredTools = [
-                    ListCarsIntent.title, GetVehicleInfoIntent.title, ControlCarIntent.title, SetSeatClimateIntent.title
+                    ListCarsIntent.title, GetVehicleInfoIntent.title, ControlCarIntent.title,
+                    SetCabinTemperatureIntent.title, SetSeatClimateIntent.title, SendNavigationIntent.title
                 ].map { String(localized: $0) }
                 #expect(Set(requiredTools).isSubset(of: Set(referenced)))
             }

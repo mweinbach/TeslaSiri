@@ -239,8 +239,9 @@ struct FleetAPIClient {
         return page(bootstrap, cursor: Self.currentTimeMilliseconds(), requestID: response.requestID)
     }
 
-    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges> {
-        let response = try await vehicleRecords()
+    func changes(since cursor: Int64, refresh: Bool = false) async throws -> FleetAPIPage<FleetSyncChanges> {
+        let cachePolicy: URLRequest.CachePolicy = refresh ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
+        let response = try await vehicleRecords(cachePolicy: cachePolicy)
         let vehicles = response.data.map(TessieModelAdapter.vehicle)
         return page(
             FleetSyncChanges(latest: vehicles.compactMap(\.latest), vehicles: vehicles),
@@ -267,12 +268,29 @@ struct FleetAPIClient {
         return page(vehicle, requestID: response.requestID)
     }
 
-    func latestSnapshot(vin: String, includingTires: Bool = true) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func wakeVehicle(vin: String) async throws {
+        let response: Response<TessieCommandResponse> = try await send(Endpoint(
+            method: .post,
+            path: "/\(encoded(vin))/wake",
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeout: max(configuration.timeout, FleetKitConfig.commandTimeout)
+        ))
+        guard response.data.result else {
+            throw FleetAPIError.apiFailure(
+                error: "The vehicle did not wake up in time.",
+                requiredScope: nil,
+                requestID: response.requestID
+            )
+        }
+    }
+
+    func latestSnapshot(vin: String, includingTires: Bool = true, refresh: Bool = false) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+        let cachePolicy: URLRequest.CachePolicy = refresh ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
         if !includingTires {
-            let response = try await vehicleState(vin: vin)
+            let response = try await vehicleState(vin: vin, cachePolicy: cachePolicy)
             return page(TessieModelAdapter.snapshot(vin: vin, state: response.data), requestID: response.requestID)
         }
-        let response = try await snapshotState(vin: vin)
+        let response = try await snapshotState(vin: vin, cachePolicy: cachePolicy)
         return page(
             TessieModelAdapter.snapshot(vin: vin, state: response.state, tireState: response.tireState),
             requestID: response.requestID
@@ -761,8 +779,11 @@ struct FleetAPIClient {
             let response: Response<TessieVehicleState> = try await send(endpoint, accessToken: accessToken)
             return Response(data: response.data.fields, requestID: response.requestID)
         }
-        guard cachePolicy == .useProtocolCachePolicy, let scope = Self.vehicleStateScope, scope.vin == vin else {
+        guard let scope = Self.vehicleStateScope, scope.vin == vin else {
             return try await readState()
+        }
+        if cachePolicy != .useProtocolCachePolicy {
+            scope.cached = nil
         }
 
         let token = try await accessTokenProvider.accessToken()
@@ -790,14 +811,16 @@ struct FleetAPIClient {
     }
 
     private func snapshotState(
-        vin: String
+        vin: String,
+        cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy
     ) async throws -> (state: TessieJSONObject, tireState: TessieJSONObject?, requestID: String?) {
         let vehiclePath = "/\(encoded(vin))"
         async let tireRequest: Response<TessieJSONObject> = send(Endpoint(
             path: "\(vehiclePath)/tire_pressure",
-            queryItems: [URLQueryItem(name: "pressure_format", value: "psi")]
+            queryItems: [URLQueryItem(name: "pressure_format", value: "psi")],
+            cachePolicy: cachePolicy
         ))
-        let stateResponse = try await vehicleState(vin: vin)
+        let stateResponse = try await vehicleState(vin: vin, cachePolicy: cachePolicy)
         let tireState: TessieJSONObject?
         do {
             tireState = try await tireRequest.data
@@ -816,10 +839,11 @@ struct FleetAPIClient {
         return (stateResponse.data, tireState, stateResponse.requestID)
     }
 
-    private func vehicleRecords() async throws -> Response<[TessieVehicleRecord]> {
+    private func vehicleRecords(cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy) async throws -> Response<[TessieVehicleRecord]> {
         let response: Response<TessieResults<TessieVehicleRecord>> = try await send(Endpoint(
             path: "/vehicles",
-            queryItems: [URLQueryItem(name: "only_active", value: "true")]
+            queryItems: [URLQueryItem(name: "only_active", value: "true")],
+            cachePolicy: cachePolicy
         ))
         return Response(data: response.data.results, requestID: response.requestID)
     }

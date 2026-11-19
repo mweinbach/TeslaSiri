@@ -245,7 +245,7 @@ struct VehicleHeroStage: View {
 
                 VehicleHeroStats(snapshot: snapshot, units: units, compact: compact)
                     .padding(.horizontal, 16)
-                    .padding(.top, compact ? -12 : -20)
+                    .padding(.top, compact ? -2 : -6)
             }
             .frame(maxWidth: .infinity)
             .appEntityIdentifier(vehicleEntityIdentifier)
@@ -307,6 +307,7 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.batteryLevel, fractionLength: 0),
             unit: "%",
+            valueTint: snapshot.isActivelyCharging ? .green : .primary,
             caption: snapshot.isActivelyCharging
                 ? Text("\(Image(systemName: "bolt.fill")) Charging").foregroundStyle(.green)
                 : Text("Battery"),
@@ -318,8 +319,11 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"),
             unit: nil,
-            caption: Text("Inside"),
-            accessibilityLabel: "Cabin temperature"
+            valueTint: snapshot.climateOn == true ? .blue : .primary,
+            caption: snapshot.climateOn == true
+                ? Text("Climate On").foregroundStyle(.blue)
+                : Text("Inside"),
+            accessibilityLabel: snapshot.climateOn == true ? "Cabin temperature, climate on" : "Cabin temperature"
         )
     }
 
@@ -330,14 +334,21 @@ private struct VehicleHeroStats: View {
             .accessibilityHidden(true)
     }
 
-    private func stat(value: String, unit: String?, caption: Text, accessibilityLabel: String) -> some View {
-        VStack(spacing: 2) {
+    private func stat(
+        value: String,
+        unit: String?,
+        valueTint: Color = .primary,
+        caption: Text,
+        accessibilityLabel: String
+    ) -> some View {
+        VStack(spacing: 3) {
             MetricValueText(
                 value: value,
                 unit: unit,
                 font: valueFont,
                 unitFont: compact ? .subheadline.weight(.semibold) : .headline
             )
+            .foregroundStyle(valueTint)
             caption
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -379,6 +390,9 @@ struct VehicleQuickActionBar: View {
     let activeControlAction: String?
     var pendingControls: Set<VehicleControlCommand> = []
     let controlMessage: String?
+    var controlMessageIsError: Bool = false
+    var isWaking: Bool = false
+    var isRefreshing: Bool = false
     let controlsEnabled: Bool
     let onCommand: (VehicleControlCommand) -> Void
 
@@ -407,14 +421,24 @@ struct VehicleQuickActionBar: View {
             .disabled(!controlsEnabled || isRunningControl)
             .sensoryFeedback(.impact(flexibility: .solid), trigger: hapticTrigger)
 
-            if let controlMessage {
-                VehicleControlStatusLine(message: controlMessage, isRunning: isRunningControl)
+            if isWaking {
+                VehicleControlStatusLine(message: "Waking vehicle…", isRunning: true, isError: false)
+            } else if let controlMessage {
+                VehicleControlStatusLine(
+                    message: controlMessage,
+                    isRunning: isRunningControl || !pendingControls.isEmpty,
+                    isError: controlMessageIsError
+                )
+            } else if isRefreshing {
+                VehicleControlStatusLine(message: "Refreshing vehicle data…", isRunning: true, isError: false)
             } else if let updatedAt = snapshot.updatedAtDate {
                 RelativeTimeText(date: updatedAt, style: .updated)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
+        .animation(.smooth(duration: 0.25), value: isWaking)
+        .animation(.smooth(duration: 0.25), value: controlMessage)
         .frame(maxWidth: .infinity)
     }
 
@@ -656,12 +680,17 @@ extension FleetLatestSnapshot {
 private struct VehicleControlStatusLine: View {
     let message: String
     let isRunning: Bool
+    var isError: Bool = false
 
     var body: some View {
         HStack(spacing: 6) {
             if isRunning {
                 ProgressView()
                     .controlSize(.mini)
+            } else if isError {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
@@ -671,8 +700,14 @@ private struct VehicleControlStatusLine: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(
+            (isError ? Color.orange.opacity(0.12) : AppTheme.insetSurface),
+            in: Capsule()
+        )
     }
 }
 

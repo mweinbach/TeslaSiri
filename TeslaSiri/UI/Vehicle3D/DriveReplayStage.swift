@@ -104,14 +104,24 @@ struct DriveReplayStage: View {
             placeholder: { DriveReplayPlaceholder() }
         )
         .id(ObjectIdentifier(stage))
-        .aspectRatio(1.9, contentMode: .fit)
+        .aspectRatio(1.75, contentMode: .fit)
         .frame(maxWidth: .infinity)
+        .background(AppTheme.insetSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(AppTheme.hairline, lineWidth: 0.75)
+        }
         .overlay(alignment: .topLeading) {
             DriveReplayReadout(replay: replay, driveSessionID: driveSessionID, fallback: state)
-                .padding(.leading, 4)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(10)
         }
         .overlay(alignment: .bottomTrailing) {
             playbackButtons
+                .padding(10)
         }
     }
 

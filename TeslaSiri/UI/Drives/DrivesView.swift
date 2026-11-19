@@ -209,6 +209,7 @@ struct DrivesView: View {
         } else {
             await store.refresh()
         }
+        await placesIndex?.refresh(using: store)
     }
 
     private func selectedSessionBinding(fallback: String?) -> Binding<String> {

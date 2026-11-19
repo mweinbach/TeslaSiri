@@ -58,8 +58,9 @@ final class VehicleStage {
     @ObservationIgnored private let reflection = Entity()
     @ObservationIgnored private var reflectionPairs: [(source: Entity, mirror: Entity)] = []
     @ObservationIgnored private var reflectionNeedsSync = false
-    @ObservationIgnored private let floorLight = Entity()
+    @ObservationIgnored private let floorSortGroup = ModelSortGroup(depthPass: .prePass)
     @ObservationIgnored private let shadow = Entity()
+    @ObservationIgnored private var bakedShadow: VehicleScene.GroundShadow?
     @ObservationIgnored private var roadOpacity: Float = 0
     @ObservationIgnored private var floorRoadOpacity: Float?
     @ObservationIgnored private var isDarkAppearance = true
@@ -82,10 +83,6 @@ final class VehicleStage {
     @ObservationIgnored private var cameraPivot: SIMD3<Float> = [0, 0.7, 0]
     @ObservationIgnored private var transition: CameraTransition?
     @ObservationIgnored private var currentPoseKind: PoseKind = .parked
-    @ObservationIgnored private var orbitYaw: Float = 0
-    @ObservationIgnored private var zoom: Float = 1
-    @ObservationIgnored private var lastInteraction: Double = -100
-    @ObservationIgnored private var isInteracting = false
 
     private static let log = Logger(subsystem: "com.maxweinbach.TeslaSiri", category: "VehicleStage")
     private static var cache: [String: VehicleStage] = [:]
@@ -117,9 +114,8 @@ final class VehicleStage {
         Self.configure(camera)
         reflection.isEnabled = false
         root.addChild(carPivot)
-        for entity in [floorLight, reflection, shadow] {
-            root.addChild(entity)
-        }
+        root.addChild(reflection)
+        root.addChild(shadow)
     }
 
     var isReady: Bool { phase == .ready }
@@ -137,7 +133,6 @@ final class VehicleStage {
         if hostID != ObjectIdentifier(host) { root.removeFromParent() }
         hostID = ObjectIdentifier(host)
         transition = nil
-        isInteracting = false
         onFrame = nil
         driveOverride = nil
         mount(for: host)
@@ -282,6 +277,7 @@ final class VehicleStage {
             blue: CGFloat(rgb & 0xFF) / 255,
             alpha: 1
         )
+        bakedShadow = loaded.bakedGroundShadow()
         if isDarkAppearance { buildReflection(of: loaded, frame: frame) }
         buildFloorEffects(frame: frame)
         applyState(state, animated: false)
@@ -338,8 +334,6 @@ final class VehicleStage {
             }
         }
 
-        applyLighting(for: newState.mode)
-
         let kind = poseKind(for: newState)
         if kind != currentPoseKind {
             currentPoseKind = kind
@@ -349,12 +343,14 @@ final class VehicleStage {
                     fromFOV: cameraFOV,
                     fromPivot: cameraPivot,
                     start: time,
-                    duration: 1.8
+                    duration: 1.4
                 )
             } else {
                 snapCamera()
             }
         }
+
+        applyLighting(for: newState.mode)
     }
 
     /// Briefly flashes the headlights, mirroring a Flash Lights command.
@@ -410,35 +406,6 @@ final class VehicleStage {
         case .driving:
             state.isReversing && poses[.reverse] != nil ? .reverse : (poses[.drive] == nil ? .parked : .drive)
         }
-    }
-
-    // MARK: - Interaction
-
-    func beginInteraction() {
-        isInteracting = true
-        transition = nil
-        lastInteraction = time
-    }
-
-    func orbit(by translation: CGFloat) {
-        orbitYaw += Float(translation) * -0.0075
-        lastInteraction = time
-    }
-
-    func zoom(by factor: CGFloat) {
-        zoom = min(1.7, max(0.75, zoom * Float(factor)))
-        lastInteraction = time
-    }
-
-    func endInteraction() {
-        isInteracting = false
-        lastInteraction = time
-    }
-
-    func resetView() {
-        orbitYaw = 0
-        zoom = 1
-        lastInteraction = -100
     }
 
     // MARK: - Frame
@@ -592,8 +559,6 @@ final class VehicleStage {
         let showroom = 1 - roadOpacity
         reflection.components.set(OpacityComponent(opacity: reflectionStrength * showroom))
         reflection.isEnabled = reflectionStrength > 0 && showroom > 0.05
-        floorLight.components.set(OpacityComponent(opacity: showroom))
-        floorLight.isEnabled = showroom > 0.01
     }
 
     private func stepCamera(_ dt: Float) {
@@ -626,23 +591,6 @@ final class VehicleStage {
             if linear >= 1 { self.transition = nil }
         }
 
-        if !isInteracting, time - lastInteraction > 5 {
-            let decay = min(1, dt * (reduceMotion ? 20 : 1.6))
-            orbitYaw -= orbitYaw * decay
-            zoom += (1 - zoom) * decay
-        }
-
-        var yaw = orbitYaw
-        if currentPoseKind == .parked, !reduceMotion, !isInteracting {
-            yaw += 0.035 * sin(Float(time) * 0.21)
-        }
-        if yaw != 0 || zoom != 1 {
-            let rotation = simd_quatf(angle: yaw, axis: [0, 1, 0])
-            let offset = (transform.translation - pivot) / zoom
-            transform.translation = pivot + rotation.act(offset)
-            transform.rotation = rotation * transform.rotation
-        }
-
         if transform != cameraTransform {
             camera.transform = transform
             cameraTransform = transform
@@ -663,7 +611,7 @@ final class VehicleStage {
 
     private func updateHotspots() {
         guard let scene, viewSize.width > 1, viewSize.height > 1 else { return }
-        guard state.mode != .driving, transition == nil, !isInteracting, zoom <= 1.25 else {
+        guard state.mode != .driving, transition == nil else {
             lastProjection = nil
             if !hotspots.isEmpty { hotspots = [] }
             return
@@ -723,47 +671,45 @@ final class VehicleStage {
         if changed { hotspots = placements }
     }
 
-    // MARK: - Floor effects
+    // MARK: - Floor shadow & satin reflection
 
-    /// A mirrored copy of the car below the floor plane, clipped to the parts nearest the
-    /// ground and drawn faintly, like the reflection on the Tesla app's satin showroom floor. Animated parts and lights are copied onto the
-    /// mirror every frame so open doors and lit lamps reflect too.
+    /// Subtle PBR-shaded mirror of the car below `y = 0` (dark mode only), matching the
+    /// Tesla app's dark satin showroom floor (`~14%` strength). Shares `floorSortGroup`
+    /// (`order: 0`) with the baked contact shadow (`order: 1`) so the contact shadow always
+    /// masks the reflection directly underneath the tires and sills from every orbit angle.
     private func buildReflection(of scene: VehicleScene, frame: VehicleFrame) {
         reflectionNeedsSync = true
         let mirror = scene.entity.clone(recursive: true)
-        // The studio paint shaders pick up the overhead softbox through mirrored normals and
-        // blow out to white, so the reflection uses its own flat, unlit materials: the paint
-        // color on painted panels, mid-gray on the wheels and near-black for everything else.
-        let paint = paintHighlight ?? UIColor(white: 0.5, alpha: 1)
+        let paint = paintHighlight ?? UIColor(white: 0.45, alpha: 1)
         let wheelRoots = Self.activeMounts(of: scene).map { $0.socket + "/" + $0.child }
-        // The depth pre-pass keeps the translucent mirror's chassis from showing through its body.
         Self.applyReflectionMaterials(
             to: mirror,
             path: "",
-            sortGroup: ModelSortGroup(depthPass: .prePass),
+            sortGroup: floorSortGroup,
             paintPaths: Set(scene.manifest.paintSurfaces),
             wheelRoots: wheelRoots,
-            paint: UnlitMaterial.reflection(paint.withAlphaComponent(1), brightness: 0.55),
-            wheel: UnlitMaterial.reflection(UIColor(white: 0.55, alpha: 1), brightness: 1),
-            other: UnlitMaterial.reflection(UIColor(white: 0.07, alpha: 1), brightness: 1)
+            paint: Self.reflectionPBR(color: paint, brightness: 0.52, roughness: 0.34, metallic: 0.45),
+            wheel: Self.reflectionPBR(color: UIColor(white: 0.22, alpha: 1), brightness: 1, roughness: 0.5, metallic: 0.25),
+            other: Self.reflectionPBR(color: UIColor(white: 0.05, alpha: 1), brightness: 1, roughness: 0.65, metallic: 0.1)
         )
+        let groundY = frame.origin.y
         reflection.transform = Transform(
             scale: [1, -1, 1],
             rotation: simd_quatf(angle: 0, axis: [0, 1, 0]),
-            translation: [0, 2 * frame.origin.y, 0]
+            translation: [0, 2 * groundY, 0]
         )
         reflection.addChild(mirror)
 
-        // Like the Tesla app's satin floor: strongest at the tires, gone by the beltline. The bounds are
-        // in the reflection's local (unmirrored) space.
-        let ground = frame.origin.y
+        // Fade smoothly from the tires down toward the rocker panels so only the lower body
+        // and wheels reflect into the floor.
         let reach = max(frame.length, frame.width) * 0.75 + 1
+        let fadeHeight = frame.height * 0.48
         var clipping = ClippingComponent(bounds: BoundingBox(
-            min: [frame.origin.x - reach, ground - 0.05, frame.origin.z - reach],
-            max: [frame.origin.x + reach, ground + frame.height * 0.7, frame.origin.z + reach]
+            min: [frame.origin.x - reach, groundY - 0.04, frame.origin.z - reach],
+            max: [frame.origin.x + reach, groundY + fadeHeight, frame.origin.z + reach]
         ))
         var feather = ClippingComponent.FeatheredEdge(falloff: .linear)
-        feather.positiveEdgeInset = [0, frame.height * 0.7, 0]
+        feather.positiveEdgeInset = [0, fadeHeight, 0]
         clipping.featheredEdge = feather
         clipping.shouldClipSelf = true
         clipping.shouldClipChildren = true
@@ -784,35 +730,35 @@ final class VehicleStage {
         }
     }
 
-    /// How much of the mirrored car shows through the floor.
-    /// Light mode has no reflection: like the Tesla app's light theme, the car sits on a
-    /// soft neutral shadow, and a dark mirror on a pale page reads as a gray slab.
-    private var reflectionStrength: Float { isDarkAppearance ? 0.3 : 0 }
+    private var reflectionStrength: Float { isDarkAppearance ? 0.15 : 0 }
 
+    /// Ground contact shadow positioned just below the tires (`origin.y - 0.001`), sorted
+    /// directly above `reflection` (`order: 1`) so it cleanly anchors the car from every angle.
     private func buildFloorEffects(frame: VehicleFrame) {
-        let orientation = frame.orientation(heading: 0)
-
-        // The paint color spilling onto the showroom floor around the car.
-        let tint = paintHighlight ?? UIColor(white: 0.6, alpha: 1)
-        floorLight.components.set(ModelComponent(
-            mesh: .generatePlane(width: frame.width * 2.8, depth: frame.length * 1.55),
-            materials: [UnlitMaterial.stageSprite(
-                VehicleStageTextures.glow,
-                color: tint.withAlphaComponent(isDarkAppearance ? 0.26 : 0.05)
-            )]
-        ))
-        floorLight.position = frame.origin + frame.up * 0.001
-        floorLight.orientation = orientation
-
-        // Broad, soft occlusion under the body.
-        let shadowAlpha: CGFloat = isDarkAppearance ? 0.9 : 0.6
-        shadow.components.set(ModelComponent(
-            mesh: .generatePlane(width: frame.width + 0.45, depth: frame.length + 0.55),
-            materials: [UnlitMaterial.stageSprite(VehicleStageTextures.contactShadow, color: UIColor(white: 0, alpha: shadowAlpha))]
-        ))
-        shadow.position = frame.origin + frame.up * 0.003
-        shadow.orientation = orientation
-
+        let shadowAlpha: CGFloat = isDarkAppearance ? 0.92 : 0.56
+        let groundY = frame.origin.y - 0.001
+        if let baked = bakedShadow {
+            shadow.components.set(ModelComponent(
+                mesh: .generatePlane(width: baked.width, depth: baked.depth),
+                materials: [UnlitMaterial.stageSprite(
+                    baked.texture,
+                    color: UIColor(white: 0, alpha: shadowAlpha)
+                )]
+            ))
+            shadow.position = SIMD3(baked.center.x, groundY, baked.center.z)
+            shadow.orientation = simd_quatf(angle: 0, axis: [0, 1, 0])
+        } else {
+            shadow.components.set(ModelComponent(
+                mesh: .generatePlane(width: frame.width * 1.28, depth: frame.length * 1.16),
+                materials: [UnlitMaterial.stageSprite(
+                    VehicleStageTextures.contactShadow,
+                    color: UIColor(white: 0, alpha: shadowAlpha)
+                )]
+            ))
+            shadow.position = SIMD3(frame.origin.x, groundY, frame.origin.z)
+            shadow.orientation = frame.orientation(heading: 0)
+        }
+        shadow.components.set(ModelSortGroupComponent(group: floorSortGroup, order: 1))
     }
 }
 
@@ -875,7 +821,7 @@ private struct CameraPose {
         guard let fitDirection else { return transform }
         let tanVertical = tan(verticalFOV * .pi / 360)
         let tanHorizontal = tanVertical * max(aspect, 0.3)
-        let distance = max(fitRadius * 0.95 * fitMargin / tanHorizontal, fitRadius * 0.62 / tanVertical)
+        let distance = max(fitRadius * 0.67 * fitMargin / tanHorizontal, fitRadius * 0.44 / tanVertical)
         // Camera basis looking from the eye toward the pivot (cameras look down -Z).
         let back = simd_normalize(fitDirection)
         let side = simd_normalize(simd_cross([0, 1, 0], back))
@@ -1004,20 +950,31 @@ extension VehicleStage {
         return removed
     }
 
-    /// Replaces every material in the mirrored car with a flat reflection material. Faces
-    /// cull from the front because the negative scale reverses triangle winding.
+    private static func reflectionPBR(color: UIColor, brightness: CGFloat, roughness: Float, metallic: Float) -> PhysicallyBasedMaterial {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: r * brightness, green: g * brightness, blue: b * brightness, alpha: 1))
+        material.roughness = .init(floatLiteral: roughness)
+        material.metallic = .init(floatLiteral: metallic)
+        material.faceCulling = .front
+        return material
+    }
+
+    /// Replaces mirrored car materials with satin PBR reflection materials (front-face culled
+    /// for the inverted Y winding) inside a pre-pass sort group so internal geometry never shows through.
     fileprivate static func applyReflectionMaterials(
         to entity: Entity,
         path: String,
         sortGroup: ModelSortGroup,
         paintPaths: Set<String>,
         wheelRoots: [String],
-        paint: UnlitMaterial,
-        wheel: UnlitMaterial,
-        other: UnlitMaterial
+        paint: PhysicallyBasedMaterial,
+        wheel: PhysicallyBasedMaterial,
+        other: PhysicallyBasedMaterial
     ) {
         if var model = entity.components[ModelComponent.self] {
-            let material: UnlitMaterial
+            let material: PhysicallyBasedMaterial
             if paintPaths.contains(path) {
                 material = paint
             } else if wheelRoots.contains(where: { path.hasPrefix($0) }) {
@@ -1069,7 +1026,9 @@ extension VehicleStage {
         let wheelbase = simd_length(forward)
         forward = simd_normalize(forward)
         var origin = (frontCenter + rearCenter) / 2
-        origin.y = bounds.min.y.isFinite ? bounds.min.y : 0
+        // Tesla models rest directly on world y = 0; pin to 0 when visualBounds dips slightly
+        // from wheel-well or underbody geometry so the contact shadow never detaches from the tires.
+        origin.y = (bounds.min.y.isFinite && abs(bounds.min.y) > 0.15) ? bounds.min.y : 0
 
         // Light-beam cards and floor helpers inflate the visual bounds, so clamp the body
         // size to proportions of the wheelbase (every Tesla is 1.55–1.75 wheelbases long).
@@ -1178,7 +1137,7 @@ extension VehicleStage {
         func showroom(_ direction: SIMD3<Float>, margin: Float = 1, pivot: SIMD3<Float>? = nil) -> CameraPose {
             CameraPose(
                 transform: Transform(),
-                verticalFOV: 24,
+                verticalFOV: 22,
                 designAspect: 1.9,
                 pivot: pivot ?? showroomPivot,
                 fitDirection: simd_normalize(direction),
@@ -1187,17 +1146,18 @@ extension VehicleStage {
             )
         }
 
-        // Parked: the direction of Tesla's HOME camera, a front three-quarter view.
+        // Parked: match Tesla's own low eye-level HomeParked showroom angle (~9.5° front
+        // three-quarter, telephoto 22° FOV) so the car fills the stage dramatically with a
+        // crisp horizontal ground shadow and subtle floor reflection.
         let home = scene.parkedCamera().position(relativeTo: nil) - showroomPivot
         var homeFlat = SIMD3<Float>(home.x, 0, home.z)
         if simd_length(homeFlat) < 0.1 { homeFlat = frame.forward - frame.right }
         var poses: [PoseKind: CameraPose] = [
-            .parked: showroom(simd_normalize(simd_normalize(homeFlat) + frame.forward * 0.2) + frame.up * 0.13)
+            .parked: showroom(simd_normalize(simd_normalize(homeFlat) + frame.forward * 0.14) + frame.up * 0.17)
         ]
 
-        // Charging: like the Tesla app's charging screen, a rear three-quarter view from the
-        // port side, a little higher than parked and aimed between the car's center and the
-        // port so the rear quarter and the port fill the frame.
+        // Charging: rear three-quarter from the charge-port side at ~14° elevation so the
+        // rear quarter and port fill the frame cleanly.
         var portSide = -frame.right
         var chargingPivot = showroomPivot
         if let port = anchors[.chargePort] {
@@ -1205,11 +1165,11 @@ extension VehicleStage {
             portSide = lateral >= 0 ? frame.right : -frame.right
             var towardPort = port - showroomPivot
             towardPort.y = 0
-            chargingPivot = showroomPivot + towardPort * 0.32
+            chargingPivot = showroomPivot + towardPort * 0.30
         }
         poses[.charging] = showroom(
-            portSide * 0.8 - frame.forward * 0.78 + frame.up * 0.19,
-            margin: 0.92,
+            portSide * 0.78 - frame.forward * 0.76 + frame.up * 0.25,
+            margin: 0.88,
             pivot: chargingPivot
         )
         poses[.drive] = chasePose(frame: frame, behind: true)
@@ -1217,18 +1177,18 @@ extension VehicleStage {
         return poses
     }
 
-    /// The Full Self-Driving visualization's chase camera: high behind the car, looking
+    /// The Full Self-Driving visualization's chase camera: elevated behind the car, looking
     /// down the road so the lane lines and planned path recede ahead of it. In reverse the
     /// camera swings to the front and looks back along the path.
     fileprivate static func chasePose(frame: VehicleFrame, behind: Bool) -> CameraPose {
         let direction: SIMD3<Float> = behind ? frame.forward : -frame.forward
-        let eye = frame.origin - direction * (frame.length * 1.9) + frame.up * (frame.height * 2.3)
-        let target = frame.origin + direction * (frame.length * 1.25)
+        let eye = frame.origin - direction * (frame.length * 1.65) + frame.up * (frame.height * 1.95)
+        let target = frame.origin + direction * (frame.length * 1.15)
         let camera = PerspectiveCamera()
         camera.look(at: target, from: eye, relativeTo: nil)
         return CameraPose(
             transform: Transform(scale: .one, rotation: camera.orientation, translation: camera.position),
-            verticalFOV: 38,
+            verticalFOV: 34,
             designAspect: 1.9,
             pivot: frame.center
         )

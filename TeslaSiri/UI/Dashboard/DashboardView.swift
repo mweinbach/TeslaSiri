@@ -35,7 +35,7 @@ struct DashboardView: View {
         .observeDuoPosture()
         .background(AppScreenBackground())
         .navigationTitle(navigationTitle)
-        .navigationSubtitle(store.selectedVehicle?.latest?.heroStatusLine ?? "")
+        .navigationSubtitle(navigationSubtitle)
         .toolbarTitleDisplayMode(.inlineLarge)
         .toolbarTitleMenu {
             if store.vehicles.count > 1 {
@@ -61,6 +61,13 @@ struct DashboardView: View {
 
     private var navigationTitle: String {
         store.selectedVehicle?.name ?? "Vehicle"
+    }
+
+    private var navigationSubtitle: String {
+        if store.isWakingVehicle {
+            return "Waking vehicle…"
+        }
+        return store.selectedVehicle?.latest?.heroStatusLine ?? ""
     }
 
     @ToolbarContentBuilder
@@ -121,6 +128,7 @@ struct DashboardView: View {
                 Label("Refresh Vehicle", systemImage: "arrow.clockwise")
             }
         }
+        .accessibilityLabel(store.isWakingVehicle ? "Waking Vehicle" : "Refresh Vehicle")
         .disabled(!canRefreshFleet || store.isRefreshing)
     }
 
@@ -324,6 +332,9 @@ private struct DashboardShowroom: View {
                     activeControlAction: store.activeControlAction,
                     pendingControls: store.pendingControls,
                     controlMessage: store.vehicleControlMessage,
+                    controlMessageIsError: store.vehicleControlMessageIsError,
+                    isWaking: store.isWakingVehicle,
+                    isRefreshing: store.isRefreshing,
                     controlsEnabled: vehicle.allowsVehicleControls,
                     onCommand: onCommand
                 )

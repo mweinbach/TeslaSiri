@@ -161,7 +161,7 @@ struct VehicleBatteryCard: View {
 
     @ViewBuilder
     private var chargingDetails: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 8) {
             if let power = snapshot.chargerPowerKW, power > 0 {
                 detail(formattedNumber(power, fractionLength: 1, suffix: " kW"), caption: "Power")
             }
@@ -180,13 +180,19 @@ struct VehicleBatteryCard: View {
 
     private func detail(_ value: String, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
+            Text(caption)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
-            Text(caption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(AppTheme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -226,41 +232,48 @@ private struct BatteryLevelBar: View {
 
     private var fillStyle: Color {
         if isCharging { return .green }
-        return clampedLevel <= 0.2 ? .orange : .green
+        if clampedLevel <= 0.15 { return .red }
+        return clampedLevel <= 0.25 ? .orange : .green
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             GeometryReader { proxy in
-                let width = proxy.size.width
+                let width = max(proxy.size.width, 1)
+                let height = proxy.size.height
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(.quaternary)
+                        .fill(AppTheme.insetSurface)
 
                     Capsule()
                         .fill(fillStyle.gradient)
-                        .frame(width: max(proxy.size.height, width * clampedLevel))
+                        .frame(width: max(height, width * clampedLevel))
+                        .animation(.smooth(duration: 0.35), value: clampedLevel)
 
                     if let limit {
+                        let clampedLimit = max(0, min(limit, 1))
                         Capsule()
-                            .fill(.primary.opacity(0.55))
-                            .frame(width: 2.5, height: proxy.size.height + 8)
-                            .offset(x: width * max(0, min(limit, 1)) - 1.25)
+                            .fill(.primary.opacity(0.65))
+                            .frame(width: 2.5, height: height + 6)
+                            .offset(x: min(max(width * clampedLimit - 1.25, 0), width - 2.5))
                     }
                 }
             }
             .frame(height: 12)
 
             if let limit {
-                GeometryReader { proxy in
-                    let x = proxy.size.width * max(0, min(limit, 1))
-                    Text("Limit \(formattedNumber(limit * 100, fractionLength: 0, suffix: "%"))")
-                        .font(.caption2.weight(.medium))
+                HStack {
+                    Text("Charge limit \(formattedNumber(limit * 100, fractionLength: 0, suffix: "%"))")
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .fixedSize()
-                        .position(x: min(max(x, 32), proxy.size.width - 32), y: proxy.size.height / 2)
+                        .monospacedDigit()
+                    Spacer()
+                    if clampedLevel >= max(0, min(limit, 1)) - 0.01 {
+                        Text("At limit")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.green)
+                    }
                 }
-                .frame(height: 14)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -347,19 +360,18 @@ struct VehicleClimateCard: View {
     let units: String?
 
     private var isOn: Bool { snapshot.climateOn == true }
-    private var tempSuffix: String { units == "metric" ? "°C" : "°F" }
 
     var body: some View {
         DashboardCard("Climate", systemImage: isOn ? "fan.fill" : "fan", tint: isOn ? .blue : .secondary) {
             VStack(alignment: .leading, spacing: 4) {
                 MetricValueText(value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"))
-                Text("Inside")
-                    .font(.subheadline)
+                Text("Inside cabin")
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 12)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     if let outside = snapshot.outsideTemp {
                         Label(
                             "\(formattedNumber(outside, fractionLength: 0, suffix: "°")) outside",
@@ -367,7 +379,7 @@ struct VehicleClimateCard: View {
                         )
                         .foregroundStyle(.secondary)
                     }
-                    Label(statusText, systemImage: "power")
+                    Label(statusText, systemImage: isOn ? "fan.fill" : "power")
                         .foregroundStyle(isOn ? AnyShapeStyle(.blue) : AnyShapeStyle(.secondary))
                 }
                 .font(.footnote.weight(.medium))
@@ -378,12 +390,12 @@ struct VehicleClimateCard: View {
     }
 
     private var statusText: String {
-        guard let on = snapshot.climateOn else { return "Climate status unavailable" }
-        guard on else { return "Climate off" }
+        guard let on = snapshot.climateOn else { return "Unavailable" }
+        guard on else { return "Off" }
         if let target = snapshot.targetTemperature {
-            return "On · \(formattedNumber(target, fractionLength: 0, suffix: "°"))"
+            return "Set to \(formattedNumber(target, fractionLength: 0, suffix: "°"))"
         }
-        return "Climate on"
+        return "On"
     }
 }
 
@@ -395,18 +407,18 @@ struct VehicleSecurityCard: View {
     var body: some View {
         DashboardCard("Security", systemImage: "lock.shield", tint: isLocked ? .secondary : .orange) {
             VStack(alignment: .leading, spacing: 4) {
-                Image(systemName: snapshot.locked.map { $0 ? "lock.fill" : "lock.open.fill" } ?? "lock.shield")
-                    .font(.system(size: 30, weight: .semibold))
+                Text(snapshot.locked.map { $0 ? "Locked" : "Unlocked" } ?? "--")
+                    .font(.system(.title, design: .rounded, weight: .semibold))
                     .foregroundStyle(isLocked ? AnyShapeStyle(.primary) : AnyShapeStyle(.orange))
-                    .frame(height: 40, alignment: .bottomLeading)
-                    .accessibilityHidden(true)
-                Text(snapshot.locked.map { $0 ? "Locked" : "Unlocked" } ?? "Lock status unavailable")
-                    .font(.subheadline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text(isLocked ? "Doors secured" : (snapshot.locked == false ? "Doors openable" : "Status unavailable"))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 12)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     let summary = closureSummary
                     Label(summary.text, systemImage: summary.symbol)
                         .foregroundStyle(summary.hasOpenItem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
@@ -492,10 +504,11 @@ struct VehicleLocationCard: View {
                     .textSelection(.enabled)
             }
             .task(id: coordinateTaskID) {
-                resolvedAddress = nil
                 let address = await driveEndpointAddressGeocoder.address(latitude: latitude, longitude: longitude)
                 guard !Task.isCancelled else { return }
-                resolvedAddress = address
+                if let address {
+                    resolvedAddress = address
+                }
             }
         }
     }
@@ -533,26 +546,45 @@ private struct TrailingIconLabelStyle: LabelStyle {
 struct VehicleTiresCard: View {
     let tires: FleetTirePressures
 
+    private static let lowThresholdPSI = 38.0
+
+    private var hasLowTire: Bool {
+        [tires.frontLeftPSI, tires.frontRightPSI, tires.rearLeftPSI, tires.rearRightPSI]
+            .compactMap { $0 }
+            .contains { $0 < Self.lowThresholdPSI }
+    }
+
     var body: some View {
-        DashboardCard("Tire Pressure", systemImage: "tirepressure") {
-            if let measured = tires.measuredAtDate {
+        DashboardCard(
+            "Tire Pressure",
+            systemImage: hasLowTire ? "exclamationmark.tirepressure" : "tirepressure",
+            tint: hasLowTire ? .orange : .secondary
+        ) {
+            if hasLowTire {
+                StatusBadge("Low Tire", systemImage: "exclamationmark.triangle.fill", tint: .orange)
+            } else if let measured = tires.measuredAtDate {
                 RelativeTimeText(date: measured)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         } content: {
             HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 36) {
+                VStack(alignment: .leading, spacing: 32) {
                     tireReading(tires.frontLeftPSI, position: "Front left", alignment: .leading)
                     tireReading(tires.rearLeftPSI, position: "Rear left", alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                VehicleTopDownOutline()
-                    .frame(width: 64, height: 120)
-                    .accessibilityHidden(true)
+                VehicleTopDownOutline(
+                    lowFrontLeft: isLow(tires.frontLeftPSI),
+                    lowFrontRight: isLow(tires.frontRightPSI),
+                    lowRearLeft: isLow(tires.rearLeftPSI),
+                    lowRearRight: isLow(tires.rearRightPSI)
+                )
+                .frame(width: 68, height: 124)
+                .accessibilityHidden(true)
 
-                VStack(alignment: .trailing, spacing: 36) {
+                VStack(alignment: .trailing, spacing: 32) {
                     tireReading(tires.frontRightPSI, position: "Front right", alignment: .trailing)
                     tireReading(tires.rearRightPSI, position: "Rear right", alignment: .trailing)
                 }
@@ -562,58 +594,68 @@ struct VehicleTiresCard: View {
         }
     }
 
+    private func isLow(_ psi: Double?) -> Bool {
+        guard let psi else { return false }
+        return psi < Self.lowThresholdPSI
+    }
+
     private func tireReading(_ psi: Double?, position: String, alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 0) {
+        let low = isLow(psi)
+        return VStack(alignment: alignment, spacing: 1) {
             MetricValueText(
                 value: formattedNumber(psi, fractionLength: 1),
                 unit: "psi",
                 font: .system(.title2, design: .rounded, weight: .semibold),
                 unitFont: .caption.weight(.semibold)
             )
-            Text(position)
+            .foregroundStyle(low ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+            Text(low ? "\(position) · Low" : position)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(low ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(position) tire")
-        .accessibilityValue(formattedNumber(psi, fractionLength: 1, suffix: " psi"))
+        .accessibilityValue(formattedNumber(psi, fractionLength: 1, suffix: low ? " psi, low" : " psi"))
     }
 }
 
-/// Simple top-down car silhouette with four wheels, used beside tire readings.
+/// Top-down car silhouette with four wheel indicators beside tire readings.
 private struct VehicleTopDownOutline: View {
+    var lowFrontLeft: Bool = false
+    var lowFrontRight: Bool = false
+    var lowRearLeft: Bool = false
+    var lowRearRight: Bool = false
+
     var body: some View {
         ZStack {
-            ForEach(Array(Self.wheelOffsets.enumerated()), id: \.offset) { _, offset in
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(.secondary)
-                    .frame(width: 8, height: 22)
-                    .offset(offset)
-            }
+            wheel(offset: CGSize(width: -29, height: -34), isLow: lowFrontLeft)
+            wheel(offset: CGSize(width: 29, height: -34), isLow: lowFrontRight)
+            wheel(offset: CGSize(width: -29, height: 35), isLow: lowRearLeft)
+            wheel(offset: CGSize(width: 29, height: 35), isLow: lowRearRight)
 
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(AppTheme.insetSurface)
-                .strokeBorder(.tertiary, lineWidth: 1.5)
-                .frame(width: 54, height: 118)
+                .strokeBorder(AppTheme.hairline, lineWidth: 1.25)
+                .frame(width: 54, height: 120)
+
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.quaternary)
+                .frame(width: 38, height: 26)
+                .offset(y: -18)
 
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.quaternary)
-                .frame(width: 40, height: 24)
-                .offset(y: -20)
-
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.quaternary)
-                .frame(width: 38, height: 14)
-                .offset(y: 34)
+                .fill(.quaternary.opacity(0.8))
+                .frame(width: 36, height: 16)
+                .offset(y: 30)
         }
     }
 
-    private static let wheelOffsets: [CGSize] = [
-        CGSize(width: -29, height: -34),
-        CGSize(width: 29, height: -34),
-        CGSize(width: -29, height: 36),
-        CGSize(width: 29, height: 36)
-    ]
+    private func wheel(offset: CGSize, isLow: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+            .fill(isLow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            .frame(width: 8, height: 22)
+            .offset(offset)
+    }
 }
 
 // MARK: - Details

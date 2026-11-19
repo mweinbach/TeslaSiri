@@ -343,11 +343,14 @@ public struct ToggleSnippetMapStyleIntent: AppIntent {
         switch scope {
         case "drive": DriveRouteSnippetIntent.reload()
         case "charge": ChargeSessionSnippetIntent.reload()
-        case "vehicle": GetVehicleStatusIntent.reload()
+        case "vehicle":
+            GetVehicleStatusIntent.reload()
+            GetVehicleInfoIntent.reload()
         default:
             DriveRouteSnippetIntent.reload()
             ChargeSessionSnippetIntent.reload()
             GetVehicleStatusIntent.reload()
+            GetVehicleInfoIntent.reload()
         }
         return .result()
     }
@@ -533,6 +536,7 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
         SiriSnippetStateStore.shared.notifyChanged(.vehicleStatus(vin: resolved.vin))
         // App Intents re-performs the originating climate snippet after the tap.
         GetVehicleStatusIntent.reload()
+        GetVehicleInfoIntent.reload()
         return .result()
     }
 }

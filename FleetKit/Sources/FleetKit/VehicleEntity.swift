@@ -117,11 +117,15 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
                 commands.append(info.canAcceptNavigationRequests == true ? "Send a navigation destination" : "Send a navigation destination if supported")
             }
             additional = [
-                "Set Tesla Seat Heater: adjust heating by seat position where equipped",
+                "Set Car Temperature: set a target cabin temperature with an interactive card",
+                "Set Tesla Seat Climate: adjust heating by seat position (front or rear) where equipped",
                 usesTeslascope ? "Install Tesla Software Update: start an available update now" : "Install Tesla Software Update or Cancel Tesla Software Update when an update is available"
             ]
+            if info.canAcceptNavigationRequests != false {
+                additional.append(info.canAcceptNavigationRequests == true ? "Send Destination to Tesla: send a standalone navigation destination" : "Send Destination to Tesla: send a standalone navigation destination if supported")
+            }
             if !usesTeslascope, info.hasSeatCooling != false {
-                additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Heater: adjust front seat cooling" : "Set Tesla Seat Heater: adjust front seat cooling if equipped")
+                additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Climate: adjust front seat cooling" : "Set Tesla Seat Climate: adjust front seat cooling if equipped")
             }
         }
         if allowsCharging {

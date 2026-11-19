@@ -1,41 +1,40 @@
 ---
 name: prepare-trip
-description: Get the user's car or Tesla ready to leave, by checking range and tire pressure, warming or cooling the cabin, and sending the destination to the car's navigation. Use when the user asks to get my car ready, prep the car for a commute or road trip, warm up or cool down my car before leaving, or asks if my car is ready to drive somewhere. Not for a single command like only setting the temperature or only sending an address, and not for securing a parked car overnight.
+description: Get the user's car ready to head out by checking battery, range, tire pressure, and cabin temperature, preconditioning the cabin, adjusting charging if needed, and sending the destination to the car. Use when the user asks to get my car ready, prep for a commute or road trip, warm up or cool down before leaving, or asks whether the car is ready to drive somewhere. Not for a single quick action like only setting the temperature or only sending an address, and not for securing a parked car overnight.
 ---
 
-# Prepare a Trip
+# Prepare for a Trip
 
-## 1. Check readiness
+## 1. Check if the car is ready
 
-Use the Get Tesla Vehicle Info tool with the battery, range, charging, tire pressure, and climate topics. If the user only asks whether the car is ready, answer from those readings and stop.
+Start with one call to the Get Tesla Vehicle Info tool requesting battery, range, charging, tire pressure, and climate.
 
-For “my car,” omit the vehicle to use the default. If the user names a car, use that vehicle for the readings and all changes. Use the List Cars tool when you need to identify the car or answer a question about available controls. If the name is ambiguous, ask which car they mean. If it is unavailable, tell the user and stop.
+- Leave the vehicle empty for "my car." If the user names a car, keep every read and change on that same car (call the List Cars tool once if you need to identify it; ask if ambiguous; stop if unavailable).
+- If they're only asking whether the car is ready, answer from those readings and stop.
+- **Tires**: call out any tire below 38 PSI (most Teslas target around 42 PSI cold).
+- **Range**: if they mentioned a destination or distance, compare it with current range and flag it if they'd arrive with under ~20% left.
+  - Plugged in? Offer to bump the charge limit (90% for a long trip, 100% only if they ask) and start charging if they agree.
+  - Unplugged? Let them know they'll need to charge before or during the drive.
 
-- Tires: flag any tire under 38 PSI. Most Teslas recommend about 42 PSI cold.
-- Range: if the user named a destination or a distance, compare it with the range. If less than about 20% of range would be left at arrival, say so.
-  - If the car is plugged in, offer to raise the limit (90% for a long trip, 100% only if asked). Include the agreed limit and any requested start of charging with the other changes. The tool confirms the limit change before sending commands.
-  - If it's unplugged, tell the user they'll need to charge before or during the trip.
+## 2. Prep the car in one call
 
-## 2. Prepare the car
+Bundle the cabin settings, any agreed charging changes, and the destination into a single call to the Control Car tool. Setting a target temperature starts climate automatically. Pick sensible defaults from the conditions and what the user asked:
 
-Send the cabin settings, any requested charging changes, and the destination together with the Control Car tool. A target temperature starts HVAC. Choose the cabin settings from the weather and what the user said.
+- **Freezing, ice, frost, or snow**: ~22 °C, max defrost on, driver seat heat 3, steering wheel heater on.
+- **Hot cabin** (above ~29 °C / 85 °F): ~20 °C. If they specifically ask for seat cooling or rear seat heat, also call the Set Tesla Seat Climate tool for the same car.
+- **Smoke or poor air quality**: turn on Bioweapon Defense Mode.
+- **Everyday conditions**: 21 °C, or whatever temperature they asked for (convert Fahrenheit to Celsius and keep it between 15 and 28 °C).
 
-- Freezing outside, or the user mentions ice, frost, or snow: about 22 °C, max defrost on, driver seat heat 3, steering wheel heater on.
-- Hot cabin (above about 29 °C or 85 °F): about 20 °C. If the user explicitly asks for seat cooling, use the Set Tesla Seat Heater tool in cooling mode for the same car.
-- Otherwise: 21 °C, or the temperature the user asked for.
-- Smoke or poor air quality: turn on Bioweapon Defense Mode.
+When including a destination, pass the most complete address or place name you have (add the city if they only named a business).
 
-The user may say Fahrenheit. Convert to Celsius (°C = (°F − 32) × 5 ⁄ 9) and keep it between 15 and 28 °C.
+## 3. Give a quick pre-departure summary
 
-## 3. Send the destination
+Wrap up in a few clear lines: battery and range, what cabin or charging changes went through, any low tire, and the destination sent.
 
-Include the most complete address or place name in the same control request. If the user gave only a business name, include the city if you know it. If a command fails partway through, stop and report the accepted changes and the step the tool could not confirm. Leave the remaining steps pending until the user asks to continue.
-
-## 4. Report
-
-Summarize in a few lines: battery and range, cabin settings that were applied, any low tire, and the destination that was sent. If a command result’s Delivery State is Waking Vehicle, say the car was asleep and the request was sent to wake it rather than claiming climate is already running.
+- If the result's Delivery State is Waking Vehicle, say the car was asleep and the request was sent to wake it—don't say climate is already running.
+- If a command fails partway through, report what succeeded and the first unconfirmed step, then stop until the user asks to continue.
 
 ## Don't
 
-- Don't unlock the car or open the trunk or frunk unless the user asked.
-- Don't turn Dog Mode off.
+- Don't unlock the doors or open the trunk or frunk unless asked.
+- Don't turn off Dog Mode.

@@ -41,9 +41,9 @@ struct FleetSandboxDataClient: FleetDataLoading {
         return makePage(Self.demoCapabilities, requestID: "demo-capabilities")
     }
 
-    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges> {
+    func changes(since cursor: Int64, refresh: Bool) async throws -> FleetAPIPage<FleetSyncChanges> {
         guard sandbox.mode() == .demoVehicle else {
-            return try await liveClient.changes(since: cursor)
+            return try await liveClient.changes(since: cursor, refresh: refresh)
         }
         let state = sandbox.demoState()
         let vehicle = Self.makeVehicle(from: state)
@@ -57,9 +57,26 @@ struct FleetSandboxDataClient: FleetDataLoading {
 
     // MARK: - Live Snapshot & Vehicle Controls
 
-    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func wakeVehicle(vin: String) async throws {
+        let mode = sandbox.mode()
+        guard mode.interceptsWrites else {
+            try await liveClient.wakeVehicle(vin: vin)
+            return
+        }
+        if mode == .dryRun {
+            sandbox.recordSimulatedControl(
+                action: "wake",
+                vin: vin,
+                vehicleName: FleetKitLog.vin(vin),
+                params: [:],
+                source: "App"
+            )
+        }
+    }
+
+    func latestSnapshot(vin: String, includingTires: Bool, refresh: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
         guard sandbox.mode() == .demoVehicle else {
-            return try await liveClient.latestSnapshot(vin: vin, includingTires: includingTires)
+            return try await liveClient.latestSnapshot(vin: vin, includingTires: includingTires, refresh: refresh)
         }
         let state = sandbox.demoState()
         return makePage(Self.makeSnapshot(from: state), requestID: "demo-live")

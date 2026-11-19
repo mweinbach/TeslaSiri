@@ -13,8 +13,7 @@ public enum ChargePortAction: String, AppEnum, Sendable {
     ]
 }
 
-/// Starts charging a plugged-in Tesla vehicle.
-@AppIntent(.tool)
+/// Starts charging a plugged-in Tesla vehicle. Shortcuts intent; Siri AI uses Control Car.
 public struct StartChargingIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Start Tesla Charging"
     public static let description = IntentDescription(
@@ -64,8 +63,7 @@ public struct StartChargingIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Stops an active charging session on a Tesla vehicle after confirmation.
-@AppIntent(.tool)
+/// Stops an active charging session on a Tesla vehicle after confirmation. Shortcuts intent; Siri AI uses Control Car.
 public struct StopChargingIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Stop Tesla Charging"
     public static let description = IntentDescription(
@@ -116,8 +114,7 @@ public struct StopChargingIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Opens/unlocks or closes the motorized charge port door on a Tesla vehicle.
-@AppIntent(.tool)
+/// Opens/unlocks or closes the motorized charge port door on a Tesla vehicle. Shortcuts intent; Siri AI uses Control Car.
 public struct SetChargePortIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Control Tesla Charge Port"
     public static let description = IntentDescription(
@@ -186,8 +183,7 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Enables or disables Sentry Mode camera security monitoring on a Tesla vehicle.
-@AppIntent(.tool)
+/// Enables or disables Sentry Mode camera security monitoring on a Tesla vehicle. Shortcuts intent; Siri AI uses Control Car.
 public struct SetSentryModeIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Sentry Mode"
     public static let description = IntentDescription(
@@ -257,9 +253,7 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Composite Siri AI climate tool that accepts a synthesized `CabinClimateSettings`
-/// value so multi-setting cabin prep requests execute cleanly in one tool call.
-@AppIntent(.tool)
+/// Composite Shortcuts climate intent using `CabinClimateSettings`. Siri AI uses Control Car.
 public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Configure Tesla Cabin Climate"
     public static let description = IntentDescription(
@@ -545,9 +539,15 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
 
     public static var parameterSummary: some ParameterSummary {
         When(\.$vehicle, .hasAnyValue) {
-            Summary("Read release notes for \(\.$vehicle)")
+            Summary("Read release notes for \(\.$vehicle)") {
+                \.$version
+                \.$featureQuery
+            }
         } otherwise: {
-            Summary("Read release notes for my car")
+            Summary("Read release notes for my car") {
+                \.$version
+                \.$featureQuery
+            }
         }
     }
 
@@ -630,9 +630,7 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Closes all windows on a parked Tesla vehicle after confirmation. Kept as a separate
-/// reviewed intent per repository guidelines rather than changing `VentWindowsIntent`.
-@AppIntent(.tool)
+/// Closes all windows on a parked Tesla vehicle after confirmation. Shortcuts intent; Siri AI uses Control Car.
 public struct CloseWindowsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Close Tesla Windows"
     public static let description = IntentDescription(

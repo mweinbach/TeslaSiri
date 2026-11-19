@@ -98,7 +98,8 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
 public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Tesla Driving Stats"
     public static let description = IntentDescription(
-        "Computes and reads aloud Tesla driving and energy efficiency statistics for a chosen period (sinceLastCharge, today, last7Days, last30Days, or last90Days), including total completed drives, total miles, drive time, kWh consumed, average efficiency in Wh/mi and mi/kWh, Autopilot distance and percentage, top speed, and parked/phantom energy drain since the last charge."
+        "Summarizes road trips and driving efficiency: trip count, total miles, time behind the wheel, Wh/mi and mi/kWh efficiency, Autopilot distance, top speed, and parked energy drain.",
+        searchKeywords: ["driving stats", "efficiency", "Wh/mi", "miles driven", "Autopilot miles", "how much did I drive"]
     )
     public static let isDiscoverable = true
 
@@ -113,7 +114,7 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
 
     @Parameter(
         title: "Period",
-        description: "Time window to summarize: sinceLastCharge, today, last7Days (default), last30Days, or last90Days.",
+        description: "Time window to summarize: Since Last Charge, Today, Last 7 Days (default), Last 30 Days, or Last 90 Days.",
         default: .last7Days
     )
     public var period: StatsPeriod
@@ -196,7 +197,8 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
 public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Tesla Charging Stats"
     public static let description = IntentDescription(
-        "Computes and reads aloud Tesla charging statistics for a chosen period (sinceLastCharge, today, last7Days, last30Days, or last90Days), including total charging sessions, Supercharger vs AC/home session count, total kWh added, miles added, total charging cost, and average cost per kWh."
+        "Summarizes plug-in electricity totals and costs: Supercharger versus home AC sessions, kWh added, range gained, recorded spend, and average price per kWh.",
+        searchKeywords: ["charging stats", "charging cost", "how much did I spend charging", "Supercharger spending", "kWh added"]
     )
     public static let isDiscoverable = true
 
@@ -211,7 +213,7 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
 
     @Parameter(
         title: "Period",
-        description: "Time window to summarize: sinceLastCharge (summarizes the most recent charge), today, last7Days, last30Days (default), or last90Days.",
+        description: "Time window to summarize: Since Last Charge (summarizes the most recent charge), Today, Last 7 Days, Last 30 Days (default), or Last 90 Days.",
         default: .last30Days
     )
     public var period: StatsPeriod
@@ -328,9 +330,19 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
 
     public static var parameterSummary: some ParameterSummary {
         When(\.$vehicle, .hasAnyValue) {
-            Summary("Show \(\.$count) recent charges for \(\.$vehicle)")
+            Summary("Show \(\.$count) recent charges for \(\.$vehicle)") {
+                \.$locationQuery
+                \.$superchargersOnly
+                \.$startDate
+                \.$endDate
+            }
         } otherwise: {
-            Summary("Show \(\.$count) recent charges for my car")
+            Summary("Show \(\.$count) recent charges for my car") {
+                \.$locationQuery
+                \.$superchargersOnly
+                \.$startDate
+                \.$endDate
+            }
         }
     }
 
@@ -405,7 +417,8 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
 public struct GetBatteryHealthIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Tesla Battery Health & Stats"
     public static let description = IntentDescription(
-        "Reads a Tesla vehicle's battery health percentage, estimated degradation percentage, current usable capacity vs original new-pack capacity in kWh, estimated full-charge range at 100%, current energy remaining in kWh, lifetime energy used, phantom drain percentage, and pack voltage and module temperatures."
+        "Reads a Tesla vehicle's battery health percentage, estimated degradation percentage, current usable capacity vs original new-pack capacity in kWh, estimated full-charge range at 100%, current energy remaining in kWh, lifetime energy used, phantom drain percentage, and pack voltage and module temperatures.",
+        searchKeywords: ["battery health", "battery degradation", "battery capacity", "phantom drain", "pack health", "full charge range"]
     )
     public static let isDiscoverable = true
 

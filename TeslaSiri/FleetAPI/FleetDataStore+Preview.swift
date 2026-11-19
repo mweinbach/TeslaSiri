@@ -166,11 +166,13 @@ private struct PreviewFleetDataClient: FleetDataLoading {
         )
     }
 
-    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges> {
+    func changes(since cursor: Int64, refresh: Bool) async throws -> FleetAPIPage<FleetSyncChanges> {
         makePage(data: FleetSyncChanges(), cursor: cursor + 1, requestID: "preview")
     }
 
-    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+    func wakeVehicle(vin: String) async throws {}
+
+    func latestSnapshot(vin: String, includingTires: Bool, refresh: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
         makePage(data: FleetLatestSnapshot(vin: vin), requestID: "preview-live")
     }
 

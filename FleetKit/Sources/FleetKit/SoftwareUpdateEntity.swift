@@ -15,7 +15,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
 
-    @Property(title: "Vehicle Name", description: "The owner's name for the car this update is for.")
+    @Property(title: "Vehicle Name", description: "The owner's name for the car this update is for.", indexingKey: \.title)
     public var vehicleName: String
 
     @Property(title: "Current Version", description: "The software version installed on the car now, such as 2026.32.5.")
@@ -181,13 +181,13 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
     @Property(title: "Software Version", description: "The software version these release notes describe, such as 2026.38.1.")
     public var version: String?
 
-    @Property(title: "Feature Title", description: "The name of the new feature or change, such as \"Dashcam Viewer\".")
+    @Property(title: "Feature Title", description: "The name of the new feature or change, such as \"Dashcam Viewer\".", indexingKey: \.title)
     public var title: String
 
     @Property(title: "Feature Subtitle", description: "A short category or tagline for the feature.")
     public var subtitle: String?
 
-    @Property(title: "Release Note Details", description: "Tesla's full description of the feature, in plain text.")
+    @Property(title: "Release Note Details", description: "Tesla's full description of the feature, in plain text.", indexingKey: \.textContent)
     public var details: String?
 
     public init(info: FleetReleaseNoteInfo, vin: String, version: String?) {

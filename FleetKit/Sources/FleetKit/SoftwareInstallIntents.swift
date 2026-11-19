@@ -29,10 +29,22 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
     public init() {}
 
     public static var parameterSummary: some ParameterSummary {
-        When(\.$vehicle, .hasAnyValue) {
-            Summary("Update \(\.$vehicle) at \(\.$startTime)")
+        When(\.$startTime, .hasAnyValue) {
+            When(\.$vehicle, .hasAnyValue) {
+                Summary("Update \(\.$vehicle) at \(\.$startTime)")
+            } otherwise: {
+                Summary("Update my car at \(\.$startTime)")
+            }
         } otherwise: {
-            Summary("Update my car at \(\.$startTime)")
+            When(\.$vehicle, .hasAnyValue) {
+                Summary("Update \(\.$vehicle)") {
+                    \.$startTime
+                }
+            } otherwise: {
+                Summary("Update my car") {
+                    \.$startTime
+                }
+            }
         }
     }
 
@@ -113,7 +125,8 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
 public struct CancelSoftwareUpdateIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Cancel Tesla Software Update"
     public static let description = IntentDescription(
-        "Cancels a scheduled software update on the user's Tesla before it starts installing, after asking the user to confirm. It can't stop an install that's already running."
+        "Cancels a scheduled software update on the user's Tesla before it starts installing, after asking the user to confirm. It can't stop an install that's already running.",
+        searchKeywords: ["cancel update", "stop update", "abort software update", "cancel firmware update"]
     )
     public static let isDiscoverable = true
 

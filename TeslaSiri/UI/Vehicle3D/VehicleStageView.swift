@@ -2,8 +2,7 @@ import RealityKit
 import SwiftUI
 
 /// Hosts a `VehicleStage` in a transparent RealityView so the car sits directly on the
-/// page. Horizontal drags turn the car (vertical drags still scroll the page), pinch zooms,
-/// double-tap recenters, and the stage glides back to its pose after a few seconds.
+/// page at its authored showroom, charging, or driving angle.
 /// While the model loads, or if it can't, `placeholder` shows instead.
 ///
 /// One loaded stage is shared by every screen that shows the same car. Whichever screen
@@ -28,7 +27,6 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var host = VehicleStageHost()
     @State private var isOnscreen = false
-    @State private var lastMagnification: CGFloat = 1
     @State private var viewSize: CGSize = .zero
 
     private var isHost: Bool { stage.hostID == ObjectIdentifier(host) }
@@ -45,29 +43,17 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
                 .animation(.smooth(duration: 0.6), value: isShowingStage)
 
             if isOnscreen && isHost && isRendering {
-                VehicleStageCanvas(stage: stage, host: host, isVisible: isShowingStage)
+                VehicleStageCanvas(
+                    stage: stage,
+                    host: host,
+                    isVisible: isShowingStage,
+                    fadesEdges: state.mode == .driving
+                )
             }
 
             if isShowingStage && isRendering {
                 VehicleHotspotLayer(stage: stage, viewWidth: viewSize.width, onHotspot: onHotspot, hotspotLabel: hotspotLabel)
             }
-        }
-        .contentShape(.rect)
-        .gesture(VehicleOrbitPanGesture(stage: stage))
-        .simultaneousGesture(
-            MagnifyGesture()
-                .onChanged { value in
-                    stage.beginInteraction()
-                    stage.zoom(by: value.magnification / max(lastMagnification, 0.01))
-                    lastMagnification = value.magnification
-                }
-                .onEnded { _ in
-                    lastMagnification = 1
-                    stage.endInteraction()
-                }
-        )
-        .onTapGesture(count: 2) {
-            stage.resetView()
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             viewSize = size
@@ -117,24 +103,36 @@ struct VehicleStageView<Placeholder: View, Overlay: View>: View {
         stage.apply(state)
     }
 
-    /// The paint color as soft studio light behind and around the car.
+    /// Soft horizontal studio horizon glow behind the car, matching Tesla's parked showroom.
     @ViewBuilder
     private var ambientLight: some View {
         if let paint = stage.paintHighlight {
-            let strength = colorScheme == .dark ? 0.34 : 0.14
-            EllipticalGradient(
-                stops: [
-                    .init(color: Color(uiColor: paint).opacity(strength), location: 0),
-                    .init(color: Color(uiColor: paint).opacity(strength * 0.45), location: 0.45),
-                    .init(color: .clear, location: 1)
-                ],
-                center: UnitPoint(x: 0.5, y: 0.55),
-                startRadiusFraction: 0,
-                endRadiusFraction: 0.5
-            )
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            let colorInfo = Self.backdropTint(for: paint, dark: colorScheme == .dark)
+            if colorInfo.opacity > 0 {
+                EllipticalGradient(
+                    stops: [
+                        .init(color: colorInfo.color.opacity(colorInfo.opacity), location: 0),
+                        .init(color: colorInfo.color.opacity(colorInfo.opacity * 0.45), location: 0.44),
+                        .init(color: .clear, location: 1)
+                    ],
+                    center: UnitPoint(x: 0.5, y: 0.55),
+                    startRadiusFraction: 0,
+                    endRadiusFraction: 0.56
+                )
+                .scaleEffect(x: 1.25, y: 0.88)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
         }
+    }
+
+    private static func backdropTint(for paint: UIColor, dark: Bool) -> (color: Color, opacity: Double) {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        paint.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        if saturation > 0.16 {
+            return (Color(uiColor: paint), dark ? 0.20 : 0.06)
+        }
+        return dark ? (Color(red: 0.72, green: 0.76, blue: 0.84), 0.11) : (.clear, 0)
     }
 }
 
@@ -146,71 +144,119 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
     @ViewBuilder var hotspotLabel: (VehicleHotspot) -> Overlay
 
     var body: some View {
-        let placements = stage.hotspots
+        let layout = resolvedCallouts(for: stage.hotspots)
         ZStack(alignment: .topLeading) {
             Canvas { context, _ in
-                for placement in placements {
-                    guard let leader = callout(for: placement).leader else { continue }
+                for item in layout {
+                    guard let leader = item.leader else { continue }
                     var path = Path()
                     path.move(to: leader.start)
                     path.addLine(to: leader.end)
-                    context.stroke(path, with: .color(.primary.opacity(0.5)), lineWidth: 1)
+                    context.stroke(
+                        path,
+                        with: .linearGradient(
+                            Gradient(colors: [.primary.opacity(0.24), .primary.opacity(0.05)]),
+                            startPoint: leader.start,
+                            endPoint: leader.end
+                        ),
+                        lineWidth: 0.75
+                    )
                 }
             }
             .allowsHitTesting(false)
 
-            ForEach(placements) { placement in
-                let geometry = callout(for: placement)
+            ForEach(layout) { item in
                 Button {
-                    onHotspot?(placement.hotspot)
+                    onHotspot?(item.hotspot)
                 } label: {
-                    hotspotLabel(placement.hotspot)
-                        .frame(width: geometry.labelWidth, alignment: geometry.alignment)
+                    hotspotLabel(item.hotspot)
+                        .fixedSize()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .disabled(onHotspot == nil)
-                .position(geometry.label)
+                .position(item.labelCenter)
                 .transition(.opacity)
             }
         }
-        .animation(.smooth, value: placements.map(\.hotspot))
+        .animation(.smooth(duration: 0.22), value: layout.map(\.hotspot))
     }
 
-    private struct Callout {
-        var label: CGPoint
-        var labelWidth: CGFloat?
-        var alignment: Alignment = .center
+    private struct ResolvedCallout: Identifiable {
+        let hotspot: VehicleHotspot
+        var labelCenter: CGPoint
+        let estimatedWidth: CGFloat
+        let anchor: CGPoint
         var leader: (start: CGPoint, end: CGPoint)?
+
+        var id: VehicleHotspot { hotspot }
     }
 
-    private func callout(for placement: VehicleHotspotPlacement) -> Callout {
+    /// Arranges callout pills along a clean top rail above the car and spreads out any
+    /// horizontal collisions (such as Trunk and Charge Port near each other) so pills never overlap.
+    private func resolvedCallouts(for placements: [VehicleHotspotPlacement]) -> [ResolvedCallout] {
+        guard !placements.isEmpty else { return [] }
         let width = max(viewWidth, 1)
-        let anchor = placement.point
-        switch placement.hotspot {
-        case .lock:
-            let top: CGFloat = 18
-            let leader = anchor.y > top + 34
-                ? (start: CGPoint(x: anchor.x, y: top + 18), end: CGPoint(x: anchor.x, y: anchor.y - 4))
-                : nil
-            return Callout(label: CGPoint(x: anchor.x, y: top), labelWidth: 44, leader: leader)
-        case .frunk, .trunk, .chargePort:
-            // Above the car, with a hairline leader down to the part. Text sits on whichever
-            // side of the leader has room.
-            let x = min(max(anchor.x, 10), width - 10)
-            let labelWidth: CGFloat = placement.hotspot == .chargePort ? 96 : 64
-            let textOnRight = x + labelWidth + 8 < width
-            let labelY: CGFloat = 52
-            let leader = anchor.y > 44
-                ? (start: CGPoint(x: x, y: 32), end: CGPoint(x: x, y: anchor.y - 2))
-                : nil
-            return Callout(
-                label: CGPoint(x: textOnRight ? x + 6 + labelWidth / 2 : x - 6 - labelWidth / 2, y: labelY),
-                labelWidth: labelWidth,
-                alignment: textOnRight ? .leading : .trailing,
-                leader: leader
+        let horizontalInset: CGFloat = 14
+        let gap: CGFloat = 8
+
+        var items = placements.map { placement -> ResolvedCallout in
+            let estimatedWidth: CGFloat = switch placement.hotspot {
+            case .lock: 32
+            case .frunk: 46
+            case .trunk: 46
+            case .chargePort: 54
+            }
+            let rowY: CGFloat = placement.hotspot == .lock ? 18 : 24
+            let clampedX = min(max(placement.point.x, horizontalInset + estimatedWidth / 2), width - horizontalInset - estimatedWidth / 2)
+            return ResolvedCallout(
+                hotspot: placement.hotspot,
+                labelCenter: CGPoint(x: clampedX, y: rowY),
+                estimatedWidth: estimatedWidth,
+                anchor: placement.point,
+                leader: nil
             )
         }
+
+        // Sort left-to-right and push overlapping pills apart cleanly.
+        items.sort { $0.labelCenter.x < $1.labelCenter.x }
+        for index in 1..<items.count {
+            let minCenter = items[index - 1].labelCenter.x
+                + items[index - 1].estimatedWidth / 2
+                + gap
+                + items[index].estimatedWidth / 2
+            if items[index].labelCenter.x < minCenter {
+                items[index].labelCenter.x = minCenter
+            }
+        }
+        // Pull back inside the right margin if separation overflowed right.
+        if let last = items.last {
+            let maxRight = width - horizontalInset - last.estimatedWidth / 2
+            if last.labelCenter.x > maxRight {
+                let overflow = last.labelCenter.x - maxRight
+                for index in items.indices {
+                    items[index].labelCenter.x = max(
+                        horizontalInset + items[index].estimatedWidth / 2,
+                        items[index].labelCenter.x - overflow
+                    )
+                }
+            }
+        }
+
+        for index in items.indices {
+            let center = items[index].labelCenter
+            let anchor = items[index].anchor
+            let startY = center.y + 16
+            if anchor.y > startY + 10 {
+                items[index].leader = (
+                    start: CGPoint(x: center.x, y: startY),
+                    end: CGPoint(x: anchor.x, y: anchor.y - 3)
+                )
+            }
+        }
+        return items
     }
 }
 
@@ -220,6 +266,7 @@ private struct VehicleStageCanvas: View {
     let stage: VehicleStage
     let host: VehicleStageHost
     let isVisible: Bool
+    var fadesEdges: Bool = false
 
     @State private var surface = VehicleStageSurface()
 
@@ -234,28 +281,35 @@ private struct VehicleStageCanvas: View {
             let camera = PerspectiveCamera()
             anchor.addChild(camera)
             content.add(anchor)
-            surface.subscription?.cancel()
-            surface.anchor = anchor
-            surface.camera = camera
-            host.surface = surface
+            let currentSurface = surface
+            currentSurface.subscription?.cancel()
+            currentSurface.anchor = anchor
+            currentSurface.camera = camera
+            host.surface = currentSurface
             stage.mount(for: host)
-            surface.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak surface] event in
+            currentSurface.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak currentSurface] event in
                 let deltaTime = event.deltaTime
                 // The stage publishes SwiftUI state, so every frame step runs on the main actor.
                 if Thread.isMainThread {
                     MainActor.assumeIsolated {
-                        guard let surface, host.surface === surface, stage.hostID == ObjectIdentifier(host) else { return }
+                        guard let currentSurface, host.surface === currentSurface, stage.hostID == ObjectIdentifier(host) else { return }
                         stage.tick(deltaTime)
                     }
                 } else {
                     Task { @MainActor in
-                        guard let surface, host.surface === surface, stage.hostID == ObjectIdentifier(host) else { return }
+                        guard let currentSurface, host.surface === currentSurface, stage.hostID == ObjectIdentifier(host) else { return }
                         stage.tick(deltaTime)
                     }
                 }
             }
         }
-        .mask { VehicleStageEdgeFade() }
+        .mask {
+            if fadesEdges {
+                VehicleStageEdgeFade()
+            } else {
+                Color.black
+            }
+        }
         .opacity(isVisible ? 1 : 0)
         .animation(.smooth(duration: 0.6), value: isVisible)
         .accessibilityHidden(true)
@@ -306,56 +360,6 @@ private struct VehicleStageEdgeFade: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-        }
-    }
-}
-
-/// A pan that only begins when the drag is mostly horizontal, so it never steals
-/// vertical scrolling from the surrounding scroll view.
-struct VehicleOrbitPanGesture: UIGestureRecognizerRepresentable {
-    let stage: VehicleStage
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var lastTranslation: CGFloat = 0
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
-            var motion = pan.velocity(in: pan.view)
-            if motion == .zero { motion = pan.translation(in: pan.view) }
-            guard motion != .zero else { return false }
-            return abs(motion.x) > abs(motion.y) * 1.2
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-        ) -> Bool {
-            otherGestureRecognizer is UIPinchGestureRecognizer
-        }
-    }
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
-        Coordinator()
-    }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.maximumNumberOfTouches = 1
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        let translation = recognizer.translation(in: recognizer.view).x
-        switch recognizer.state {
-        case .began:
-            context.coordinator.lastTranslation = translation
-            stage.beginInteraction()
-        case .changed:
-            stage.orbit(by: translation - context.coordinator.lastTranslation)
-            context.coordinator.lastTranslation = translation
-        default:
-            stage.endInteraction()
         }
     }
 }

@@ -4,7 +4,7 @@ import Foundation
 // Convenience controls from the Fleet controls registry: `flash_lights`,
 // `honk_horn`, and `navigation_request`. All run immediately.
 
-@AppIntent(.tool)
+/// Shortcuts intent. Siri AI uses the Control Car tool.
 public struct FlashLightsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Flash Tesla Lights"
     public static let description = IntentDescription(
@@ -53,7 +53,7 @@ public struct FlashLightsIntent: AppIntent, PredictableIntent {
     }
 }
 
-@AppIntent(.tool)
+/// Shortcuts and snippet button intent. Siri AI uses the Control Car tool.
 public struct HonkHornIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Honk Tesla Horn"
     public static let description = IntentDescription(
@@ -106,7 +106,7 @@ public struct HonkHornIntent: AppIntent, PredictableIntent {
 public struct SendNavigationIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Send Destination to Tesla"
     public static let description = IntentDescription(
-        "Shares a destination to the user's Tesla so its built-in touchscreen navigation has the route ready when they get in the car. Accepts a street address, a place or business name with its city, a map link, or latitude and longitude. Doesn't open Maps or start navigation on this device.",
+        "Sends a street address, place name with city, map link, or coordinates to the car's touchscreen navigation. Doesn't open Maps on this device. Use for standalone navigation; use Control Car when combining a destination with climate or other vehicle changes.",
         searchKeywords: ["navigate", "directions", "send address", "route", "take me to", "drive to"]
     )
     public static let isDiscoverable = true

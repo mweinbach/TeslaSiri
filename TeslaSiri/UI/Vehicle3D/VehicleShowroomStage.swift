@@ -40,8 +40,7 @@ struct VehicleShowroomStage: View {
     var body: some View {
         let state = stageState
         stageView(for: state)
-        // Taller than the static artwork so the callouts have room above the car.
-        .aspectRatio(stageAspectRatio * 0.78, contentMode: .fit)
+        .aspectRatio(stageAspectRatio * 0.86, contentMode: .fit)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topLeading) {
             if state.mode == .driving {
@@ -131,8 +130,7 @@ struct VehicleShowroomStage: View {
     }
 }
 
-/// Tesla-style callout: an action over a part name ("Open" / "Frunk"), the lock state over
-/// the roof, or the bolt beside the charge port. Plain text on the scene, no chrome.
+/// Chromeless Tesla-style callout floating quietly above the car with a hairline leader.
 struct VehicleHotspotLabel: View {
     let hotspot: VehicleHotspot
     let snapshot: FleetLatestSnapshot
@@ -140,7 +138,6 @@ struct VehicleHotspotLabel: View {
 
     var body: some View {
         content
-            .padding(.vertical, 4)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityTitle)
     }
@@ -149,31 +146,27 @@ struct VehicleHotspotLabel: View {
     private var content: some View {
         switch hotspot {
         case .lock:
-            Image(systemName: snapshot.locked == false ? "lock.open.fill" : "lock.fill")
-                .font(.title2)
-                .foregroundStyle(snapshot.locked == false ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            let unlocked = snapshot.locked == false
+            Image(systemName: unlocked ? "lock.open.fill" : "lock.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(unlocked ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 .contentTransition(.symbolEffect(.replace))
+                .frame(width: 28, height: 28)
         case .chargePort:
             VehicleChargeBadge(snapshot: snapshot)
         case .frunk, .trunk:
-            VStack(alignment: .leading, spacing: 0) {
-                Text(action)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            let isOpen = hotspot == .frunk
+                ? snapshot.closures?.frontTrunkOpen == true
+                : snapshot.closures?.rearTrunkOpen == true
+            VStack(spacing: 1) {
+                Text(isOpen ? (hotspot == .frunk ? "Open" : "Close") : "Open")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(isOpen ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 Text(hotspot == .frunk ? "Frunk" : "Trunk")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isOpen ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary.opacity(0.85)))
             }
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
-        }
-    }
-
-    private var action: String {
-        switch hotspot {
-        case .frunk: snapshot.closures?.frontTrunkOpen == true ? "Opened" : "Open"
-        case .trunk: snapshot.closures?.rearTrunkOpen == true ? "Close" : "Open"
-        default: ""
         }
     }
 
@@ -207,24 +200,36 @@ struct VehicleChargeBadge: View {
     private var isPortOpen: Bool { snapshot.chargePortDoorOpen == true }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             disc
 
             if isCharging {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(formattedNumber(snapshot.batteryLevel, fractionLength: 0, suffix: "%"))
-                        .font(.subheadline.weight(.semibold))
+                        .font(.caption.weight(.bold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     if let remaining {
                         Text(remaining)
-                            .font(.caption)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                 }
                 .lineLimit(1)
                 .fixedSize()
+                .padding(.trailing, 4)
+            }
+        }
+        .padding(isCharging ? 4 : 0)
+        .background {
+            if isCharging {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 0.75)
+                    }
+                    .shadow(color: .black.opacity(0.14), radius: 5, y: 2)
             }
         }
     }

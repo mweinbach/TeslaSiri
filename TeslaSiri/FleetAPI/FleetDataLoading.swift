@@ -6,11 +6,12 @@ protocol FleetDataLoading {
 
     func bootstrap() async throws -> FleetAPIPage<FleetBootstrap>
     func capabilities() async throws -> FleetAPIPage<FleetCapabilities>
-    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges>
+    func changes(since cursor: Int64, refresh: Bool) async throws -> FleetAPIPage<FleetSyncChanges>
 
     // MARK: - Live Snapshot & Vehicle Controls
 
-    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot>
+    func wakeVehicle(vin: String) async throws
+    func latestSnapshot(vin: String, includingTires: Bool, refresh: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot>
     func runControl(
         action: String,
         vin: String,
@@ -62,6 +63,16 @@ protocol FleetDataLoading {
         fields: [String]
     ) async throws -> FleetAPIPage<[FleetTelemetrySeriesPoint]>
     func rawVehicleDataExport(vin: String) async throws -> FleetRawDataExport
+}
+
+extension FleetDataLoading {
+    func changes(since cursor: Int64) async throws -> FleetAPIPage<FleetSyncChanges> {
+        try await changes(since: cursor, refresh: false)
+    }
+
+    func latestSnapshot(vin: String, includingTires: Bool) async throws -> FleetAPIPage<FleetLatestSnapshot> {
+        try await latestSnapshot(vin: vin, includingTires: includingTires, refresh: false)
+    }
 }
 
 extension FleetAPIClient: FleetDataLoading {}
