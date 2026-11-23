@@ -9,6 +9,7 @@ import AppIntents
 public struct SearchFleetIntent: ShowInAppSearchResultsIntent {
     public static let title: LocalizedStringResource = "Search Wattie"
     public static let searchScopes: [StringSearchScope] = [.general]
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Search")
     public var criteria: StringSearchCriteria

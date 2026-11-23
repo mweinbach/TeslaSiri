@@ -285,7 +285,7 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
 public struct SetChargingAmpsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Tesla Charging Amps"
     public static let description = IntentDescription(
-        "Sets the maximum current the car draws while AC charging, in amps, to charge more slowly or share a circuit. It doesn't change the charge limit; use the Set Tesla Charge Limit tool for that. Doesn't affect Supercharging.",
+        "Sets the maximum current the car draws while AC charging, in amps, to charge more slowly or share a circuit. It doesn't change the charge limit; use Set Tesla Charge Limit (or Control Car) for that. Doesn't affect Supercharging.",
         searchKeywords: ["charge speed", "charging current", "amperage", "slow charge"]
     )
     public static let isDiscoverable = true

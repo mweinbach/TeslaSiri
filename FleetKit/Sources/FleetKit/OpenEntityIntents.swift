@@ -6,6 +6,7 @@ import AppIntents
 @AppIntent(schema: .system.open)
 public struct OpenVehicleIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Vehicle"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Vehicle")
     public var target: VehicleEntity
@@ -20,6 +21,7 @@ public struct OpenVehicleIntent: OpenIntent {
 @AppIntent(schema: .system.open)
 public struct OpenVehicleStatusIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Vehicle Status"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Vehicle Status")
     public var target: VehicleStatusEntity
@@ -34,6 +36,7 @@ public struct OpenVehicleStatusIntent: OpenIntent {
 @AppIntent(schema: .system.open)
 public struct OpenDriveIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Drive"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Drive")
     public var target: DriveEntity
@@ -48,6 +51,7 @@ public struct OpenDriveIntent: OpenIntent {
 @AppIntent(schema: .system.open)
 public struct OpenSoftwareUpdateIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Software Update"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Software Update")
     public var target: SoftwareUpdateEntity
@@ -62,6 +66,7 @@ public struct OpenSoftwareUpdateIntent: OpenIntent {
 @AppIntent(schema: .system.open)
 public struct OpenReleaseNoteIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Release Note"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Release Note")
     public var target: ReleaseNoteEntity
@@ -76,6 +81,7 @@ public struct OpenReleaseNoteIntent: OpenIntent {
 @AppIntent(schema: .system.open)
 public struct OpenChargeSessionIntent: OpenIntent {
     public static let title: LocalizedStringResource = "Open Charging Session"
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Charging Session")
     public var target: ChargeSessionEntity

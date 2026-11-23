@@ -1,6 +1,9 @@
+import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import Foundation
 import Testing
+import UniformTypeIdentifiers
 @testable import FleetKit
 
 struct FleetEntityIndexingTests {
@@ -194,5 +197,119 @@ struct FleetEntityIndexingTests {
         #expect(driveAttributes.contentDescription?.contains(shortenedVIN) == true)
         #expect(driveAttributes.keywords?.contains(vin) == false)
         #expect(driveAttributes.keywords?.contains(shortenedVIN) == true)
+    }
+
+    @Test(arguments: ["Roadrunner", "2026.44.1", "software update", "unmatched"])
+    func `software update query matches vehicle name, version, and generic terms`(query: String) async throws {
+        let stateWithUpdate = """
+        {"display_name":"Roadrunner","vehicle_state":{"car_version":"2026.2.1 abc","software_update":{"status":"available","version":"2026.44.1","download_perc":100}}}
+        """
+        try await withIsolatedFleetService { request in
+            switch request.url?.path {
+            case "/vehicles": (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+            case "/VIN-1/state": (200, Data(stateWithUpdate.utf8))
+            case "/VIN-2/state": (200, Data(FleetKitFixtures.tessieStateJSON.utf8))
+            default: (404, Data())
+            }
+        } body: { _ in
+            let matches = try await SoftwareUpdateEntityQuery().entities(matching: query)
+            switch query {
+            case "Roadrunner", "2026.44.1":
+                #expect(matches.map(\.vin) == ["VIN-1"])
+            case "software update":
+                #expect(Set(matches.map(\.vin)) == ["VIN-1", "VIN-2"])
+            default:
+                #expect(matches.isEmpty)
+            }
+        }
+    }
+
+    @Test func `indexed entities export plain-text transferable summaries without exposing full VIN`() async throws {
+        let vin = "5YJ3E1EA7KF000316"
+        let vehicle = VehicleEntity(id: vin, name: "Roadrunner", model: "Model Y", color: "Pearl White")
+        let snapshot = FleetSnapshotInfo(vin: vin, batteryLevel: 78, batteryRangeMiles: 245, locked: true, insideTemp: 70, temperatureInFahrenheit: true)
+        let status = VehicleStatusEntity(snapshot: snapshot, vehicleName: "Roadrunner", locationAddress: "Cupertino, CA")
+        let drive = DriveEntity(info: try FleetKitFixtures.decode(FleetDriveInfo.self, from: FleetKitFixtures.driveJSON.replacingOccurrences(of: "VIN-1", with: vin)))
+        let charge = ChargeSessionEntity(info: FleetChargeInfo(
+            sessionID: "\(vin):901",
+            vin: vin,
+            startedAt: 1_710_003_600_000,
+            endedAt: 1_710_005_400_000,
+            location: "Kettleman City Supercharger",
+            isSupercharger: true,
+            energyAddedKWH: 44,
+            milesAdded: 180,
+            startingBatteryPercent: 15,
+            endingBatteryPercent: 75,
+            cost: 18.4
+        ))
+        let software = SoftwareUpdateEntity(
+            info: try FleetKitFixtures.decode(FleetSoftwareInfo.self, from: FleetKitFixtures.softwareJSON),
+            vin: vin,
+            vehicleName: "Roadrunner"
+        )
+        let noteInfo = try #require(try FleetKitFixtures.decode(FleetSoftwareInfo.self, from: FleetKitFixtures.softwareJSON).releaseNotes.first)
+        let releaseNote = ReleaseNoteEntity(info: noteInfo, vin: vin, version: "2026.8.4")
+
+        let exportedTexts = try await [
+            String(decoding: try await vehicle.exported(as: .plainText), as: UTF8.self),
+            String(decoding: try await status.exported(as: .plainText), as: UTF8.self),
+            String(decoding: try await drive.exported(as: .plainText), as: UTF8.self),
+            String(decoding: try await charge.exported(as: .plainText), as: UTF8.self),
+            String(decoding: try await software.exported(as: .plainText), as: UTF8.self),
+            String(decoding: try await releaseNote.exported(as: .plainText), as: UTF8.self)
+        ]
+
+        #expect(exportedTexts[0] == "Roadrunner (Model Y · Pearl White)")
+        #expect(exportedTexts[1].contains("Roadrunner"))
+        #expect(exportedTexts[1].contains("Battery 78%"))
+        #expect(exportedTexts[2].contains("12.3 mi"))
+        #expect(exportedTexts[3].contains("Kettleman City Supercharger"))
+        #expect(exportedTexts[4].contains("2026.8.4"))
+        #expect(exportedTexts[5].contains("Better routing"))
+        for text in exportedTexts {
+            #expect(!text.contains(vin))
+        }
+    }
+
+    @Test func `security-sensitive intents require authentication while everyday warm-up and lock stay lock-screen friendly`() {
+        // Physical access, security disablement, and firmware install require authentication.
+        #expect(UnlockVehicleIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(OpenTrunkIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(OpenFrunkIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(SetChargePortIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(SetSentryModeIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(InstallSoftwareUpdateIntent.authenticationPolicy == .requiresAuthentication)
+
+        // Everyday climate/lock commands and non-GPS vehicle status remain usable while locked.
+        #expect(ControlCarIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(StartClimateIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(LockVehicleIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(VehicleStatusEntity.authenticationPolicy == .alwaysAllowed)
+    }
+
+    @Test func `foreground open and in-app search intents target the main app process`() {
+        #expect(SearchFleetIntent.allowedExecutionTargets == .main)
+        #expect(OpenVehicleIntent.allowedExecutionTargets == .main)
+        #expect(OpenVehicleStatusIntent.allowedExecutionTargets == .main)
+        #expect(OpenDriveIntent.allowedExecutionTargets == .main)
+        #expect(OpenSoftwareUpdateIntent.allowedExecutionTargets == .main)
+        #expect(OpenReleaseNoteIntent.allowedExecutionTargets == .main)
+        #expect(OpenChargeSessionIntent.allowedExecutionTargets == .main)
+    }
+
+    @Test func `user-facing fleet entities provide card snippets`() {
+        func assertSnippetRepresentable<E: SnippetRepresentableEntity>(_ type: E.Type) {
+            _ = E.snippet
+        }
+        assertSnippetRepresentable(VehicleEntity.self)
+        assertSnippetRepresentable(VehicleStatusEntity.self)
+        assertSnippetRepresentable(DriveEntity.self)
+        assertSnippetRepresentable(ChargeSessionEntity.self)
+        assertSnippetRepresentable(SoftwareUpdateEntity.self)
+        assertSnippetRepresentable(ReleaseNoteEntity.self)
+        assertSnippetRepresentable(DrivingStatsEntity.self)
+        assertSnippetRepresentable(ChargingStatsEntity.self)
+        assertSnippetRepresentable(BatteryHealthEntity.self)
     }
 }

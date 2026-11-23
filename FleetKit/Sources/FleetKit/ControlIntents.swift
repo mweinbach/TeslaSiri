@@ -65,6 +65,7 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
         searchKeywords: ["unlock my car", "unlock car", "unlock doors", "unlock vehicle", "unlock Tesla"]
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",
@@ -112,7 +113,7 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
 public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Start Car Climate"
     public static let description = IntentDescription(
-        "Warms up, cools down, or preconditions the user's car or Tesla by starting cabin HVAC at its current setpoint. Use for requests like \"warm up my car\", \"cool down my car\", or \"warm up my Tesla\". Use Set Car Temperature for a target temperature, or Configure Tesla Cabin Climate for multi-setting prep.",
+        "Warms up, cools down, or preconditions the user's car or Tesla by starting cabin HVAC at its current setpoint. Use for requests like \"warm up my car\", \"cool down my car\", or \"warm up my Tesla\". Use Set Car Temperature for a target temperature, or Control Car for multi-setting prep.",
         searchKeywords: [
             "warm up", "warm up my car", "cool down", "cool down my car",
             "heat my car", "cool my car", "precondition", "precondition my car",
@@ -195,7 +196,7 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
 public struct VentWindowsIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Vent Tesla Windows"
     public static let description = IntentDescription(
-        "Lowers all four of the car's windows a few centimeters to let hot air out of a parked Tesla. To roll the car's windows back up, use the Close Tesla Windows tool.",
+        "Lowers all four of the car's windows a few centimeters to let hot air out of a parked Tesla. To roll the car's windows back up, use Close Tesla Windows (or Control Car).",
         searchKeywords: ["crack the windows", "vent", "let air out"]
     )
     public static let isDiscoverable = true
@@ -286,6 +287,7 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
         searchKeywords: ["trunk", "frunk", "front trunk", "rear trunk", "liftgate", "hatch", "boot", "hood"]
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",
@@ -362,13 +364,14 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
 }
 
 /// Kept so saved shortcuts that open the frunk keep working. Not a Siri tool:
-/// Siri uses Open Tesla Trunk or Frunk with the Frunk option.
+/// Siri AI uses Control Car; Shortcuts and App Shortcuts use Open Tesla Trunk or Frunk.
 public struct OpenFrunkIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Open Tesla Frunk"
     public static let description = IntentDescription(
         "Opens the frunk, the front storage compartment under the hood, after asking the user to confirm. The frunk can't be closed remotely."
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",

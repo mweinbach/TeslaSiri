@@ -11,7 +11,7 @@ import Foundation
 public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Turn Off Tesla Climate"
     public static let description = IntentDescription(
-        "Turns off cabin heating and air conditioning in the user's car (or Tesla), such as after preconditioning. Doesn't affect charging. Use the Stop Tesla Charging tool to end a charging session.",
+        "Turns off cabin heating and air conditioning in the user's car (or Tesla), such as after preconditioning. Doesn't affect charging. Use Stop Tesla Charging (or Control Car) to end a charging session.",
         searchKeywords: ["turn off AC", "turn off heat", "stop preconditioning", "stop car climate", "turn off car climate"]
     )
     public static let isDiscoverable = true
@@ -91,10 +91,10 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
 public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Car Temperature"
     public static let description = IntentDescription(
-        "Starts cabin climate and sets the target temperature in the user's car (15°C–28°C / 59°F–82.4°F), showing an interactive temperature card. Use for standalone temperature requests like \"set my car to 72\"; use Control Car when combining temperature with locks, defrost, seat heat, or other controls.",
+        "Starts cabin climate and sets a specific target temperature (15°C–28°C / 59°F–82.4°F), showing an interactive temperature card. Use only when the user names a temperature like \"set my car to 72\". For \"warm up my car\", \"cool down my car\", or multi-control requests, use Control Car instead.",
         searchKeywords: [
-            "warm up", "warm up my car", "cool down", "cool down my car",
-            "set temperature", "set car temperature", "heat car", "cool car", "AC", "air conditioning"
+            "set temperature", "set car temperature", "cabin temperature",
+            "warm car to", "cool car to", "heat car to", "AC", "air conditioning"
         ]
     )
     public static let isDiscoverable = true

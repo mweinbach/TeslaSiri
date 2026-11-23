@@ -8,6 +8,7 @@ struct TeslaSiriApp: App {
     @State private var isSwitchingProvider = false
 
     init() {
+        TeslaSiriShortcuts.updateAppShortcutParameters()
         BatteryReminderManager.shared.registerBackgroundTask()
         if CommandLine.arguments.contains("--verify-demo-siri") {
             FleetSandboxStore.shared.setMode(.demoVehicle)

@@ -10,6 +10,7 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
         searchKeywords: ["update my car", "install update", "firmware", "schedule update"]
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",

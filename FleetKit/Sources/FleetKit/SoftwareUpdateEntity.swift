@@ -1,10 +1,14 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import Foundation
 
 /// The software-update status for a vehicle, indexed in Spotlight.
 public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiable {
-    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Software Update")
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(
+        name: "Software Update",
+        synonyms: ["Car Software Update", "Tesla Software Update", "Firmware Update"]
+    )
     public static let defaultQuery = SoftwareUpdateEntityQuery()
 
     /// "software:<VIN>" — namespaced so it can't collide with other VIN-keyed
@@ -130,7 +134,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
     }
 }
 
-public struct SoftwareUpdateEntityQuery: EntityQuery, IndexedEntityQuery {
+public struct SoftwareUpdateEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
     public init() {}
 
     public func entities(for identifiers: [SoftwareUpdateEntity.ID]) async throws -> [SoftwareUpdateEntity] {
@@ -153,6 +157,38 @@ public struct SoftwareUpdateEntityQuery: EntityQuery, IndexedEntityQuery {
         return [SoftwareUpdateEntity(info: info, vin: vehicle.vin, vehicleName: vehicle.name)]
     }
 
+    public func entities(matching string: String) async throws -> [SoftwareUpdateEntity] {
+        let service = FleetIntentService.make()
+        let selectedVIN = FleetSharedTokenStore.shared.selectedVIN()
+        var vehicles = try await service.vehicles()
+        if let index = vehicles.firstIndex(where: { $0.vin == selectedVIN }), index != vehicles.startIndex {
+            let selected = vehicles.remove(at: index)
+            vehicles.insert(selected, at: 0)
+        }
+
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let namedMatches = trimmed.isEmpty ? [] : vehicles.filter { $0.name.localizedStandardContains(trimmed) }
+        if !namedMatches.isEmpty {
+            vehicles = namedMatches
+        }
+
+        let genericTerms = ["software", "update", "firmware", "version", "car", "vehicle", "tesla"]
+        let isGeneric = trimmed.isEmpty || genericTerms.contains(where: { trimmed.contains($0) })
+
+        var results: [SoftwareUpdateEntity] = []
+        for vehicle in vehicles {
+            let info = try await service.software(vin: vehicle.vin)
+            let entity = SoftwareUpdateEntity(info: info, vin: vehicle.vin, vehicleName: vehicle.name)
+            if isGeneric || !namedMatches.isEmpty
+                || (entity.currentVersion?.localizedStandardContains(trimmed) == true)
+                || (entity.availableVersion?.localizedStandardContains(trimmed) == true)
+                || (entity.status?.localizedStandardContains(trimmed) == true) {
+                results.append(entity)
+            }
+        }
+        return results
+    }
+
     public func reindexEntities(for identifiers: [SoftwareUpdateEntity.ID], indexDescription: CSSearchableIndexDescription) async throws {
         try await FleetSpotlightIndexer.donate(entities(for: identifiers))
     }
@@ -165,6 +201,12 @@ public struct SoftwareUpdateEntityQuery: EntityQuery, IndexedEntityQuery {
             all.append(SoftwareUpdateEntity(info: info, vin: vehicle.vin, vehicleName: vehicle.name))
         }
         try await FleetSpotlightIndexer.donate(all)
+    }
+}
+
+extension SoftwareUpdateEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.spokenStatus)
     }
 }
 
@@ -303,6 +345,21 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
         let cutoff = normalized.index(normalized.startIndex, offsetBy: maxCharacters)
         let slice = String(normalized[..<cutoff]).trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(slice)…"
+    }
+}
+
+extension ReleaseNoteEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.transferSummary)
+    }
+
+    /// Human-readable release note text for sharing with other apps (never exposes the VIN).
+    public var transferSummary: String {
+        let prefix = version.map { "Version \($0) — " } ?? ""
+        if let details, !details.isEmpty {
+            return "\(prefix)\(title): \(details)"
+        }
+        return "\(prefix)\(spokenItemSummary)"
     }
 }
 

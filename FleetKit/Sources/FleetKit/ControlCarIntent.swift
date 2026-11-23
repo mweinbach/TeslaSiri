@@ -15,7 +15,7 @@ public enum CarWindowAction: String, AppEnum {
 public struct CarControlSettings: TransientAppEntity {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Car Control Settings")
 
-    @Property(title: "Climate Power", description: "True to start HVAC, false to turn it off. A cabin temperature also starts HVAC.")
+    @Property(title: "Climate Power", description: "True to warm up, cool down, precondition, or start cabin climate; false to turn off heat or AC. A cabin temperature also starts HVAC.")
     public var climateOn: Bool?
     @Property(title: "Cabin Settings", description: "The requested temperature in Celsius, defrost, front seat heaters, steering wheel heat, Dog Mode, or air filtration. Omit any unchanged settings.")
     public var cabin: CabinClimateSettings?
@@ -53,7 +53,7 @@ public struct CarControlSettings: TransientAppEntity {
 public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
-        "Applies one or more changes to a Tesla in one call: locks, climate, defrost, front seat heat, steering wheel, Dog Mode, Bioweapon Defense, Sentry Mode, charging, charge limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for the default car; software updates and seat cooling have dedicated tools.",
+        "Applies one or more Tesla controls in one call: warm up, cool down, precondition, or stop climate, defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locks, Sentry, charging, limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for default car; seat cooling and software updates have dedicated tools.",
         searchKeywords: [
             "control my car", "lock my car", "unlock my car", "warm up my car", "cool down my car",
             "precondition", "turn off climate", "defrost", "dog mode", "bioweapon defense",
@@ -62,8 +62,15 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
             "flash lights", "honk horn", "steering wheel heater", "prepare my Tesla"
         ]
     )
+    public static let isDiscoverable = true
 
-    @Parameter(title: "Vehicle", description: "The car to change. Omit for the selected or default car; pass a vehicle from List Cars if the user specifies another one.", optionsProvider: SelectedVehicleOptionsProvider())
+    @Parameter(
+        title: "Vehicle",
+        description: "The car to change. Omit for the selected or default car; pass a vehicle from List Cars if the user specifies another one.",
+        requestValueDialog: IntentDialog("Which vehicle?"),
+        requestDisambiguationDialog: IntentDialog("Which vehicle?"),
+        optionsProvider: SelectedVehicleOptionsProvider()
+    )
     public var vehicle: VehicleEntity?
     @Parameter(title: "Changes", description: "Only the controls explicitly requested for this car. A temperature starts HVAC once even when climate power is also on.")
     public var changes: CarControlSettings

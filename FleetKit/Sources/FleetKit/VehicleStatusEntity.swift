@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import Foundation
 
 /// A point-in-time, human-readable status snapshot for a vehicle. Conforms to
@@ -11,6 +12,7 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         synonyms: ["Car Status", "My Car Status", "Tesla Status"]
     )
     public static let defaultQuery = VehicleStatusEntityQuery()
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
 
     /// "status:<VIN>" — one current-status entity per vehicle. Namespaced so it
     /// can't collide with other VIN-keyed entity types in the shared Spotlight
@@ -108,13 +110,25 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     @Property(title: "Speed", description: "Current speed in miles per hour. Empty or 0 when parked.")
     public var speedMPH: Double?
 
-    @Property(title: "Location", description: "Street address or place name near the car's last reported position, when known.")
+    @Property(
+        title: "Location",
+        description: "Street address or place name near the car's last reported position, when known.",
+        authenticationPolicy: .requiresAuthentication
+    )
     public var locationAddress: String?
 
-    @Property(title: "Latitude", description: "Latitude of the car's last reported position, in decimal degrees.")
+    @Property(
+        title: "Latitude",
+        description: "Latitude of the car's last reported position, in decimal degrees.",
+        authenticationPolicy: .requiresAuthentication
+    )
     public var latitude: Double?
 
-    @Property(title: "Longitude", description: "Longitude of the car's last reported position, in decimal degrees.")
+    @Property(
+        title: "Longitude",
+        description: "Longitude of the car's last reported position, in decimal degrees.",
+        authenticationPolicy: .requiresAuthentication
+    )
     public var longitude: Double?
 
     @Property(title: "Front Left Tire", description: "Front left tire pressure in PSI, such as 42.")
@@ -308,6 +322,28 @@ public struct VehicleStatusEntityQuery: EntityQuery, EntityStringQuery, IndexedE
 
     public func reindexAllEntities(indexDescription: CSSearchableIndexDescription) async throws {
         try await FleetSpotlightIndexer.donate(suggestedEntities())
+    }
+}
+
+extension VehicleStatusEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.transferSummary)
+    }
+
+    /// Human-readable status summary for sharing with other apps (never exposes the VIN).
+    public var transferSummary: String {
+        var parts = ["\(vehicleName): \(statusSummary)"]
+        if let batteryRangeMiles {
+            parts.append("Range \(Int(batteryRangeMiles.rounded())) mi")
+        }
+        let unit = temperatureUnit ?? "°"
+        if let insideTemp {
+            parts.append("Cabin \(Int(insideTemp.rounded()))\(unit)")
+        }
+        if let locationAddress, !locationAddress.isEmpty {
+            parts.append("Location: \(locationAddress)")
+        }
+        return parts.joined(separator: " • ")
     }
 }
 

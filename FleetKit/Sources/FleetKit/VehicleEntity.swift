@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import OSLog
 
 /// A Tesla on the account, used as the optional vehicle parameter on
@@ -197,6 +198,18 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
 
     public func reindexAllEntities(indexDescription: CSSearchableIndexDescription) async throws {
         try await FleetSpotlightIndexer.donate(allEntities())
+    }
+}
+
+extension VehicleEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.transferSummary)
+    }
+
+    /// Human-readable vehicle summary for sharing with other apps (never exposes the VIN).
+    public var transferSummary: String {
+        let details = [model, color].compactMap { $0 }.joined(separator: " · ")
+        return details.isEmpty ? "\(name) (Tesla)" : "\(name) (\(details))"
     }
 }
 

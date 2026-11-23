@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import OSLog
 import Foundation
 
@@ -431,6 +432,12 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             parts.append("for \(formattedCost)")
         }
         return parts.joined(separator: " ") + "."
+    }
+}
+
+extension ChargeSessionEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: { $0.spokenSummary() })
     }
 }
 

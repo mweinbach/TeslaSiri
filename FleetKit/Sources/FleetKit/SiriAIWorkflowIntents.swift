@@ -67,7 +67,7 @@ public struct StartChargingIntent: AppIntent, PredictableIntent {
 public struct StopChargingIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Stop Tesla Charging"
     public static let description = IntentDescription(
-        "Ends the battery charging session that's running on a plugged-in Tesla, after asking the user to confirm, so the cable can be unplugged or charging can wait. Doesn't affect climate. To turn off heating or air conditioning, use the Turn Off Tesla Climate tool.",
+        "Ends the battery charging session that's running on a plugged-in Tesla, after asking the user to confirm, so the cable can be unplugged or charging can wait. Doesn't affect climate. To turn off heating or air conditioning, use Turn Off Tesla Climate (or Control Car).",
         searchKeywords: ["stop charging", "end charge", "pause charging"]
     )
     public static let isDiscoverable = true
@@ -121,6 +121,7 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
         "Opens (and unlocks) or closes the motorized charge port door on a Tesla vehicle. Opening the charge port asks for user confirmation."
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",
@@ -190,6 +191,7 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
         "Turns Sentry Mode exterior camera security monitoring on or off on a Tesla vehicle. Turning Sentry Mode off prompts the user for confirmation."
     )
     public static let isDiscoverable = true
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(
         title: "Vehicle",

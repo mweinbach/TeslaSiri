@@ -1,5 +1,6 @@
 import AppIntents
 import CoreSpotlight
+import CoreTransferable
 import Foundation
 import OSLog
 
@@ -255,6 +256,12 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
             FleetKitLog.vin(vin), startAddress, endAddress, tag
         ].compactMap { $0 }
         return attributes
+    }
+}
+
+extension DriveEntity: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: { $0.spokenSummary() })
     }
 }
 

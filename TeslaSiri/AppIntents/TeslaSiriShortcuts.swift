@@ -14,6 +14,8 @@ nonisolated struct TeslaSiriShortcuts: AppShortcutsProvider {
             intent: GetVehicleStatusIntent(),
             phrases: [
                 "Check my car in \(.applicationName)",
+                "How's my car in \(.applicationName)",
+                "Check my car battery in \(.applicationName)",
                 "Check \(\.$vehicle) in \(.applicationName)",
                 "Show \(.applicationName) status for \(\.$vehicle)"
             ],
@@ -41,12 +43,16 @@ nonisolated struct TeslaSiriShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StartClimateIntent(),
             phrases: [
-                "Start climate in \(\.$vehicle) with \(.applicationName)",
-                "Precondition my car with \(.applicationName)",
-                "Warm up \(\.$vehicle) with \(.applicationName)",
                 "Warm up my car with \(.applicationName)",
+                "Warm up \(\.$vehicle) with \(.applicationName)",
+                "Heat up my car with \(.applicationName)",
+                "Cool down my car with \(.applicationName)",
                 "Cool down \(\.$vehicle) with \(.applicationName)",
-                "Cool down my car with \(.applicationName)"
+                "Precondition my car with \(.applicationName)",
+                "Precondition \(\.$vehicle) with \(.applicationName)",
+                "Start climate in my car with \(.applicationName)",
+                "Start climate in \(\.$vehicle) with \(.applicationName)",
+                "Turn on climate in my car with \(.applicationName)"
             ],
             shortTitle: "Start Climate",
             systemImageName: "fan.fill"
@@ -55,7 +61,10 @@ nonisolated struct TeslaSiriShortcuts: AppShortcutsProvider {
             intent: StopClimateIntent(),
             phrases: [
                 "Stop climate in \(\.$vehicle) with \(.applicationName)",
-                "Stop climate in my car with \(.applicationName)"
+                "Stop climate in my car with \(.applicationName)",
+                "Turn off climate in \(\.$vehicle) with \(.applicationName)",
+                "Turn off climate in my car with \(.applicationName)",
+                "Turn off my car AC with \(.applicationName)"
             ],
             shortTitle: "Stop Climate",
             systemImageName: "fan.slash.fill"
