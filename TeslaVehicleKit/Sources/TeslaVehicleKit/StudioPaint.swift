@@ -31,7 +31,7 @@ import RealityKit
             let image=CGImage(width:512,height:1,bitsPerComponent:8,bitsPerPixel:32,bytesPerRow:2048,
                 space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:.init(rawValue:CGImageAlphaInfo.noneSkipLast.rawValue),
                 provider:CGDataProvider(data:Data(data) as CFData)!,decode:nil,shouldInterpolate:true,intent:.defaultIntent)!
-            return try TextureResource.generate(from:image,options:.init(semantic:.color))
+            return try TextureResource(image: image, options: .init(semantic: .color))
         }
         return try (texture(spec),texture(diff))
     }

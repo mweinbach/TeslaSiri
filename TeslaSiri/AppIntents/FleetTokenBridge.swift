@@ -23,11 +23,16 @@ enum FleetTokenBridge {
             try shared.save(accessToken: token, for: store.provider)
             hasLiveToken = true
             logger.notice("Mirrored access token to shared keychain")
-        } catch {
+        } catch FleetAPIError.missingAccessToken {
             guard revision == shared.sessionRevision, !Task.isCancelled else { return false }
             try? shared.clearAccessToken(for: store.provider)
             hasLiveToken = false
-            logger.warning("No valid session — cleared shared access token (\(error.localizedDescription, privacy: .public))")
+            logger.warning("No access token stored — cleared shared access token")
+        } catch {
+            // Do not clear the shared token on transient or locked-keychain errors
+            // (e.g. errSecInteractionNotAllowed when woken in the background while locked).
+            logger.warning("Skipped access token sync — leaving shared token intact (\(error.localizedDescription, privacy: .public))")
+            return false
         }
 
         if !hasLiveToken || store.loadState == .loaded || store.selectedVehicle != nil {

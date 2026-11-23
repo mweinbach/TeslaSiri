@@ -154,12 +154,23 @@ struct AppRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                refreshSandboxSnapshot()
+                refreshDiagnostics()
+            }
             configureFleetPolling(for: newPhase)
             if newPhase == .active {
                 Task { await FleetTokenBridge.sync(store: store) }
-                refreshSandboxSnapshot()
-                if (diagnostics.isSignedIn || sandboxMode == .demoVehicle), !store.vehicles.isEmpty {
-                    Task { await store.refresh() }
+                if diagnostics.isSignedIn || sandboxMode == .demoVehicle {
+                    if store.vehicles.isEmpty {
+                        Task {
+                            await store.loadInitialDataIfNeeded()
+                            guard isCurrentSession(), !Task.isCancelled else { return }
+                            FleetTokenBridge.syncSelectedVehicle(store: store)
+                        }
+                    } else {
+                        Task { await store.refresh() }
+                    }
                 }
             }
         }

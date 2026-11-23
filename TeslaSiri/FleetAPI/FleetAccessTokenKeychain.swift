@@ -17,6 +17,7 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
     func loadAccessToken() throws -> String {
         var query = baseQuery
         query[kSecReturnData as String] = true
+        query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
@@ -31,11 +32,21 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
         }
 
         guard
-            let data = item as? Data,
+            let attributes = item as? [String: Any],
+            let data = attributes[kSecValueData as String] as? Data,
             let token = String(data: data, encoding: .utf8),
             !token.isEmpty
         else {
             throw FleetAPIError.missingAccessToken
+        }
+
+        // Upgrade legacy WhenUnlocked items so background launches after first unlock can read them.
+        let accessible = attributes[kSecAttrAccessible as String] as? String
+        if accessible != (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String) {
+            _ = SecItemUpdate(
+                baseQuery as CFDictionary,
+                [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly] as CFDictionary
+            )
         }
 
         return token
@@ -45,7 +56,7 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
         let data = Data(token.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
         let updateStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
