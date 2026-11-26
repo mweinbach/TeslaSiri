@@ -6,7 +6,8 @@ struct DriveSessionPicker: View {
     let drives: [FleetDriveSession]
     let endpointAddresses: [String: DriveEndpointAddresses]
     @Binding var selectedSessionID: String
-    var title: String = "Recent drives"
+    var title: String = String(localized: "Recent drives", comment: "Section header for recent drives")
+    var units: String? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -31,9 +32,15 @@ struct DriveSessionPicker: View {
                             Text("Session")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(selectedDrive.map(menuLabel(for:)) ?? "Select a drive")
-                                .font(.headline)
-                                .multilineTextAlignment(.leading)
+                            Group {
+                                if let selectedDrive {
+                                    Text(menuLabel(for: selectedDrive))
+                                } else {
+                                    Text("Select a drive")
+                                }
+                            }
+                            .font(.headline)
+                            .multilineTextAlignment(.leading)
                         }
                         Spacer()
                         Image(systemName: "chevron.up.chevron.down")
@@ -55,7 +62,8 @@ struct DriveSessionPicker: View {
                                     DriveSessionChip(
                                         drive: drive,
                                         endpointAddresses: endpointAddresses[drive.sessionID],
-                                        isSelected: selectedSessionID == drive.sessionID
+                                        isSelected: selectedSessionID == drive.sessionID,
+                                        units: units
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -93,6 +101,7 @@ struct DriveSessionChip: View {
     let drive: FleetDriveSession
     let endpointAddresses: DriveEndpointAddresses?
     let isSelected: Bool
+    var units: String? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.duoPosture) private var duoPosture
@@ -131,7 +140,7 @@ struct DriveSessionChip: View {
             Spacer(minLength: 4)
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi"))
+                Text(formattedDistance(miles: drive.distanceMiles, units: units, fractionLength: 1))
                     .font(.headline.weight(.semibold))
                     .monospacedDigit()
 

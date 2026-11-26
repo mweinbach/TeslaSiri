@@ -71,64 +71,162 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
 
     public var headline: String {
         if updateAvailable, let availableVersion {
-            return "Update available: \(availableVersion)"
+            return String(localized: "Update available: \(availableVersion)", bundle: .module, comment: "Headline when a software update version is available")
         }
         if let currentVersion {
-            return "Up to date: \(currentVersion)"
+            return String(localized: "Up to date: \(currentVersion)", bundle: .module, comment: "Headline when vehicle software is up to date")
         }
-        return "Software"
+        return String(localized: "Software", bundle: .module, comment: "Fallback headline for vehicle software status")
     }
 
     public var detailText: String {
-        if let installPercent { return "Installing • \(installPercent)%" }
-        if let downloadPercent { return "Downloading • \(downloadPercent)%" }
-        if let status, !status.isEmpty { return status.capitalized }
-        return currentVersion.map { "Current \($0)" } ?? ""
+        if let installPercent {
+            let pct = FleetKitFormatting.percent(installPercent)
+            return String(localized: "Installing • \(pct)", bundle: .module, comment: "Software update detail text while installing with progress percentage")
+        }
+        if let downloadPercent {
+            let pct = FleetKitFormatting.percent(downloadPercent)
+            return String(localized: "Downloading • \(pct)", bundle: .module, comment: "Software update detail text while downloading with progress percentage")
+        }
+        if let status, !status.isEmpty {
+            switch status.lowercased() {
+            case "available":
+                return String(localized: "Available", bundle: .module, comment: "Software update status: ready to install")
+            case "scheduled":
+                return String(localized: "Scheduled", bundle: .module, comment: "Software update status: scheduled to install")
+            case "installing":
+                return String(localized: "Installing", bundle: .module, comment: "Software update status: currently installing")
+            case "downloading":
+                return String(localized: "Downloading", bundle: .module, comment: "Software update status: currently downloading")
+            case "downloading_wifi_wait":
+                return String(localized: "Waiting for Wi-Fi", bundle: .module, comment: "Software update status: waiting for Wi-Fi to download")
+            default:
+                return status.capitalized
+            }
+        }
+        return currentVersion.map {
+            String(localized: "Current \($0)", bundle: .module, comment: "Current installed software version label")
+        } ?? ""
     }
 
     public var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(vehicleName) - \(headline)", subtitle: "\(detailText)")
+        DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: "\(vehicleName) - \(headline)"),
+            subtitle: LocalizedStringResource(stringLiteral: detailText)
+        )
     }
 
     /// One or two sentences for Siri describing where the update stands.
     public var spokenStatus: String {
         guard updateAvailable else {
-            return currentVersion.map { "\(vehicleName) is up to date on \($0)." } ?? "\(vehicleName) has no software update waiting."
+            if let currentVersion {
+                return String(localized: "\(vehicleName) is up to date on \(currentVersion).", bundle: .module, comment: "Spoken status when the car is on the latest software version")
+            }
+            return String(localized: "\(vehicleName) has no software update waiting.", bundle: .module, comment: "Spoken status when no software update is pending")
         }
-        let target = availableVersion.map { "Software update \($0)" } ?? "A software update"
-        let duration = expectedDurationMinutes.map { " Installing takes about \($0) minutes, and the car can't be driven during it." } ?? ""
+        let durationSuffix = expectedDurationMinutes.map { minutes in
+            " " + String(
+                localized: "Installing takes about \(minutes) minutes, and the car can't be driven during it.",
+                bundle: .module,
+                comment: "Spoken note explaining expected software update install duration"
+            )
+        } ?? ""
+
         switch status?.lowercased() ?? "" {
         case "installing":
-            return "\(target) is installing on \(vehicleName)" + (installPercent.map { ", \($0)% done." } ?? ".")
+            if let availableVersion {
+                if let installPercent {
+                    let pct = FleetKitFormatting.percent(installPercent)
+                    return String(localized: "Software update \(availableVersion) is installing on \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for a versioned software update currently installing with percent")
+                }
+                return String(localized: "Software update \(availableVersion) is installing on \(vehicleName).", bundle: .module, comment: "Spoken status for a versioned software update currently installing")
+            }
+            if let installPercent {
+                let pct = FleetKitFormatting.percent(installPercent)
+                return String(localized: "A software update is installing on \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for an unversioned software update currently installing with percent")
+            }
+            return String(localized: "A software update is installing on \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update currently installing")
         case "scheduled":
-            return "\(target) is scheduled to install on \(vehicleName)." + duration
+            let base = availableVersion.map {
+                String(localized: "Software update \($0) is scheduled to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a scheduled versioned software update")
+            } ?? String(localized: "A software update is scheduled to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a scheduled unversioned software update")
+            return base + durationSuffix
         case "downloading":
-            return "\(target) is downloading to \(vehicleName)" + (downloadPercent.map { ", \($0)% done." } ?? ".")
+            if let availableVersion {
+                if let downloadPercent {
+                    let pct = FleetKitFormatting.percent(downloadPercent)
+                    return String(localized: "Software update \(availableVersion) is downloading to \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for a versioned software update downloading with percent")
+                }
+                return String(localized: "Software update \(availableVersion) is downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for a versioned software update downloading")
+            }
+            if let downloadPercent {
+                let pct = FleetKitFormatting.percent(downloadPercent)
+                return String(localized: "A software update is downloading to \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for an unversioned software update downloading with percent")
+            }
+            return String(localized: "A software update is downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update downloading")
         case "downloading_wifi_wait":
-            return "\(target) is waiting for Wi-Fi to finish downloading to \(vehicleName)" + (downloadPercent.map { " (\($0)% done)." } ?? ".")
+            if let availableVersion {
+                if let downloadPercent {
+                    let pct = FleetKitFormatting.percent(downloadPercent)
+                    return String(localized: "Software update \(availableVersion) is waiting for Wi-Fi to finish downloading to \(vehicleName) (\(pct) done).", bundle: .module, comment: "Spoken status for a versioned software update waiting on Wi-Fi with percent")
+                }
+                return String(localized: "Software update \(availableVersion) is waiting for Wi-Fi to finish downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for a versioned software update waiting on Wi-Fi")
+            }
+            if let downloadPercent {
+                let pct = FleetKitFormatting.percent(downloadPercent)
+                return String(localized: "A software update is waiting for Wi-Fi to finish downloading to \(vehicleName) (\(pct) done).", bundle: .module, comment: "Spoken status for an unversioned software update waiting on Wi-Fi with percent")
+            }
+            return String(localized: "A software update is waiting for Wi-Fi to finish downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update waiting on Wi-Fi")
         default:
-            return installable
-                ? "\(target) is ready to install on \(vehicleName)." + duration
-                : "\(target) is available for \(vehicleName)."
+            if installable {
+                let base = availableVersion.map {
+                    String(localized: "Software update \($0) is ready to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a ready-to-install versioned software update")
+                } ?? String(localized: "A software update is ready to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a ready-to-install unversioned software update")
+                return base + durationSuffix
+            }
+            return availableVersion.map {
+                String(localized: "Software update \($0) is available for \(vehicleName).", bundle: .module, comment: "Spoken status for an available versioned software update")
+            } ?? String(localized: "A software update is available for \(vehicleName).", bundle: .module, comment: "Spoken status for an available unversioned software update")
         }
     }
 
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
         var parts = [headline]
-        if let currentVersion { parts.append("Current version \(currentVersion)") }
-        if let availableVersion { parts.append("Available version \(availableVersion)") }
-        if let status { parts.append("Status \(status)") }
-        if installable { parts.append("Installable now") }
-        let description = "Tesla software update for \(vehicleName). \(parts.joined(separator: ". "))."
-        attributes.title = "\(vehicleName) Software"
-        attributes.displayName = "\(vehicleName) software update"
-        attributes.kind = "Tesla Software Update"
+        if let currentVersion {
+            parts.append(String(localized: "Current version \(currentVersion)", bundle: .module, comment: "Spotlight detail for current software version"))
+        }
+        if let availableVersion {
+            parts.append(String(localized: "Available version \(availableVersion)", bundle: .module, comment: "Spotlight detail for available software version"))
+        }
+        if let status {
+            parts.append(String(localized: "Status \(status)", bundle: .module, comment: "Spotlight detail for software update status"))
+        }
+        if installable {
+            parts.append(String(localized: "Installable now", bundle: .module, comment: "Spotlight detail when a software update can be installed immediately"))
+        }
+        let summaryParts = parts.joined(separator: ". ")
+        let description = String(
+            localized: "Tesla software update for \(vehicleName). \(summaryParts).",
+            bundle: .module,
+            comment: "Spotlight searchable description for a vehicle software update"
+        )
+        attributes.title = String(localized: "\(vehicleName) Software", bundle: .module, comment: "Spotlight title for a vehicle's software update status")
+        attributes.displayName = String(localized: "\(vehicleName) software update", bundle: .module, comment: "Spotlight display name for a vehicle's software update")
+        attributes.kind = String(localized: "Tesla Software Update", bundle: .module, comment: "Spotlight kind for a Tesla software update")
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
-            vehicleName, FleetKitLog.vin(vin), "Tesla", "software", "software update", "release", "release version",
-            "version", "install", "download", "update available", currentVersion, availableVersion, status
+            vehicleName, FleetKitLog.vin(vin), "Tesla",
+            String(localized: "software", bundle: .module, comment: "Spotlight keyword for software"),
+            String(localized: "software update", bundle: .module, comment: "Spotlight keyword for software update"),
+            String(localized: "release", bundle: .module, comment: "Spotlight keyword for release"),
+            String(localized: "release version", bundle: .module, comment: "Spotlight keyword for release version"),
+            String(localized: "version", bundle: .module, comment: "Spotlight keyword for version"),
+            String(localized: "install", bundle: .module, comment: "Spotlight keyword for install"),
+            String(localized: "download", bundle: .module, comment: "Spotlight keyword for download"),
+            String(localized: "update available", bundle: .module, comment: "Spotlight keyword for update available"),
+            currentVersion, availableVersion, status
         ].compactMap { $0 }
         return attributes
     }
@@ -174,7 +272,10 @@ public struct SoftwareUpdateEntityQuery: EntityQuery, EntityStringQuery, Indexed
             vehicles = namedMatches
         }
 
-        let genericTerms = ["software", "update", "firmware", "version", "car", "vehicle", "tesla"]
+        let genericTerms = [
+            "software", "update", "firmware", "version", "car", "vehicle", "tesla",
+            "actualización", "actualizacion", "versión", "coche", "carro", "vehículo", "vehiculo"
+        ]
         let isGeneric = trimmed.isEmpty || genericTerms.contains(where: { trimmed.contains($0) })
 
         var results: [SoftwareUpdateEntity] = []
@@ -273,24 +374,50 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
         let trimmedQuery = featureQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
         if notes.isEmpty {
             if let trimmedQuery, !trimmedQuery.isEmpty {
-                return "No release notes matching \"\(trimmedQuery)\" were found for version \(version) on \(vehicleName)."
+                return String(
+                    localized: "No release notes matching \"\(trimmedQuery)\" were found for version \(version) on \(vehicleName).",
+                    bundle: .module,
+                    comment: "Spoken message when no software release notes match a search query"
+                )
             }
-            return "No release notes were found for version \(version) on \(vehicleName)."
+            return String(
+                localized: "No release notes were found for version \(version) on \(vehicleName).",
+                bundle: .module,
+                comment: "Spoken message when no software release notes are available for a version"
+            )
         }
 
         let maxSpokenItems = 4
         let spokenItems = notes.prefix(maxSpokenItems).map(\.spokenItemSummary).joined(separator: " ")
         let remaining = notes.count - min(notes.count, maxSpokenItems)
-        let suffix = remaining > 0 ? " Plus \(remaining) more feature update\(remaining == 1 ? "" : "s")." : ""
+        let suffix = remaining > 0
+            ? " " + String(
+                localized: "Plus \(remaining) more feature updates.",
+                bundle: .module,
+                comment: "Spoken suffix indicating additional release notes beyond those read aloud"
+            )
+            : ""
 
         if let trimmedQuery, !trimmedQuery.isEmpty {
-            return "Version \(version) on \(vehicleName) has \(notes.count) release note\(notes.count == 1 ? "" : "s") matching \"\(trimmedQuery)\". \(spokenItems)\(suffix)"
+            return String(
+                localized: "Version \(version) on \(vehicleName) has \(notes.count) release notes matching \"\(trimmedQuery)\". \(spokenItems)",
+                bundle: .module,
+                comment: "Spoken digest of release notes matching a user search query"
+            ) + suffix
         }
-        return "Version \(version) on \(vehicleName) includes \(notes.count) release note\(notes.count == 1 ? "" : "s"). \(spokenItems)\(suffix)"
+        return String(
+            localized: "Version \(version) on \(vehicleName) includes \(notes.count) release notes. \(spokenItems)",
+            bundle: .module,
+            comment: "Spoken digest of release notes for a software version"
+        ) + suffix
     }
 
     public var displayRepresentation: DisplayRepresentation {
-        let repSubtitle = [version.map { "Version \($0)" }, subtitle, details]
+        let repSubtitle = [
+            version.map { String(localized: "Version \($0)", bundle: .module, comment: "Software version label in release note subtitle") },
+            subtitle,
+            details
+        ]
             .compactMap { $0 }
             .reduce(into: [String]()) { acc, item in
                 if !acc.contains(where: { $0.caseInsensitiveCompare(item) == .orderedSame }) {
@@ -298,21 +425,33 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
                 }
             }
             .joined(separator: " • ")
-        return DisplayRepresentation(title: "\(title)", subtitle: "\(repSubtitle)")
+        return DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: title),
+            subtitle: LocalizedStringResource(stringLiteral: repSubtitle)
+        )
     }
 
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
-        let description = ["Tesla release note", version.map { "Version \($0)" }, title, subtitle, details]
+        let description = [
+            String(localized: "Tesla release note", bundle: .module, comment: "Spotlight description prefix for a Tesla release note"),
+            version.map { String(localized: "Version \($0)", bundle: .module, comment: "Software version label in release note Spotlight description") },
+            title, subtitle, details
+        ]
             .compactMap { $0 }
             .joined(separator: ". ")
         attributes.title = title
         attributes.displayName = version.map { "\(title) \($0)" } ?? title
-        attributes.kind = "Tesla Release Note"
+        attributes.kind = String(localized: "Tesla Release Note", bundle: .module, comment: "Spotlight kind for a Tesla release note")
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
-            "Tesla", "release note", "release version", "software", "update", "version",
+            "Tesla",
+            String(localized: "release note", bundle: .module, comment: "Spotlight keyword for release note"),
+            String(localized: "release version", bundle: .module, comment: "Spotlight keyword for release version"),
+            String(localized: "software", bundle: .module, comment: "Spotlight keyword for software"),
+            String(localized: "update", bundle: .module, comment: "Spotlight keyword for update"),
+            String(localized: "version", bundle: .module, comment: "Spotlight keyword for version"),
             FleetKitLog.vin(vin), version, title, subtitle, details
         ].compactMap { $0 }
         return attributes
@@ -357,7 +496,9 @@ extension ReleaseNoteEntity: Transferable {
 
     /// Human-readable release note text for sharing with other apps (never exposes the VIN).
     public var transferSummary: String {
-        let prefix = version.map { "Version \($0) — " } ?? ""
+        let prefix = version.map {
+            String(localized: "Version \($0) — ", bundle: .module, comment: "Version prefix for shared release note text")
+        } ?? ""
         if let details, !details.isEmpty {
             return "\(prefix)\(title): \(details)"
         }

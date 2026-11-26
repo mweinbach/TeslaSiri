@@ -8,18 +8,31 @@ struct AppScreenBackground: View {
 }
 
 struct CardContainer<Content: View>: View {
-    let title: String?
+    let title: Text?
     let systemImage: String?
     var tint: Color = .secondary
     @ViewBuilder let content: Content
 
     init(
-        title: String? = nil,
+        title: LocalizedStringKey? = nil,
         systemImage: String? = nil,
         tint: Color = .secondary,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = title.map { Text($0) }
+        self.systemImage = systemImage
+        self.tint = tint
+        self.content = content()
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(
+        title: S,
+        systemImage: String? = nil,
+        tint: Color = .secondary,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = Text(title)
         self.systemImage = systemImage
         self.tint = tint
         self.content = content()
@@ -29,9 +42,9 @@ struct CardContainer<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) {
             if let title {
                 if let systemImage {
-                    DashboardCardHeader(title: title, systemImage: systemImage, tint: tint)
+                    DashboardCardHeader(titleText: title, systemImage: systemImage, tint: tint)
                 } else {
-                    Text(title)
+                    title
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .accessibilityAddTraits(.isHeader)
@@ -47,14 +60,21 @@ struct CardContainer<Content: View>: View {
 }
 
 struct StatusBadge: View {
-    let text: String
+    let label: Text
     let systemImage: String?
     let tint: Color
 
     @Environment(\.colorScheme) private var colorScheme
 
-    init(_ text: String, systemImage: String? = nil, tint: Color = .secondary) {
-        self.text = text
+    init(_ text: LocalizedStringKey, systemImage: String? = nil, tint: Color = .secondary) {
+        self.label = Text(text)
+        self.systemImage = systemImage
+        self.tint = tint
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(_ text: S, systemImage: String? = nil, tint: Color = .secondary) {
+        self.label = Text(text)
         self.systemImage = systemImage
         self.tint = tint
     }
@@ -65,7 +85,7 @@ struct StatusBadge: View {
                 Image(systemName: systemImage)
                     .imageScale(.small)
             }
-            Text(text)
+            label
                 .lineLimit(1)
         }
         .font(.caption.weight(.semibold))
@@ -81,13 +101,22 @@ struct StatusBadge: View {
 }
 
 struct LoadingRow: View {
-    let label: String
+    let label: Text
+
+    init(label: LocalizedStringKey) {
+        self.label = Text(label)
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(label: S) {
+        self.label = Text(label)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
             ProgressView()
                 .controlSize(.small)
-            Text(label)
+            label
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

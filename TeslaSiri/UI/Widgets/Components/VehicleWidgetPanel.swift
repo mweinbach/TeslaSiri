@@ -132,10 +132,14 @@ struct VehicleWidgetPanel: View {
                         .fill(accentColor.gradient)
                         .frame(width: max(height, width * level))
                     if let limit {
-                        Capsule()
-                            .fill(.primary.opacity(0.65))
-                            .frame(width: 2, height: height + 4)
-                            .offset(x: min(max(width * limit - 1, 0), width - 2))
+                        HStack(spacing: 0) {
+                            Color.clear
+                                .frame(width: min(max(width * limit - 1, 0), width - 2), height: 1)
+                            Capsule()
+                                .fill(.primary.opacity(0.65))
+                                .frame(width: 2, height: height + 4)
+                            Spacer(minLength: 0)
+                        }
                     }
                 }
             }
@@ -143,12 +147,16 @@ struct VehicleWidgetPanel: View {
 
             HStack {
                 if let limitVal = snapshot.chargeLimit {
-                    Text("Limit \(Int(limitVal.rounded()))%")
+                    Text("Limit \(FleetKitFormatting.percent(limitVal))")
                         .monospacedDigit()
                 }
                 Spacer(minLength: 4)
                 if let power = snapshot.chargerPowerKW, snapshot.isCharging, power > 0 {
-                    Text("\(power.formatted(.number.precision(.fractionLength(0...1)))) kW")
+                    Text(
+                        Measurement(value: power, unit: UnitPower.kilowatts).formatted(
+                            .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1)))
+                        )
+                    )
                         .foregroundStyle(.green)
                         .monospacedDigit()
                 }
@@ -159,7 +167,10 @@ struct VehicleWidgetPanel: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Battery charge")
-        .accessibilityValue(snapshot.batteryLevel.map { "\(Int($0)) percent" } ?? "Unavailable")
+        .accessibilityValue(
+            snapshot.batteryLevel.map { FleetKitFormatting.percent($0) }
+                ?? String(localized: "Unavailable", comment: "VoiceOver fallback when battery charge is unavailable")
+        )
     }
 
     @ViewBuilder
@@ -176,7 +187,13 @@ struct VehicleWidgetPanel: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
         case .security:
-            Text(snapshot.openClosures.map { $0.isEmpty ? "All closed" : $0.joined(separator: ", ") } ?? "Status unavailable")
+            Text(
+                snapshot.openClosures.map {
+                    $0.isEmpty
+                        ? String(localized: "All closed", comment: "Widget security detail when all doors, windows, and trunks are closed")
+                        : $0.formatted(.list(type: .and))
+                } ?? String(localized: "Status unavailable", comment: "Widget security detail when closure status is unavailable")
+            )
                 .font(.caption.weight(.medium))
                 .foregroundStyle(snapshot.openClosures?.isEmpty == false ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
@@ -193,7 +210,7 @@ struct VehicleWidgetPanel: View {
         .font(.subheadline)
     }
 
-    private func infoRow(_ title: String, value: String, symbol: String) -> some View {
+    private func infoRow(_ title: LocalizedStringKey, value: String, symbol: String) -> some View {
         HStack {
             Label(title, systemImage: symbol)
                 .foregroundStyle(.secondary)
@@ -221,18 +238,21 @@ struct VehicleWidgetPanel: View {
             if snapshot.canStartCharging {
                 actionButton("Start Charging", symbol: "bolt.fill", action: .startCharging)
             } else if snapshot.isCharging, let hours = snapshot.hoursToCharge, hours > 0 {
-                Label("\(Int((hours * 60).rounded())) min to limit", systemImage: "clock")
+                let remaining = Duration.seconds(hours * 3600).formatted(
+                    .units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2)
+                )
+                Label("\(remaining) to limit", systemImage: "clock")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.green)
                     .lineLimit(1)
             }
         case .climate:
             if snapshot.allowsVehicleCommands != false {
-                actionButton(
-                    snapshot.isClimateStarting() ? "Starting…" : "Start Climate",
-                    symbol: "fan.fill",
-                    action: .startClimate
-                )
+                if snapshot.isClimateStarting() {
+                    actionButton("Starting…", symbol: "fan.fill", action: .startClimate)
+                } else {
+                    actionButton("Start Climate", symbol: "fan.fill", action: .startClimate)
+                }
             }
         case .security:
             if snapshot.allowsVehicleCommands != false {
@@ -241,7 +261,7 @@ struct VehicleWidgetPanel: View {
         }
     }
 
-    private func actionButton(_ title: String, symbol: String, action: FleetWidgetAction, iconOnly: Bool = false) -> some View {
+    private func actionButton(_ title: LocalizedStringKey, symbol: String, action: FleetWidgetAction, iconOnly: Bool = false) -> some View {
         Button(intent: actionIntent(action)) {
             Label(title, systemImage: symbol)
                 .labelStyle(WidgetActionLabelStyle(iconOnly: iconOnly))
@@ -280,11 +300,14 @@ struct VehicleWidgetPanel: View {
                 Gauge(value: snapshot.batteryLevel ?? 0, in: 0...100) {
                     Image(systemName: "bolt.fill")
                 } currentValueLabel: {
-                    Text(snapshot.batteryLevel.map { "\(Int($0))" } ?? "—")
+                    Text(snapshot.batteryLevel.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—")
                 }
                 .gaugeStyle(.accessoryCircular)
                 .accessibilityLabel("Car battery")
-                .accessibilityValue(snapshot.batteryLevel.map { "\(Int($0)) percent" } ?? "Unavailable")
+                .accessibilityValue(
+                    snapshot.batteryLevel.map { FleetKitFormatting.percent($0) }
+                        ?? String(localized: "Unavailable", comment: "VoiceOver fallback when battery charge is unavailable")
+                )
             } else {
                 Label(snapshot.name, systemImage: topic.systemImage).font(.caption.weight(.semibold))
                 Text(headlineValue + " · " + headlineCaption).font(.headline)
@@ -296,7 +319,7 @@ struct VehicleWidgetPanel: View {
 
     private var headlineValue: String {
         switch topic {
-        case .overview, .charging: snapshot.batteryLevel.map { "\(Int($0.rounded()))%" } ?? "—"
+        case .overview, .charging: snapshot.batteryLevel.map { FleetKitFormatting.percent($0) } ?? "—"
         case .climate: snapshot.temperatureDescription(snapshot.insideTemperature)
         case .security: snapshot.lockDescription
         }
@@ -307,7 +330,12 @@ struct VehicleWidgetPanel: View {
         case .overview: snapshot.rangeDescription
         case .charging: snapshot.chargingDescription
         case .climate: snapshot.climateDescription
-        case .security: snapshot.sentryOn.map { $0 ? "Sentry on" : "Sentry off" } ?? "Sentry unavailable"
+        case .security:
+            snapshot.sentryOn.map {
+                $0
+                    ? String(localized: "Sentry on", comment: "Widget caption when Sentry Mode is enabled")
+                    : String(localized: "Sentry off", comment: "Widget caption when Sentry Mode is disabled")
+            } ?? String(localized: "Sentry unavailable", comment: "Widget caption when Sentry Mode status is unavailable")
         }
     }
 
@@ -323,10 +351,10 @@ enum VehicleWidgetTopic: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .overview: "Vehicle"
-        case .charging: "Charging"
-        case .climate: "Cabin Climate"
-        case .security: "Vehicle Security"
+        case .overview: String(localized: "Vehicle", comment: "Widget topic title for vehicle overview")
+        case .charging: String(localized: "Charging", comment: "Widget topic title for charging status")
+        case .climate: String(localized: "Cabin Climate", comment: "Widget topic title for cabin climate")
+        case .security: String(localized: "Vehicle Security", comment: "Widget topic title for vehicle security")
         }
     }
 

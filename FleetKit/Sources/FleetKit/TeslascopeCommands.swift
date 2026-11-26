@@ -23,19 +23,21 @@ extension TeslascopeClient {
         let command = try TeslascopeCommand(action: action, params: params)
         let target = try await entry(vin: vin)
         guard Self.controlActions(for: target.vehicle).supports(action) else {
-            let category = Self.controlActions.chargeActions.contains(action) ? "charging" : "vehicle"
-            throw FleetKitError.api("The linked Tesla account hasn’t granted \(category) command access for this car.")
+            if Self.controlActions.chargeActions.contains(action) {
+                throw FleetKitError.api(String(localized: "The linked Tesla account hasn’t granted charging command access for this car.", bundle: .module, comment: "Error when Teslascope account lacks charging command permission"))
+            }
+            throw FleetKitError.api(String(localized: "The linked Tesla account hasn’t granted vehicle command access for this car.", bundle: .module, comment: "Error when Teslascope account lacks vehicle command permission"))
         }
         try await sendCommand(command.name, params: command.params, publicID: target.publicID)
     }
 
     public func installSoftwareUpdate(vin: String, offsetSec: Int) async throws {
         guard offsetSec == 0 else {
-            throw FleetKitError.api("Teslascope can only start a software update immediately.")
+            throw FleetKitError.api(String(localized: "Teslascope can only start a software update immediately.", bundle: .module, comment: "Error when a delayed software update install is requested on Teslascope"))
         }
         let target = try await entry(vin: vin)
         guard target.vehicle.allowsVehicleCommands != false else {
-            throw FleetKitError.api("The linked Tesla account hasn’t granted vehicle command access for this car.")
+            throw FleetKitError.api(String(localized: "The linked Tesla account hasn’t granted vehicle command access for this car.", bundle: .module, comment: "Error when Teslascope account lacks vehicle command permission"))
         }
         try await sendCommand("scheduleSoftwareUpdate", params: [:], publicID: target.publicID)
     }
@@ -55,7 +57,7 @@ extension TeslascopeClient {
         guard let acknowledgement = try? JSONDecoder().decode(Acknowledgement.self, from: data),
               acknowledgement.code == 200,
               !acknowledgement.response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw FleetKitError.api("Teslascope did not acknowledge the vehicle command.")
+            throw FleetKitError.api(String(localized: "Teslascope did not acknowledge the vehicle command.", bundle: .module, comment: "Error when Teslascope does not acknowledge a sent command"))
         }
     }
 }
@@ -95,7 +97,7 @@ private struct TeslascopeCommand {
             return
         }
 
-        let invalidParameters = FleetKitError.api("The parameters for \(action) are invalid.")
+        let invalidParameters = FleetKitError.api(String(localized: "The parameters for \(action) are invalid.", bundle: .module, comment: "Error when parameters for a Teslascope command are invalid"))
         var body = [String: FleetControlValue]()
         switch action {
         case "actuate_trunk":

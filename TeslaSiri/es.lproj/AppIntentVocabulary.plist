@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IntentPhrases</key>
+	<array>
+		<dict>
+			<key>IntentName</key>
+			<string>INSetCarLockStatusIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Cierra mi coche</string>
+				<string>Abre mi Tesla</string>
+				<string>Cierra mi coche con Wattie</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INGetCarLockStatusIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>¿Está cerrado mi coche?</string>
+				<string>¿Cerré mi Tesla?</string>
+				<string>Comprueba si mi coche está cerrado con Wattie</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INActivateCarSignalIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Toca la bocina de mi coche</string>
+				<string>Enciende los intermitentes de mi Tesla</string>
+				<string>Toca la bocina y enciende las luces de mi coche con Wattie</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INGetCarPowerLevelStatusIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>¿Cuánta carga tiene mi coche?</string>
+				<string>¿Cuál es el nivel de batería de mi Tesla?</string>
+				<string>¿Cuánta autonomía tiene mi coche con Wattie?</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INListCarsIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Planifica una ruta de vehículo eléctrico con mi Tesla</string>
+				<string>Busca cargadores en mi ruta con Wattie</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

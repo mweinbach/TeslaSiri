@@ -34,7 +34,20 @@ public struct FlashLightsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Flash", vehicle: vehicle, suffix: "lights"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Flash \(vehicle.name) lights",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for flashing lights on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Flash my car lights",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for flashing lights on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -43,11 +56,19 @@ public struct FlashLightsIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "flash_lights", vin: resolved.vin, humanName: "flashing the lights")
-            let summary = "Flashing \(resolved.name)'s lights."
+            try await service.runControl(
+                action: "flash_lights",
+                vin: resolved.vin,
+                humanName: String(localized: "flashing the lights", bundle: .module, comment: "Action name used in vehicle command error messages for flashing headlights.")
+            )
+            let summary = String(
+                localized: "Flashing \(resolved.name)'s lights.",
+                bundle: .module,
+                comment: "Siri confirmation after flashing vehicle lights."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "flash_lights", summary: summary)
             log.success("flashed lights on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -84,7 +105,20 @@ public struct HonkHornIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Honk", vehicle: vehicle, suffix: "horn"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Honk \(vehicle.name) horn",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for honking the horn on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Honk my car horn",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for honking the horn on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -93,11 +127,19 @@ public struct HonkHornIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "honk_horn", vin: resolved.vin, humanName: "honking the horn")
-            let summary = "Honking \(resolved.name)'s horn."
+            try await service.runControl(
+                action: "honk_horn",
+                vin: resolved.vin,
+                humanName: String(localized: "honking the horn", bundle: .module, comment: "Action name used in vehicle command error messages for honking the horn.")
+            )
+            let summary = String(
+                localized: "Honking \(resolved.name)'s horn.",
+                bundle: .module,
+                comment: "Siri confirmation after honking the vehicle horn."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "honk_horn", summary: summary)
             log.success("honked horn on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -143,7 +185,20 @@ public struct SendNavigationIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Send navigation to", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Send navigation to \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for sending a navigation destination to a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Send navigation to my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for sending a navigation destination to the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -154,7 +209,13 @@ public struct SendNavigationIntent: AppIntent, PredictableIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let trimmed = destination.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
-                throw FleetKitError.api("Tell me where to send \(resolved.name).")
+                throw FleetKitError.api(
+                    String(
+                        localized: "Tell me where to send \(resolved.name).",
+                        bundle: .module,
+                        comment: "Error message when no navigation destination was provided."
+                    )
+                )
             }
             // Tessie's share command accepts an address, coordinates, or URL as a
             // plain value. The locale (e.g. "en-US") helps it resolve addresses.
@@ -163,9 +224,13 @@ public struct SendNavigationIntent: AppIntent, PredictableIntent {
                 action: "navigation_request",
                 vin: resolved.vin,
                 params: ["value": .string(trimmed), "locale": .string(locale)],
-                humanName: "sending the destination"
+                humanName: String(localized: "sending the destination", bundle: .module, comment: "Action name used in vehicle command error messages for sending a navigation destination.")
             )
-            let summary = "Sent \(trimmed) to \(resolved.name)."
+            let summary = String(
+                localized: "Sent \(trimmed) to \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after sending a navigation destination to the car."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "navigation_request",
@@ -173,7 +238,7 @@ public struct SendNavigationIntent: AppIntent, PredictableIntent {
                 summary: summary
             )
             log.success("sent destination to \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

@@ -23,21 +23,31 @@ public enum StatsPeriod: String, AppEnum, Sendable {
 
     public var displayTitle: String {
         switch self {
-        case .sinceLastCharge: "Since Last Charge"
-        case .today: "Today"
-        case .last7Days: "Last 7 Days"
-        case .last30Days: "Last 30 Days"
-        case .last90Days: "Last 90 Days"
+        case .sinceLastCharge:
+            String(localized: "Since Last Charge", bundle: .module, comment: "Display title for stats period since last charge")
+        case .today:
+            String(localized: "Today", bundle: .module, comment: "Display title for today's stats period")
+        case .last7Days:
+            String(localized: "Last 7 Days", bundle: .module, comment: "Display title for 7-day stats period")
+        case .last30Days:
+            String(localized: "Last 30 Days", bundle: .module, comment: "Display title for 30-day stats period")
+        case .last90Days:
+            String(localized: "Last 90 Days", bundle: .module, comment: "Display title for 90-day stats period")
         }
     }
 
     public var spokenLabel: String {
         switch self {
-        case .sinceLastCharge: "since the last charge"
-        case .today: "today"
-        case .last7Days: "over the last 7 days"
-        case .last30Days: "over the last 30 days"
-        case .last90Days: "over the last 90 days"
+        case .sinceLastCharge:
+            String(localized: "since the last charge", bundle: .module, comment: "Spoken time window phrase for since last charge")
+        case .today:
+            String(localized: "today", bundle: .module, comment: "Spoken time window phrase for today")
+        case .last7Days:
+            String(localized: "over the last 7 days", bundle: .module, comment: "Spoken time window phrase for last 7 days")
+        case .last30Days:
+            String(localized: "over the last 30 days", bundle: .module, comment: "Spoken time window phrase for last 30 days")
+        case .last90Days:
+            String(localized: "over the last 90 days", bundle: .module, comment: "Spoken time window phrase for last 90 days")
         }
     }
 
@@ -110,14 +120,23 @@ public struct DrivingStatsEntity: TransientAppEntity {
     public var batteryPercentUsedSinceCharge: Double?
 
     public var displayRepresentation: DisplayRepresentation {
+        let usesMetric = FleetKitFormatting.prefersMetric()
+        let efficiencyString: String? = averageEfficiencyWhPerMile.map { whPerMi in
+            if usesMetric {
+                let whPerKm = Int((whPerMi / 1.609344).rounded())
+                return String(localized: "\(whPerKm) Wh/km", bundle: .module, comment: "Driving efficiency in watt-hours per kilometer")
+            }
+            return String(localized: "\(Int(whPerMi.rounded())) Wh/mi", bundle: .module, comment: "Driving efficiency in watt-hours per mile")
+        }
         let subtitle = [
-            "\(driveCount) drive\(driveCount == 1 ? "" : "s")",
-            totalEnergyUsedKWH.map { String(format: "%.1f kWh", $0) },
-            averageEfficiencyWhPerMile.map { String(format: "%.0f Wh/mi", $0) }
+            String(localized: "\(driveCount) drives", bundle: .module, comment: "Drive count in driving stats subtitle"),
+            totalEnergyUsedKWH.map { FleetKitFormatting.energyKWH($0) },
+            efficiencyString
         ].compactMap { $0 }.joined(separator: " • ")
+        let distanceText = FleetKitFormatting.distance(miles: totalDistanceMiles, usesMetric: usesMetric, fractionLength: 1)
         return DisplayRepresentation(
-            title: "\(String(format: "%.1f mi", totalDistanceMiles)) (\(periodTitle))",
-            subtitle: "\(subtitle)"
+            title: LocalizedStringResource(stringLiteral: "\(distanceText) (\(periodTitle))"),
+            subtitle: LocalizedStringResource(stringLiteral: subtitle)
         )
     }
 
@@ -198,47 +217,91 @@ public struct DrivingStatsEntity: TransientAppEntity {
     }
 
     public func spokenSummary(period: StatsPeriod) -> String {
+        let usesMetric = FleetKitFormatting.prefersMetric()
         if driveCount == 0 && totalDistanceMiles < 0.05 {
             if let idle = idleEnergySinceChargeKWH, idle > 0.05 {
+                let kwh = FleetKitFormatting.energyKWH(idle)
                 return String(
-                    format: "%@ has no recorded drives %@, with %.1f kWh used while parked.",
-                    vehicleName,
-                    period.spokenLabel,
-                    idle
+                    localized: "\(vehicleName) has no recorded drives \(period.spokenLabel), with \(kwh) used while parked.",
+                    bundle: .module,
+                    comment: "Spoken driving stats when there are no drives but idle energy was used"
                 )
             }
-            return "\(vehicleName) has no recorded drives \(period.spokenLabel)."
+            return String(
+                localized: "\(vehicleName) has no recorded drives \(period.spokenLabel).",
+                bundle: .module,
+                comment: "Spoken driving stats when there are no recorded drives in the period"
+            )
         }
 
         var sentences: [String] = []
-        let hours = totalDurationMinutes / 60
-        let mins = totalDurationMinutes % 60
-        let durationPhrase: String
-        if hours > 0 {
-            durationPhrase = mins > 0 ? "\(hours) hr \(mins) min" : "\(hours) hr"
-        } else {
-            durationPhrase = "\(totalDurationMinutes) min"
-        }
+        let durationPhrase = FleetKitFormatting.durationMinutes(totalDurationMinutes)
+        let distancePhrase = FleetKitFormatting.distance(miles: totalDistanceMiles, usesMetric: usesMetric, width: .wide, fractionLength: 1)
 
-        var summary = String(
-            format: "For %@ %@: %d drive%@, %.1f miles in %@",
-            vehicleName, period.spokenLabel, driveCount, driveCount == 1 ? "" : "s", totalDistanceMiles, durationPhrase
-        )
         if let totalEnergyUsedKWH {
-            summary += String(format: ", using %.1f kWh", totalEnergyUsedKWH)
+            let energyText = FleetKitFormatting.energyKWH(totalEnergyUsedKWH)
+            sentences.append(
+                String(
+                    localized: "For \(vehicleName) \(period.spokenLabel): \(driveCount) drives, \(distancePhrase) in \(durationPhrase), using \(energyText).",
+                    bundle: .module,
+                    comment: "Spoken driving stats headline with energy used"
+                )
+            )
+        } else {
+            sentences.append(
+                String(
+                    localized: "For \(vehicleName) \(period.spokenLabel): \(driveCount) drives, \(distancePhrase) in \(durationPhrase).",
+                    bundle: .module,
+                    comment: "Spoken driving stats headline without energy used"
+                )
+            )
         }
-        sentences.append(summary + ".")
 
         if let whPerMi = averageEfficiencyWhPerMile, let miPerKWH = milesPerKWH {
-            sentences.append(String(format: "Average efficiency was %.0f Wh/mi (%.1f mi/kWh).", whPerMi, miPerKWH))
+            if usesMetric {
+                let whPerKm = Int((whPerMi / 1.609344).rounded())
+                let kmPerKWH = (miPerKWH * 1.609344).formatted(.number.precision(.fractionLength(1)))
+                sentences.append(
+                    String(
+                        localized: "Average efficiency was \(whPerKm) Wh/km (\(kmPerKWH) km/kWh).",
+                        bundle: .module,
+                        comment: "Spoken average efficiency in metric units"
+                    )
+                )
+            } else {
+                let whRounded = Int(whPerMi.rounded())
+                let miFormatted = miPerKWH.formatted(.number.precision(.fractionLength(1)))
+                sentences.append(
+                    String(
+                        localized: "Average efficiency was \(whRounded) Wh/mi (\(miFormatted) mi/kWh).",
+                        bundle: .module,
+                        comment: "Spoken average efficiency in imperial units"
+                    )
+                )
+            }
         }
 
         if let autopilotDistanceMiles, autopilotDistanceMiles > 0.1, let share = autopilotSharePercent {
-            sentences.append(String(format: "Autopilot covered %.1f miles (%.0f%%).", autopilotDistanceMiles, share))
+            let apDistance = FleetKitFormatting.distance(miles: autopilotDistanceMiles, usesMetric: usesMetric, width: .wide, fractionLength: 1)
+            let sharePct = FleetKitFormatting.percent(share)
+            sentences.append(
+                String(
+                    localized: "Autopilot covered \(apDistance) (\(sharePct)).",
+                    bundle: .module,
+                    comment: "Spoken Autopilot distance and percentage share"
+                )
+            )
         }
 
         if period == .sinceLastCharge, let idle = idleEnergySinceChargeKWH, idle >= 0.1 {
-            sentences.append(String(format: "Parked and idle systems used %.1f kWh since the last charge.", idle))
+            let kwh = FleetKitFormatting.energyKWH(idle)
+            sentences.append(
+                String(
+                    localized: "Parked and idle systems used \(kwh) since the last charge.",
+                    bundle: .module,
+                    comment: "Spoken idle energy used while parked since last charge"
+                )
+            )
         }
 
         return sentences.joined(separator: " ")
@@ -347,16 +410,18 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     }
 
     public var chargerKindText: String {
-        isSupercharger ? "Supercharger" : "AC charging"
+        isSupercharger
+            ? "Supercharger"
+            : String(localized: "AC charging", bundle: .module, comment: "Label for AC / home charging sessions")
     }
 
     public var energyText: String {
-        energyAddedKWH.map { String(format: "+%.1f kWh", $0) } ?? chargerKindText
+        energyAddedKWH.map { "+\(FleetKitFormatting.energyKWH($0))" } ?? chargerKindText
     }
 
     public var batterySummaryText: String? {
         guard let start = startingBatteryPercent, let end = endingBatteryPercent else { return nil }
-        return "\(start)% → \(end)%"
+        return "\(FleetKitFormatting.percent(start)) → \(FleetKitFormatting.percent(end))"
     }
 
     public var appleMapsLocationURL: URL? {
@@ -379,12 +444,12 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         let subtitleParts: [String] = [
             startedAt.formatted(date: .abbreviated, time: .shortened),
             batterySummaryText,
-            milesAdded.map { String(format: "+%.0f mi", $0) },
+            milesAdded.map { "+\(FleetKitFormatting.distance(miles: $0))" },
             formattedCost
         ].compactMap { $0 }
         return DisplayRepresentation(
-            title: "\(energyText) • \(place)",
-            subtitle: "\(subtitleParts.joined(separator: " • "))",
+            title: LocalizedStringResource(stringLiteral: "\(energyText) • \(place)"),
+            subtitle: LocalizedStringResource(stringLiteral: subtitleParts.joined(separator: " • ")),
             image: .init(systemName: isSupercharger ? "bolt.circle" : "powerplug")
         )
     }
@@ -392,18 +457,27 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
         let date = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let title = "\(isSupercharger ? "Supercharger" : "Charging") session \(date)"
+        let title = isSupercharger
+            ? String(localized: "Supercharger session \(date)", bundle: .module, comment: "Spotlight title for a Tesla Supercharger session")
+            : String(localized: "Charging session \(date)", bundle: .module, comment: "Spotlight title for a charging session")
         let description = spokenSummary()
         attributes.title = title
         attributes.displayName = title
-        attributes.kind = "Tesla Charging Session"
+        attributes.kind = String(localized: "Tesla Charging Session", bundle: .module, comment: "Spotlight kind for a Tesla charging session")
         attributes.contentCreationDate = startedAt
         attributes.contentModificationDate = endedAt ?? startedAt
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
-            "Tesla", "charge", "charging", "charging session", "kWh", "energy", "cost",
-            isSupercharger ? "Supercharger" : "home charging", isSupercharger ? "Supercharging" : "AC",
+            "Tesla",
+            String(localized: "charge", bundle: .module, comment: "Spotlight keyword for charge"),
+            String(localized: "charging", bundle: .module, comment: "Spotlight keyword for charging"),
+            String(localized: "charging session", bundle: .module, comment: "Spotlight keyword for charging session"),
+            "kWh",
+            String(localized: "energy", bundle: .module, comment: "Spotlight keyword for energy"),
+            String(localized: "cost", bundle: .module, comment: "Spotlight keyword for cost"),
+            isSupercharger ? "Supercharger" : String(localized: "home charging", bundle: .module, comment: "Spotlight keyword for home charging"),
+            isSupercharger ? String(localized: "Supercharging", bundle: .module, comment: "Spotlight keyword for Supercharging") : "AC",
             location
         ].compactMap { $0 }
         return attributes
@@ -411,27 +485,57 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
 
     public func spokenSummary(vehicleName: String? = nil) -> String {
         let whenText = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let charger = isSupercharger ? "Supercharged" : "charged"
-        let place = location.map { " at \($0)" } ?? ""
-        let subject = vehicleName ?? "Your Tesla"
-        var parts: [String] = ["On \(whenText), \(subject) \(charger)\(place)"]
+        let subject = vehicleName ?? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken charging summary")
+        var sentences: [String] = []
+
+        if isSupercharger {
+            if let location, !location.isEmpty {
+                sentences.append(String(localized: "On \(whenText), \(subject) Supercharged at \(location).", bundle: .module, comment: "Spoken Supercharger session lead with location"))
+            } else {
+                sentences.append(String(localized: "On \(whenText), \(subject) Supercharged.", bundle: .module, comment: "Spoken Supercharger session lead without location"))
+            }
+        } else if let location, !location.isEmpty {
+            sentences.append(String(localized: "On \(whenText), \(subject) charged at \(location).", bundle: .module, comment: "Spoken charging session lead with location"))
+        } else {
+            sentences.append(String(localized: "On \(whenText), \(subject) charged.", bundle: .module, comment: "Spoken charging session lead without location"))
+        }
 
         if let start = startingBatteryPercent, let end = endingBatteryPercent {
-            parts.append("from \(start)% to \(end)%")
+            let startPct = FleetKitFormatting.percent(start)
+            let endPct = FleetKitFormatting.percent(end)
+            if let kwh = energyAddedKWH {
+                let energy = FleetKitFormatting.energyKWH(kwh)
+                if let miles = milesAdded, miles > 0 {
+                    let dist = FleetKitFormatting.distance(miles: miles, width: .wide)
+                    sentences.append(String(localized: "Battery went from \(startPct) to \(endPct), adding \(energy) (\(dist)).", bundle: .module, comment: "Spoken battery, energy, and range added during a charge session"))
+                } else {
+                    sentences.append(String(localized: "Battery went from \(startPct) to \(endPct), adding \(energy).", bundle: .module, comment: "Spoken battery and energy added during a charge session"))
+                }
+            } else {
+                sentences.append(String(localized: "Battery went from \(startPct) to \(endPct).", bundle: .module, comment: "Spoken battery change during a charge session"))
+            }
+        } else if let kwh = energyAddedKWH {
+            let energy = FleetKitFormatting.energyKWH(kwh)
+            if let miles = milesAdded, miles > 0 {
+                let dist = FleetKitFormatting.distance(miles: miles, width: .wide)
+                sentences.append(String(localized: "Added \(energy) (\(dist)).", bundle: .module, comment: "Spoken energy and range added during a charge session"))
+            } else {
+                sentences.append(String(localized: "Added \(energy).", bundle: .module, comment: "Spoken energy added during a charge session"))
+            }
         }
-        if let kwh = energyAddedKWH {
-            parts.append(String(format: "adding %.1f kWh", kwh))
-        }
-        if let miles = milesAdded, miles > 0 {
-            parts.append(String(format: "(%.0f miles)", miles))
-        }
+
         if let minutes = durationMinutes, minutes > 0 {
-            parts.append("in \(minutes) min")
+            let duration = FleetKitFormatting.durationMinutes(minutes)
+            if let formattedCost {
+                sentences.append(String(localized: "Charging took \(duration) and cost \(formattedCost).", bundle: .module, comment: "Spoken charging duration and cost"))
+            } else {
+                sentences.append(String(localized: "Charging took \(duration).", bundle: .module, comment: "Spoken charging duration"))
+            }
+        } else if let formattedCost {
+            sentences.append(String(localized: "Cost was \(formattedCost).", bundle: .module, comment: "Spoken charging cost"))
         }
-        if let formattedCost {
-            parts.append("for \(formattedCost)")
-        }
-        return parts.joined(separator: " ") + "."
+
+        return sentences.joined(separator: " ")
     }
 }
 
@@ -475,9 +579,11 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
             all.append(contentsOf: charges)
         }
         guard !query.isEmpty else { return Array(all.prefix(10)) }
+        let asksSupercharger = query.localizedCaseInsensitiveContains("supercharg")
+            || query.localizedCaseInsensitiveContains("supercarg")
         return all.filter { session in
             session.location?.localizedCaseInsensitiveContains(query) == true
-                || (query.localizedCaseInsensitiveContains("supercharg") && session.isSupercharger)
+                || (asksSupercharger && session.isSupercharger)
                 || session.startedAt.formatted(date: .abbreviated, time: .shortened).localizedCaseInsensitiveContains(query)
         }
     }
@@ -554,13 +660,14 @@ public struct ChargingStatsEntity: TransientAppEntity {
 
     public var displayRepresentation: DisplayRepresentation {
         let subtitle = [
-            "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
-            superchargerCount > 0 ? "\(superchargerCount) Supercharger" : nil,
+            String(localized: "\(sessionCount) sessions", bundle: .module, comment: "Session count in charging stats subtitle"),
+            superchargerCount > 0 ? String(localized: "\(superchargerCount) Supercharger", bundle: .module, comment: "Supercharger session count in charging stats subtitle") : nil,
             formattedCost
         ].compactMap { $0 }.joined(separator: " • ")
+        let energyText = "+\(FleetKitFormatting.energyKWH(totalEnergyAddedKWH))"
         return DisplayRepresentation(
-            title: "\(String(format: "+%.1f kWh", totalEnergyAddedKWH)) (\(periodTitle))",
-            subtitle: "\(subtitle)"
+            title: LocalizedStringResource(stringLiteral: "\(energyText) (\(periodTitle))"),
+            subtitle: LocalizedStringResource(stringLiteral: subtitle)
         )
     }
 
@@ -612,33 +719,69 @@ public struct ChargingStatsEntity: TransientAppEntity {
 
     public func spokenSummary(period: StatsPeriod) -> String {
         if sessionCount == 0 {
-            return "\(vehicleName) has no recorded charging sessions \(period.spokenLabel)."
+            return String(
+                localized: "\(vehicleName) has no recorded charging sessions \(period.spokenLabel).",
+                bundle: .module,
+                comment: "Spoken charging stats when no charging sessions were recorded"
+            )
         }
 
-        var sentences: [String] = []
-        sentences.append(
+        let energyText = FleetKitFormatting.energyKWH(totalEnergyAddedKWH)
+        let rangeAdded = FleetKitFormatting.distance(miles: totalMilesAdded, width: .wide)
+        var sentences: [String] = [
             String(
-                format: "For %@ %@: %d charging session%@ added %.1f kWh (about %.0f miles).",
-                vehicleName,
-                period.spokenLabel,
-                sessionCount,
-                sessionCount == 1 ? "" : "s",
-                totalEnergyAddedKWH,
-                totalMilesAdded
+                localized: "For \(vehicleName) \(period.spokenLabel): \(sessionCount) charging sessions added \(energyText) (about \(rangeAdded)).",
+                bundle: .module,
+                comment: "Spoken charging stats headline with session count, energy, and range added"
             )
-        )
+        ]
 
         if superchargerCount > 0 && acSessionCount > 0 {
-            sentences.append("\(superchargerCount) Supercharger and \(acSessionCount) AC or home session\(acSessionCount == 1 ? "" : "s").")
+            sentences.append(
+                String(
+                    localized: "\(superchargerCount) Supercharger and \(acSessionCount) AC or home sessions.",
+                    bundle: .module,
+                    comment: "Spoken breakdown of Supercharger vs AC/home charging sessions"
+                )
+            )
         } else if superchargerCount > 0 {
-            sentences.append("All \(superchargerCount) session\(superchargerCount == 1 ? " was" : "s were") at Superchargers.")
+            if superchargerCount == 1 {
+                sentences.append(
+                    String(
+                        localized: "The charging session was at a Supercharger.",
+                        bundle: .module,
+                        comment: "Spoken note when the single charging session was at a Supercharger"
+                    )
+                )
+            } else {
+                sentences.append(
+                    String(
+                        localized: "All \(superchargerCount) sessions were at Superchargers.",
+                        bundle: .module,
+                        comment: "Spoken note when all charging sessions were at Superchargers"
+                    )
+                )
+            }
         }
 
         if let formattedCost {
             if let perKWH = averageCostPerKWH {
-                sentences.append("Total recorded cost was \(formattedCost) (\(formatChargeCost(perKWH, currency: currency))/kWh).")
+                let perKWHText = formatChargeCost(perKWH, currency: currency)
+                sentences.append(
+                    String(
+                        localized: "Total recorded cost was \(formattedCost) (\(perKWHText)/kWh).",
+                        bundle: .module,
+                        comment: "Spoken total charging cost with average cost per kWh"
+                    )
+                )
             } else {
-                sentences.append("Total recorded cost was \(formattedCost).")
+                sentences.append(
+                    String(
+                        localized: "Total recorded cost was \(formattedCost).",
+                        bundle: .module,
+                        comment: "Spoken total charging cost"
+                    )
+                )
             }
         }
 
@@ -696,15 +839,34 @@ public struct BatteryHealthEntity: TransientAppEntity {
     public var energyUsedSinceChargeKWH: Double?
 
     public var displayRepresentation: DisplayRepresentation {
-        let titleText = healthPercent.map { String(format: "%.1f%% Battery Health", $0) }
-            ?? energyRemainingKWH.map { String(format: "%.1f kWh Remaining", $0) }
-            ?? "\(vehicleName) Battery Stats"
+        let titleText = healthPercent.map {
+            let pct = FleetKitFormatting.percent($0, fractionLength: 1)
+            return String(localized: "\(pct) Battery Health", bundle: .module, comment: "Battery health entity title with percentage")
+        }
+            ?? energyRemainingKWH.map {
+                let kwh = FleetKitFormatting.energyKWH($0)
+                return String(localized: "\(kwh) Remaining", bundle: .module, comment: "Battery stats entity title with remaining energy")
+            }
+            ?? String(localized: "\(vehicleName) Battery Stats", bundle: .module, comment: "Fallback battery stats entity title")
         let subtitle = [
-            usableCapacityKWH.map { String(format: "%.1f kWh capacity", $0) },
-            maxRangeMiles.map { String(format: "%.0f mi at 100%%", $0) },
-            degradationPercent.map { String(format: "%.1f%% degradation", $0) }
+            usableCapacityKWH.map {
+                let kwh = FleetKitFormatting.energyKWH($0)
+                return String(localized: "\(kwh) capacity", bundle: .module, comment: "Usable battery capacity in subtitle")
+            },
+            maxRangeMiles.map {
+                let dist = FleetKitFormatting.distance(miles: $0)
+                let fullPct = FleetKitFormatting.percent(100)
+                return String(localized: "\(dist) at \(fullPct)", bundle: .module, comment: "Estimated full-charge range in subtitle")
+            },
+            degradationPercent.map {
+                let pct = FleetKitFormatting.percent($0, fractionLength: 1)
+                return String(localized: "\(pct) degradation", bundle: .module, comment: "Battery degradation percentage in subtitle")
+            }
         ].compactMap { $0 }.joined(separator: " • ")
-        return DisplayRepresentation(title: "\(titleText)", subtitle: "\(subtitle)")
+        return DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: titleText),
+            subtitle: LocalizedStringResource(stringLiteral: subtitle)
+        )
     }
 
     public init() {
@@ -750,44 +912,116 @@ public struct BatteryHealthEntity: TransientAppEntity {
     public var spokenSummary: String {
         var sentences: [String] = []
         if let health = healthPercent {
+            let healthPct = FleetKitFormatting.percent(health, fractionLength: 1)
             if let deg = degradationPercent {
-                sentences.append(String(format: "%@'s battery health is %.1f%% (%.1f%% estimated degradation).", vehicleName, health, deg))
+                let degPct = FleetKitFormatting.percent(deg, fractionLength: 1)
+                sentences.append(
+                    String(
+                        localized: "\(vehicleName)'s battery health is \(healthPct) (\(degPct) estimated degradation).",
+                        bundle: .module,
+                        comment: "Spoken battery health percentage with estimated degradation"
+                    )
+                )
             } else {
-                sentences.append(String(format: "%@'s battery health is %.1f%%.", vehicleName, health))
+                sentences.append(
+                    String(
+                        localized: "\(vehicleName)'s battery health is \(healthPct).",
+                        bundle: .module,
+                        comment: "Spoken battery health percentage"
+                    )
+                )
             }
         }
 
-        var capacityParts: [String] = []
         if let cap = usableCapacityKWH, let orig = originalCapacityKWH {
-            capacityParts.append(String(format: "usable capacity is %.1f of %.1f kWh", cap, orig))
+            let capNum = cap.formatted(.number.precision(.fractionLength(1)))
+            let origKWH = FleetKitFormatting.energyKWH(orig)
+            if let maxRange = maxRangeMiles {
+                let rangeText = FleetKitFormatting.distance(miles: maxRange, width: .wide)
+                sentences.append(
+                    String(
+                        localized: "Usable capacity is \(capNum) of \(origKWH) and estimated full-charge range is \(rangeText).",
+                        bundle: .module,
+                        comment: "Spoken usable vs original battery capacity and full-charge range"
+                    )
+                )
+            } else {
+                sentences.append(
+                    String(
+                        localized: "Usable capacity is \(capNum) of \(origKWH).",
+                        bundle: .module,
+                        comment: "Spoken usable vs original battery capacity"
+                    )
+                )
+            }
         } else if let cap = usableCapacityKWH {
-            capacityParts.append(String(format: "usable capacity is %.1f kWh", cap))
-        }
-        if let maxRange = maxRangeMiles {
-            capacityParts.append(String(format: "estimated full-charge range is %.0f miles", maxRange))
-        }
-        if !capacityParts.isEmpty {
-            let joined = capacityParts.joined(separator: " and ")
-            sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
+            let capKWH = FleetKitFormatting.energyKWH(cap)
+            if let maxRange = maxRangeMiles {
+                let rangeText = FleetKitFormatting.distance(miles: maxRange, width: .wide)
+                sentences.append(
+                    String(
+                        localized: "Usable capacity is \(capKWH) and estimated full-charge range is \(rangeText).",
+                        bundle: .module,
+                        comment: "Spoken usable battery capacity and full-charge range"
+                    )
+                )
+            } else {
+                sentences.append(
+                    String(
+                        localized: "Usable capacity is \(capKWH).",
+                        bundle: .module,
+                        comment: "Spoken usable battery capacity"
+                    )
+                )
+            }
+        } else if let maxRange = maxRangeMiles {
+            let rangeText = FleetKitFormatting.distance(miles: maxRange, width: .wide)
+            sentences.append(
+                String(
+                    localized: "Estimated full-charge range is \(rangeText).",
+                    bundle: .module,
+                    comment: "Spoken estimated full-charge range"
+                )
+            )
         }
 
-        var packParts: [String] = []
         if let remaining = energyRemainingKWH {
-            packParts.append(String(format: "%.1f kWh currently in the pack", remaining))
+            let remKWH = FleetKitFormatting.energyKWH(remaining)
+            sentences.append(
+                String(
+                    localized: "\(remKWH) currently in the pack.",
+                    bundle: .module,
+                    comment: "Spoken energy currently remaining in the battery pack"
+                )
+            )
         }
         if let lifetime = lifetimeEnergyUsedKWH {
-            packParts.append(String(format: "%.0f kWh lifetime energy used", lifetime))
+            let lifeKWH = FleetKitFormatting.energyKWH(lifetime, fractionLength: 0)
+            sentences.append(
+                String(
+                    localized: "\(lifeKWH) lifetime energy used.",
+                    bundle: .module,
+                    comment: "Spoken lifetime battery energy used"
+                )
+            )
         }
         if let drain = phantomDrainPercent {
-            packParts.append(String(format: "%.1f%% phantom drain", drain))
-        }
-        if !packParts.isEmpty {
-            let joined = packParts.joined(separator: ", ")
-            sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
+            let drainPct = FleetKitFormatting.percent(drain, fractionLength: 1)
+            sentences.append(
+                String(
+                    localized: "\(drainPct) phantom drain.",
+                    bundle: .module,
+                    comment: "Spoken phantom battery drain percentage"
+                )
+            )
         }
 
         if sentences.isEmpty {
-            return "Battery health measurements are not yet available for \(vehicleName)."
+            return String(
+                localized: "Battery health measurements are not yet available for \(vehicleName).",
+                bundle: .module,
+                comment: "Spoken fallback when battery health telemetry is unavailable"
+            )
         }
         return sentences.joined(separator: " ")
     }

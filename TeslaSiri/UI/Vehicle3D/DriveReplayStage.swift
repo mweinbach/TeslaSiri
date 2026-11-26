@@ -16,6 +16,7 @@ struct DriveReplayStage: View {
     let route: [FleetRoutePoint]
     @Binding var selectedPointIndex: Int
     var driveSessionID: String?
+    var units: String? = nil
 
     @Environment(\.vehicleModelSpec) private var spec
     @Environment(\.scenePhase) private var scenePhase
@@ -97,7 +98,7 @@ struct DriveReplayStage: View {
             spec: spec,
             state: state,
             stage: stage,
-            accessibilityDescription: "Drive replay",
+            accessibilityDescription: String(localized: "Drive replay", comment: "VoiceOver description for the 3D drive replay view"),
             onFrame: { stage, deltaTime in replay.frame(deltaTime, stage: stage) },
             onHotspot: nil,
             hotspotLabel: { _ in EmptyView() },
@@ -113,7 +114,7 @@ struct DriveReplayStage: View {
                 .strokeBorder(AppTheme.hairline, lineWidth: 0.75)
         }
         .overlay(alignment: .topLeading) {
-            DriveReplayReadout(replay: replay, driveSessionID: driveSessionID, fallback: state)
+            DriveReplayReadout(replay: replay, driveSessionID: driveSessionID, fallback: state, units: units)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -141,12 +142,13 @@ struct DriveReplayStage: View {
     private var compactControls: some View {
         HStack(alignment: .center) {
             HStack(alignment: .lastTextBaseline, spacing: 4) {
-                let speed = replay.hasLoadedDrive(driveSessionID) ? replay.speedMPH : route[safe: selectedPointIndex]?.speed ?? 0
-                Text(formattedNumber(speed, fractionLength: 0))
+                let speedMPH = replay.hasLoadedDrive(driveSessionID) ? replay.speedMPH : route[safe: selectedPointIndex]?.speed ?? 0
+                let isMetric = prefersMetricUnits(units)
+                Text(formattedNumber(isMetric ? speedMPH * 1.609_344 : speedMPH, fractionLength: 0))
                     .font(.title.weight(.semibold))
                     .fontDesign(.rounded)
                     .monospacedDigit()
-                Text("mph")
+                Text(isMetric ? UnitSpeed.kilometersPerHour.symbol : UnitSpeed.milesPerHour.symbol)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -177,15 +179,25 @@ struct DriveReplayStage: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Playback speed, \(replay.speed.title)")
 
-                Button(replay.isPlaying ? "Pause" : "Play", systemImage: replay.isPlaying ? "pause.fill" : "play.fill") {
+                Button {
                     replay.isPlaying.toggle()
+                } label: {
+                    if replay.isPlaying {
+                        Label("Pause", systemImage: "pause.fill")
+                    } else {
+                        Label("Play", systemImage: "play.fill")
+                    }
                 }
                 .labelStyle(.iconOnly)
                 .font(.body.weight(.semibold))
                 .frame(width: 44, height: 44)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .contentShape(.circle)
-                .accessibilityLabel(replay.isPlaying ? "Pause drive replay" : "Play drive replay")
+                .accessibilityLabel(
+                    replay.isPlaying
+                        ? String(localized: "Pause drive replay", comment: "VoiceOver label to pause 3D drive replay")
+                        : String(localized: "Play drive replay", comment: "VoiceOver label to start 3D drive replay")
+                )
             }
         }
         .disabled(route.count < 2 || !replay.hasLoadedDrive(driveSessionID))
@@ -221,13 +233,14 @@ private struct DriveReplayReadout: View {
     let replay: DriveReplayController
     let driveSessionID: String?
     let fallback: VehicleStageState
+    let units: String?
 
     var body: some View {
         let isReady = replay.hasLoadedDrive(driveSessionID)
         VehicleDrivingReadout(
             speedMPH: isReady ? replay.speedMPH : fallback.speedMPH,
             gear: "D",
-            units: nil,
+            units: units,
             isSelfDriving: isReady ? replay.isSelfDriving : fallback.isSelfDriving
         )
     }

@@ -85,12 +85,12 @@ public struct FleetIntentService: Sendable {
         let roster = try await vehicles(requiring: requestedVIN)
         if let requestedVIN {
             guard let vehicle = roster.first(where: { $0.vin == requestedVIN }) else {
-                throw FleetKitError.api("That vehicle is no longer available on this account.")
+                throw FleetKitError.api(String(localized: "That vehicle is no longer available on this account.", bundle: .module, comment: "Error when a requested vehicle VIN is no longer on the account"))
             }
             return vehicle
         }
         guard let vehicle = defaultVehicle(in: roster) else {
-            throw FleetKitError.api("No Tesla vehicles were found on your account.")
+            throw FleetKitError.api(String(localized: "No Tesla vehicles were found on your account.", bundle: .module, comment: "Error when no vehicles are associated with the connected account"))
         }
         return vehicle
     }
@@ -205,7 +205,7 @@ public struct FleetIntentService: Sendable {
 
     private func validateHistoryID(_ id: String, vin: String) throws {
         if id.hasPrefix("\(vin):teslascope:") != usesTeslascope {
-            throw FleetKitError.api("That session belongs to a different vehicle provider.")
+            throw FleetKitError.api(String(localized: "That session belongs to a different vehicle provider.", bundle: .module, comment: "Error when opening a drive or charge session from a different provider"))
         }
     }
 
@@ -380,10 +380,32 @@ public struct FleetIntentService: Sendable {
 
     func checkSoftwareCommand(for vehicle: FleetVehicleInfo, installAfter delay: Int?) throws {
         guard usesTeslascope else { return }
-        guard let delay else { throw FleetKitError.api("Teslascope does not support canceling software updates.") }
-        guard delay == 0 else { throw FleetKitError.api("Teslascope can start a software update immediately. It cannot schedule one for later.") }
+        guard let delay else {
+            throw FleetKitError.api(
+                String(
+                    localized: "Teslascope does not support canceling software updates.",
+                    bundle: .module,
+                    comment: "Error when attempting to cancel a Tesla software update via Teslascope."
+                )
+            )
+        }
+        guard delay == 0 else {
+            throw FleetKitError.api(
+                String(
+                    localized: "Teslascope can start a software update immediately. It cannot schedule one for later.",
+                    bundle: .module,
+                    comment: "Error when attempting to schedule a delayed software update via Teslascope."
+                )
+            )
+        }
         guard vehicle.allowsVehicleCommands != false else {
-            throw FleetKitError.api("Vehicle command access is disabled on this linked Tesla account.")
+            throw FleetKitError.api(
+                String(
+                    localized: "Vehicle command access is disabled on this linked Tesla account.",
+                    bundle: .module,
+                    comment: "Error when vehicle commands are disabled for the linked Tesla account."
+                )
+            )
         }
     }
 
@@ -451,10 +473,20 @@ enum IntentProgressHeartbeat {
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         let box = ProgressBox(progress: progress)
+        let sendingText = String(
+            localized: "Sending command to vehicle…",
+            bundle: .module,
+            comment: "Progress subtitle shown while Siri dispatches a long-running command to the car."
+        )
+        let waitingText = String(
+            localized: "Waiting for the vehicle to respond…",
+            bundle: .module,
+            comment: "Progress subtitle shown while Siri waits for a sleeping or slow car to acknowledge a command."
+        )
         box.progress.totalUnitCount = initialTotalUnitCount
         box.progress.localizedDescription = description
         box.progress.completedUnitCount = initialTotalUnitCount / 20
-        box.progress.localizedAdditionalDescription = "Sending command to vehicle…"
+        box.progress.localizedAdditionalDescription = sendingText
 
         let heartbeat = Task {
             var ticks = 0
@@ -472,9 +504,7 @@ enum IntentProgressHeartbeat {
                 )
                 box.progress.totalUnitCount = next.total
                 box.progress.completedUnitCount = next.completed
-                box.progress.localizedAdditionalDescription = ticks >= 2
-                    ? "Waiting for the vehicle to respond…"
-                    : "Sending command to vehicle…"
+                box.progress.localizedAdditionalDescription = ticks >= 2 ? waitingText : sendingText
             }
         }
 

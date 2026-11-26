@@ -49,7 +49,11 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Show", vehicle: vehicle, suffix: "latest charge"))
+            DisplayRepresentation(
+                title: vehicle.map {
+                    LocalizedStringResource("Show \($0.name)'s latest charge", bundle: FleetKitLocalization.bundleDescription, comment: "Siri suggestion to inspect a named vehicle's latest charging session")
+                } ?? LocalizedStringResource("Show my car's latest charge", bundle: FleetKitLocalization.bundleDescription, comment: "Siri suggestion to inspect the user's car's latest charging session")
+            )
         }
     }
 
@@ -64,7 +68,7 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
             if let charge {
                 let vehicles = try await service.vehicles()
                 guard let owner = vehicles.first(where: { $0.vin == charge.vin }) else {
-                    throw FleetKitError.api("That charging session doesn't belong to a car on your current account.")
+                    throw FleetKitError.api(String(localized: "That charging session doesn't belong to a car on your current account.", bundle: .module, comment: "Error when a requested charging session is not on the signed-in account"))
                 }
                 vehicleName = owner.name
                 summary = charge
@@ -72,7 +76,7 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
                 let resolved = try await service.resolvedVehicle(vehicle?.id)
                 vehicleName = resolved.name
                 guard let latest = try await service.charges(vin: resolved.vin, limit: 1).first else {
-                    throw FleetKitError.api("No charging sessions have been recorded for \(resolved.name) yet.")
+                    throw FleetKitError.api(String(localized: "No charging sessions have been recorded for \(resolved.name) yet.", bundle: .module, comment: "Error when a vehicle has no charging history"))
                 }
                 summary = ChargeSessionEntity(info: latest)
             }
@@ -80,15 +84,17 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
             let session = try await service.chargeDetails(summary)
             var spoken = session.spokenSummary(vehicleName: vehicleName)
             if let efficiency = session.chargingEfficiencyPercent, let drawn = session.energyDrawnKWH {
-                spoken += String(format: " It drew %.1f kWh from the charger, %.0f%% efficient.", drawn, efficiency)
+                let drawnText = FleetKitFormatting.energyKWH(drawn)
+                let effText = FleetKitFormatting.percent(efficiency)
+                spoken += " " + String(localized: "It drew \(drawnText) from the charger, \(effText) efficient.", bundle: .module, comment: "Spoken detail about energy drawn from charger and charging efficiency")
             }
             if session.cost == nil {
-                spoken += " No cost was recorded."
+                spoken += " " + String(localized: "No cost was recorded.", bundle: .module, comment: "Spoken note when a charging session has no recorded cost")
             }
             log.success("described charge \(session.id) for \(vehicleName)")
             return .result(
                 value: session,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 snippetIntent: ChargeSessionSnippetIntent(
                     sessions: [session],
                     vehicleName: vehicleName,
@@ -116,14 +122,14 @@ public struct ChargeSessionSnippetView: View {
         allSessions: [ChargeSessionEntity]? = nil,
         selectedIndex: Int = 0,
         sessionKey: String = "charge-latest",
-        vehicleName: String = "My Car",
+        vehicleName: String? = nil,
         mapData: SiriRenderedMapData? = nil
     ) {
         self.session = session
         self.allSessions = allSessions ?? [session]
         self.selectedIndex = selectedIndex
         self.sessionKey = sessionKey
-        self.vehicleName = vehicleName
+        self.vehicleName = vehicleName ?? String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle")
         self.mapData = mapData
     }
 
@@ -150,6 +156,8 @@ public struct ChargeSessionSnippetView: View {
                 systemImage: session.isSupercharger ? "bolt.fill" : "ev.charger.fill"
             )
             .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .foregroundStyle(session.isSupercharger ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.green))
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -179,8 +187,9 @@ public struct ChargeSessionSnippetView: View {
                             .frame(width: 22, height: 22)
                     }
                     .disabled(selectedIndex <= 0)
+                    .accessibilityLabel(Text("Previous charging session", bundle: .module, comment: "Accessibility label for previous charging session button"))
 
-                    Text("\(selectedIndex + 1)/\(allSessions.count)")
+                    Text(verbatim: "\(selectedIndex + 1)/\(allSessions.count)")
                         .font(.caption2.weight(.semibold))
                         .monospacedDigit()
 
@@ -196,6 +205,7 @@ public struct ChargeSessionSnippetView: View {
                             .frame(width: 22, height: 22)
                     }
                     .disabled(selectedIndex >= allSessions.count - 1)
+                    .accessibilityLabel(Text("Next charging session", bundle: .module, comment: "Accessibility label for next charging session button"))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
@@ -242,7 +252,10 @@ public struct ChargeSessionSnippetView: View {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(session.isSupercharger ? .red : .green)
-                    Text(session.location ?? "\(vehicleName) Charger")
+                    Text(
+                        session.location
+                            ?? String(localized: "\(vehicleName) Charger", bundle: .module, comment: "Fallback charging location title")
+                    )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -268,20 +281,29 @@ public struct ChargeSessionSnippetView: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.green)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
                 if let miles = session.milesAdded {
-                    Text(String(format: "· +%.0f mi", miles))
+                    Text(verbatim: "· +\(FleetKitFormatting.distance(miles: miles))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
 
                 Spacer()
 
-                if let batteryText = session.batterySummaryText {
-                    Text(batteryText)
-                        .font(.caption.weight(.semibold))
-                        .monospacedDigit()
+                if let start = session.startingBatteryPercent, let end = session.endingBatteryPercent {
+                    HStack(spacing: 3) {
+                        Text(FleetKitFormatting.percent(start))
+                        Image(systemName: "arrow.forward")
+                            .font(.caption2.weight(.semibold))
+                        Text(FleetKitFormatting.percent(end))
+                    }
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
                 }
             }
 
@@ -304,6 +326,7 @@ public struct ChargeSessionSnippetView: View {
                             )
                         )
                 }
+                .flipsForRightToLeftLayoutDirection(true)
                 .frame(height: 9)
             }
         }
@@ -315,32 +338,34 @@ public struct ChargeSessionSnippetView: View {
         HStack(spacing: 8) {
             metricPill(
                 icon: "clock",
-                label: "Duration",
-                value: session.durationMinutes.map { "\($0) min" } ?? "—"
+                label: LocalizedStringResource("Duration", bundle: FleetKitLocalization.bundleDescription, comment: "Charging session duration metric label"),
+                value: session.durationMinutes.map { FleetKitFormatting.durationMinutes($0) } ?? "—"
             )
             metricPill(
                 icon: "creditcard",
-                label: "Cost",
+                label: LocalizedStringResource("Cost", bundle: FleetKitLocalization.bundleDescription, comment: "Charging session cost metric label"),
                 value: session.formattedCost ?? "—"
             )
             metricPill(
                 icon: "gauge.with.dots.needle.67percent",
-                label: "Efficiency",
-                value: session.chargingEfficiencyPercent.map { String(format: "%.0f%%", $0) } ?? "—"
+                label: LocalizedStringResource("Efficiency", bundle: FleetKitLocalization.bundleDescription, comment: "Charging session efficiency metric label"),
+                value: session.chargingEfficiencyPercent.map { FleetKitFormatting.percent($0) } ?? "—"
             )
         }
     }
 
-    private func metricPill(icon: String, label: String, value: String) -> some View {
+    private func metricPill(icon: String, label: LocalizedStringResource, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Label(label, systemImage: icon)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
             Text(value)
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9)
@@ -357,7 +382,11 @@ public struct ChargeSessionSnippetView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Link(destination: url) {
-                    Label("Apple Maps", systemImage: "map.fill")
+                    Label {
+                        Text("Apple Maps", bundle: .module, comment: "Button to open charging location in Apple Maps")
+                    } icon: {
+                        Image(systemName: "map.fill")
+                    }
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -391,9 +420,9 @@ public struct EmptyChargeSnippetView: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("No Charging Sessions Found")
+                Text("No Charging Sessions Found", bundle: .module, comment: "Empty state title when no charging sessions match")
                     .font(.subheadline.weight(.semibold))
-                Text("No matching charges recorded for \(vehicleName).")
+                Text("No matching charges recorded for \(vehicleName).", bundle: .module, comment: "Empty state description when no charging sessions match")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

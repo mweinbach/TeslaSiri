@@ -78,7 +78,9 @@ final class DrivePlacesIndex {
     private enum NicknameError: LocalizedError {
         case placeUnavailable
 
-        var errorDescription: String? { "This place is no longer in your drive history." }
+        var errorDescription: String? {
+            String(localized: "This place is no longer in your drive history.", comment: "Error shown when trying to rename a place that is no longer in the drive history")
+        }
     }
 
     /// Drives that ended at, or started from, `place`, newest first.
@@ -337,11 +339,12 @@ final class DrivePlacesIndex {
         guard let (homeID, nights) = overnights.max(by: { $0.value < $1.value }), nights >= 3,
               let index = places.firstIndex(where: { $0.id == homeID }),
               places[index].category == nil,
-              DrivePlaceResolver.savedName(from: places[index].name) == nil || places[index].name == "Home"
+              DrivePlaceResolver.savedName(from: places[index].name) == nil || places[index].isDetectedHome || places[index].name == "Home"
         else { return }
-        if places[index].name != "Home" {
+        if !places[index].isDetectedHome || places[index].name != "Home" {
             places[index].address = places[index].address ?? places[index].name
             places[index].name = "Home"
+            places[index].isDetectedHome = true
         }
     }
 

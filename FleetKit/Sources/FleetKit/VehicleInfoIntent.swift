@@ -50,9 +50,20 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$topics)) { vehicle, topics in
             let topicText = topics.map(\.spokenName).formatted(.list(type: .and))
-            return DisplayRepresentation(
-                title: VehicleEntity.predictionTitle(verb: "Get", vehicle: vehicle, suffix: topicText)
-            )
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Get \(vehicle.name) \(topicText)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for reading specific telemetry topics on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Get my car \(topicText)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for reading specific telemetry topics on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -77,7 +88,7 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
             log.success("answered \(requested.map(\.rawValue).joined(separator: ",")) for \(resolved.name)")
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(answer)"),
+                dialog: IntentDialog(stringLiteral: answer),
                 snippetIntent: VehicleStatusSnippetIntent(status: entity, topics: requested)
             )
         } catch {
@@ -111,14 +122,22 @@ public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
 
     var spokenName: String {
         switch self {
-        case .battery: "battery"
-        case .range: "range"
-        case .charging: "charging"
-        case .tirePressure: "tire pressure"
-        case .odometer: "mileage"
-        case .climate: "climate"
-        case .security: "locks"
-        case .location: "location"
+        case .battery:
+            String(localized: "battery", bundle: .module, comment: "Spoken topic name for battery level.")
+        case .range:
+            String(localized: "range", bundle: .module, comment: "Spoken topic name for driving range.")
+        case .charging:
+            String(localized: "charging", bundle: .module, comment: "Spoken topic name for charging status.")
+        case .tirePressure:
+            String(localized: "tire pressure", bundle: .module, comment: "Spoken topic name for tire pressure.")
+        case .odometer:
+            String(localized: "mileage", bundle: .module, comment: "Spoken topic name for odometer mileage.")
+        case .climate:
+            String(localized: "climate", bundle: .module, comment: "Spoken topic name for cabin climate.")
+        case .security:
+            String(localized: "locks", bundle: .module, comment: "Spoken topic name for door locks and security.")
+        case .location:
+            String(localized: "location", bundle: .module, comment: "Spoken topic name for vehicle location.")
         }
     }
 }
@@ -133,7 +152,15 @@ extension VehicleStatusEntity {
         // Battery and range read naturally as one sentence when both are asked.
         if ordered.contains(.battery), ordered.contains(.range),
            let batteryPercent, let batteryRangeMiles {
-            sentences.append("\(vehicleName) is at \(batteryPercent)% with about \(Int(batteryRangeMiles.rounded())) miles of range.")
+            let percentText = FleetKitFormatting.percent(batteryPercent)
+            let rangeText = FleetKitFormatting.distance(miles: batteryRangeMiles, usesMetric: usesMetric, width: .wide, fractionLength: 0)
+            sentences.append(
+                String(
+                    localized: "\(vehicleName) is at \(percentText) with about \(rangeText) of range.",
+                    bundle: .module,
+                    comment: "Spoken vehicle status sentence combining battery percentage and estimated range."
+                )
+            )
             seen = [.battery, .range]
         } else {
             seen = []
@@ -147,26 +174,57 @@ extension VehicleStatusEntity {
 
         if let updatedAt, now.timeIntervalSince(updatedAt) > 60 * 60 {
             let age = updatedAt.formatted(.relative(presentation: .named))
-            sentences.append("These readings are from \(age), while the car was asleep.")
+            sentences.append(
+                String(
+                    localized: "These readings are from \(age), while the car was asleep.",
+                    bundle: .module,
+                    comment: "Spoken note explaining that vehicle telemetry is older than an hour because the car is asleep."
+                )
+            )
         }
 
         return sentences.isEmpty
-            ? "\(vehicleName) didn't report that information. Try again once the car is awake."
+            ? String(
+                localized: "\(vehicleName) didn't report that information. Try again once the car is awake.",
+                bundle: .module,
+                comment: "Spoken fallback when requested telemetry fields are unavailable."
+            )
             : sentences.joined(separator: " ")
     }
 
     private func sentence(for topic: VehicleInfoTopic) -> String? {
         switch topic {
         case .battery:
-            return batteryPercent.map { "\(vehicleName) is at \($0)% battery." }
+            return batteryPercent.map {
+                let percentText = FleetKitFormatting.percent($0)
+                return String(
+                    localized: "\(vehicleName) is at \(percentText) battery.",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting battery percentage."
+                )
+            }
         case .range:
-            return batteryRangeMiles.map { "Estimated range is \(Int($0.rounded())) miles." }
+            return batteryRangeMiles.map {
+                let rangeText = FleetKitFormatting.distance(miles: $0, usesMetric: usesMetric, width: .wide, fractionLength: 0)
+                return String(
+                    localized: "Estimated range is \(rangeText).",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting estimated driving range."
+                )
+            }
         case .charging:
             return chargingSentence
         case .tirePressure:
             return tireSentence
         case .odometer:
-            return odometerMiles.map { "The odometer reads \(Int($0.rounded()).formatted()) miles." }
+            return odometerMiles.map {
+                let distanceText = FleetKitFormatting.distance(miles: $0, usesMetric: usesMetric, width: .wide, fractionLength: 0)
+                return String(
+                    localized: "The odometer reads \(distanceText).",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting vehicle odometer reading."
+                )
+            }
         case .climate:
             return climateSentence
         case .security:
@@ -178,100 +236,307 @@ extension VehicleStatusEntity {
 
     private var chargingSentence: String? {
         guard let chargingState else { return nil }
-        let limit = chargeLimitPercent.map { " The charge limit is \($0)%." } ?? ""
+        let limitSentence = chargeLimitPercent.map { percent -> String in
+            let percentText = FleetKitFormatting.percent(percent)
+            return String(
+                localized: "The charge limit is \(percentText).",
+                bundle: .module,
+                comment: "Spoken sentence reporting the battery charge limit."
+            )
+        }
+        var sentences: [String] = []
         switch chargingState.lowercased() {
         case "charging", "starting":
-            var text = "It's charging"
+            var clauses: [String] = []
             if let chargerPowerKW, chargerPowerKW > 0 {
-                text += String(format: " at %.0f kW", chargerPowerKW)
+                let powerText = FleetKitFormatting.powerKW(chargerPowerKW, fractionLength: 0)
+                clauses.append(
+                    String(
+                        localized: "It's charging at \(powerText)",
+                        bundle: .module,
+                        comment: "Opening clause of spoken charging sentence including power in kW."
+                    )
+                )
+            } else {
+                clauses.append(
+                    String(
+                        localized: "It's charging",
+                        bundle: .module,
+                        comment: "Opening clause of spoken charging sentence when power is unavailable."
+                    )
+                )
             }
             if let chargeRateMPH, chargeRateMPH > 0 {
-                text += ", adding about \(Int(chargeRateMPH.rounded())) miles of range per hour"
+                let rateDistance = FleetKitFormatting.distance(miles: chargeRateMPH, usesMetric: usesMetric, width: .wide, fractionLength: 0)
+                clauses.append(
+                    String(
+                        localized: "adding about \(rateDistance) of range per hour",
+                        bundle: .module,
+                        comment: "Clause of spoken charging sentence reporting range added per hour."
+                    )
+                )
             }
             if let minutesToFullCharge {
-                let duration = Duration.seconds(minutesToFullCharge * 60)
-                    .formatted(.units(allowed: [.hours, .minutes], width: .wide))
-                text += ", with \(duration) to go"
+                let duration = FleetKitFormatting.durationMinutes(minutesToFullCharge, width: .wide)
+                clauses.append(
+                    String(
+                        localized: "with \(duration) to go",
+                        bundle: .module,
+                        comment: "Clause of spoken charging sentence reporting remaining charge time."
+                    )
+                )
             }
-            return text + "." + limit
+            sentences.append(clauses.joined(separator: ", ") + ".")
         case "complete":
-            return "Charging is complete." + limit
+            sentences.append(String(localized: "Charging is complete.", bundle: .module, comment: "Spoken sentence when battery charging is finished."))
         case "stopped", "nopower":
-            return "It's plugged in but not charging." + limit
+            sentences.append(String(localized: "It's plugged in but not charging.", bundle: .module, comment: "Spoken sentence when the car is plugged in but not actively charging."))
         case "disconnected":
-            let port = chargePortDoorOpen == true ? " The charge port door is open." : ""
-            return "It's not plugged in." + limit + port
+            sentences.append(String(localized: "It's not plugged in.", bundle: .module, comment: "Spoken sentence when no charging cable is connected."))
         default:
-            return "Charging state: \(chargingState)." + limit
+            let localizedState = VehicleStatusEntity.localizedChargingState(chargingState)
+            sentences.append(
+                String(
+                    localized: "Charging state: \(localizedState).",
+                    bundle: .module,
+                    comment: "Spoken fallback sentence for an unrecognized charging state."
+                )
+            )
         }
+        if let limitSentence {
+            sentences.append(limitSentence)
+        }
+        if chargingState.lowercased() == "disconnected", chargePortDoorOpen == true {
+            sentences.append(
+                String(
+                    localized: "The charge port door is open.",
+                    bundle: .module,
+                    comment: "Spoken sentence noting that the charge port door is open while unplugged."
+                )
+            )
+        }
+        return sentences.joined(separator: " ")
     }
 
     private var tireSentence: String? {
         let tires: [(String, Double?)] = [
-            ("front left", frontLeftTirePSI), ("front right", frontRightTirePSI),
-            ("rear left", rearLeftTirePSI), ("rear right", rearRightTirePSI)
+            (String(localized: "front left", bundle: .module, comment: "Front left tire position."), frontLeftTirePSI),
+            (String(localized: "front right", bundle: .module, comment: "Front right tire position."), frontRightTirePSI),
+            (String(localized: "rear left", bundle: .module, comment: "Rear left tire position."), rearLeftTirePSI),
+            (String(localized: "rear right", bundle: .module, comment: "Rear right tire position."), rearRightTirePSI)
         ]
-        let readings = tires.compactMap { name, psi in psi.map { (name, Int($0.rounded())) } }
-        guard !readings.isEmpty else { return "There's no recent tire pressure reading. Tesla reports it after a short drive." }
-        let list = readings.map { "\($0.0) \($0.1)" }.formatted(.list(type: .and))
-        var text = "Tire pressures are \(list) PSI."
-        let low = readings.filter { $0.1 < 38 }.map(\.0)
-        if !low.isEmpty {
-            text += " The \(low.formatted(.list(type: .and))) \(low.count == 1 ? "tire looks" : "tires look") low."
+        let readings = tires.compactMap { name, psi in psi.map { (name, $0) } }
+        guard !readings.isEmpty else {
+            return String(
+                localized: "There's no recent tire pressure reading. Tesla reports it after a short drive.",
+                bundle: .module,
+                comment: "Spoken answer when tire pressure readings are unavailable."
+            )
         }
-        return text
+        let text: String
+        if usesMetric {
+            let list = readings.map { name, psi in
+                let pressure = FleetKitFormatting.tirePressure(psi: psi, usesMetric: true)
+                return String(localized: "\(name) \(pressure)", bundle: .module, comment: "Tire position paired with its metric pressure reading.")
+            }.formatted(.list(type: .and))
+            text = String(
+                localized: "Tire pressures are \(list).",
+                bundle: .module,
+                comment: "Spoken sentence listing all four tire pressures in metric units."
+            )
+        } else {
+            let list = readings.map { name, psi in
+                "\(name) \(Int(psi.rounded()))"
+            }.formatted(.list(type: .and))
+            text = String(
+                localized: "Tire pressures are \(list) PSI.",
+                bundle: .module,
+                comment: "Spoken sentence listing all four tire pressures in PSI."
+            )
+        }
+        let low = readings.filter { Int($0.1.rounded()) < 38 }.map(\.0)
+        guard !low.isEmpty else { return text }
+        let lowList = low.formatted(.list(type: .and))
+        let warning = low.count == 1
+            ? String(localized: "The \(lowList) tire looks low.", bundle: .module, comment: "Spoken warning when a single tire has low pressure.")
+            : String(localized: "The \(lowList) tires look low.", bundle: .module, comment: "Spoken warning when multiple tires have low pressure.")
+        return "\(text) \(warning)"
     }
 
     private var climateSentence: String? {
         var parts: [String] = []
-        let unit = temperatureUnit ?? "°"
-        func degrees(_ value: Double) -> String { "\(Int(value.rounded()))\(unit)" }
+        let inFahrenheit = temperatureUnit != "°C"
+        func degrees(_ value: Double) -> String {
+            FleetKitFormatting.temperature(value, inFahrenheit: inFahrenheit, fractionLength: 0)
+        }
 
         if let insideTemp, let outsideTemp {
-            parts.append("It's \(degrees(insideTemp)) inside and \(degrees(outsideTemp)) outside.")
+            let insideText = degrees(insideTemp)
+            let outsideText = degrees(outsideTemp)
+            parts.append(
+                String(
+                    localized: "It's \(insideText) inside and \(outsideText) outside.",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting both cabin and exterior temperatures."
+                )
+            )
         } else if let insideTemp {
-            parts.append("It's \(degrees(insideTemp)) inside.")
+            let insideText = degrees(insideTemp)
+            parts.append(
+                String(
+                    localized: "It's \(insideText) inside.",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting cabin temperature."
+                )
+            )
         } else if let outsideTemp {
-            parts.append("It's \(degrees(outsideTemp)) outside.")
+            let outsideText = degrees(outsideTemp)
+            parts.append(
+                String(
+                    localized: "It's \(outsideText) outside.",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting exterior temperature."
+                )
+            )
         }
         if let isClimateOn {
             if isClimateOn {
-                parts.append("Climate is on" + (targetTemp.map { ", set to \(degrees($0))." } ?? "."))
+                if let targetTemp {
+                    let targetText = degrees(targetTemp)
+                    parts.append(
+                        String(
+                            localized: "Climate is on, set to \(targetText).",
+                            bundle: .module,
+                            comment: "Spoken sentence reporting that climate control is on with a target temperature."
+                        )
+                    )
+                } else {
+                    parts.append(
+                        String(
+                            localized: "Climate is on.",
+                            bundle: .module,
+                            comment: "Spoken sentence reporting that climate control is on."
+                        )
+                    )
+                }
             } else {
-                parts.append("Climate is off.")
+                parts.append(
+                    String(
+                        localized: "Climate is off.",
+                        bundle: .module,
+                        comment: "Spoken sentence reporting that climate control is off."
+                    )
+                )
             }
         }
-        if dogModeOn == true { parts.append("Dog Mode is on.") }
-        if maxDefrostOn == true { parts.append("Max defrost is on.") }
-        if let seatHeaterSummary, seatHeaterSummary.contains(where: { "123".contains($0) }) {
-            parts.append("Seat heat: \(seatHeaterSummary).")
+        if dogModeOn == true {
+            parts.append(String(localized: "Dog Mode is on.", bundle: .module, comment: "Spoken sentence reporting that Dog Mode is active."))
         }
-        if steeringWheelHeaterOn == true { parts.append("The steering wheel heater is on.") }
+        if maxDefrostOn == true {
+            parts.append(String(localized: "Max defrost is on.", bundle: .module, comment: "Spoken sentence reporting that max defrost is active."))
+        }
+        if let seatHeaterSummary, seatHeaterSummary.contains(where: { "123".contains($0) }) {
+            parts.append(
+                String(
+                    localized: "Seat heat: \(seatHeaterSummary).",
+                    bundle: .module,
+                    comment: "Spoken sentence summarizing active seat heater levels."
+                )
+            )
+        }
+        if steeringWheelHeaterOn == true {
+            parts.append(
+                String(
+                    localized: "The steering wheel heater is on.",
+                    bundle: .module,
+                    comment: "Spoken sentence reporting that the heated steering wheel is active."
+                )
+            )
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private var securitySentence: String? {
-        var parts: [String] = []
-        if let isLocked { parts.append(isLocked ? "It's locked" : "It's unlocked") }
-        if let sentryModeOn { parts.append(sentryModeOn ? "Sentry Mode is on" : "Sentry Mode is off") }
-        var text = parts.isEmpty ? "" : parts.joined(separator: " and ") + "."
-        if let openClosures {
-            text += openClosures == "None"
-                ? " All doors, windows, the trunk, and the frunk are closed."
-                : " Open: \(openClosures)."
+        var sentences: [String] = []
+        switch (isLocked, sentryModeOn) {
+        case (true, true):
+            sentences.append(String(localized: "It's locked and Sentry Mode is on.", bundle: .module, comment: "Spoken security sentence when doors are locked and Sentry Mode is on."))
+        case (true, false):
+            sentences.append(String(localized: "It's locked and Sentry Mode is off.", bundle: .module, comment: "Spoken security sentence when doors are locked and Sentry Mode is off."))
+        case (false, true):
+            sentences.append(String(localized: "It's unlocked and Sentry Mode is on.", bundle: .module, comment: "Spoken security sentence when doors are unlocked and Sentry Mode is on."))
+        case (false, false):
+            sentences.append(String(localized: "It's unlocked and Sentry Mode is off.", bundle: .module, comment: "Spoken security sentence when doors are unlocked and Sentry Mode is off."))
+        case (true, nil):
+            sentences.append(String(localized: "It's locked.", bundle: .module, comment: "Spoken security sentence when doors are locked."))
+        case (false, nil):
+            sentences.append(String(localized: "It's unlocked.", bundle: .module, comment: "Spoken security sentence when doors are unlocked."))
+        case (nil, true):
+            sentences.append(String(localized: "Sentry Mode is on.", bundle: .module, comment: "Spoken security sentence when Sentry Mode is on."))
+        case (nil, false):
+            sentences.append(String(localized: "Sentry Mode is off.", bundle: .module, comment: "Spoken security sentence when Sentry Mode is off."))
+        case (nil, nil):
+            break
         }
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? nil : trimmed
+        if let openClosures {
+            if openClosures == "None" {
+                sentences.append(
+                    String(
+                        localized: "All doors, windows, the trunk, and the frunk are closed.",
+                        bundle: .module,
+                        comment: "Spoken security sentence when no doors, windows, trunk, or frunk are open."
+                    )
+                )
+            } else {
+                sentences.append(
+                    String(
+                        localized: "Open: \(openClosures).",
+                        bundle: .module,
+                        comment: "Spoken security sentence listing open doors, windows, trunk, or frunk."
+                    )
+                )
+            }
+        }
+        return sentences.isEmpty ? nil : sentences.joined(separator: " ")
     }
 
     private var locationSentence: String? {
-        let place = locationAddress.map { "near \($0)" }
-            ?? ((latitude != nil && longitude != nil) ? "at the location shown in the Wattie app" : nil)
-        guard let place else { return "\(vehicleName) hasn't reported its location recently." }
-        if let speedMPH, speedMPH > 0, gear == "D" || gear == "R" {
-            return "\(vehicleName) is driving \(place) at \(Int(speedMPH.rounded())) mph."
+        let isDriving = (speedMPH ?? 0) > 0 && (gear == "D" || gear == "R")
+        if let locationAddress {
+            if isDriving, let speedMPH {
+                let speedText = FleetKitFormatting.speed(mph: speedMPH, usesMetric: usesMetric, fractionLength: 0)
+                return String(
+                    localized: "\(vehicleName) is driving near \(locationAddress) at \(speedText).",
+                    bundle: .module,
+                    comment: "Spoken location sentence when the vehicle is driving near a named address."
+                )
+            }
+            return String(
+                localized: "\(vehicleName) is parked near \(locationAddress).",
+                bundle: .module,
+                comment: "Spoken location sentence when the vehicle is parked near a named address."
+            )
         }
-        return "\(vehicleName) is parked \(place)."
+        if latitude != nil && longitude != nil {
+            if isDriving, let speedMPH {
+                let speedText = FleetKitFormatting.speed(mph: speedMPH, usesMetric: usesMetric, fractionLength: 0)
+                return String(
+                    localized: "\(vehicleName) is driving at \(speedText), at the location shown in the Wattie app.",
+                    bundle: .module,
+                    comment: "Spoken location sentence when driving with coordinates but no street address."
+                )
+            }
+            return String(
+                localized: "\(vehicleName) is parked at the location shown in the Wattie app.",
+                bundle: .module,
+                comment: "Spoken location sentence when parked with coordinates but no street address."
+            )
+        }
+        return String(
+            localized: "\(vehicleName) hasn't reported its location recently.",
+            bundle: .module,
+            comment: "Spoken location sentence when the vehicle has no recent coordinates."
+        )
     }
 }
 

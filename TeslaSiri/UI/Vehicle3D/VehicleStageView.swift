@@ -143,6 +143,8 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
     let onHotspot: ((VehicleHotspot) -> Void)?
     @ViewBuilder var hotspotLabel: (VehicleHotspot) -> Overlay
 
+    @State private var measuredWidths: [VehicleHotspot: CGFloat] = [:]
+
     var body: some View {
         let layout = resolvedCallouts(for: stage.hotspots)
         ZStack(alignment: .topLeading) {
@@ -179,6 +181,13 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(onHotspot == nil)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                    guard width > 1 else { return }
+                    let current = measuredWidths[item.hotspot] ?? 0
+                    if abs(current - width) > 0.5 {
+                        measuredWidths[item.hotspot] = width
+                    }
+                }
                 .position(item.labelCenter)
                 .transition(.opacity)
             }
@@ -205,12 +214,13 @@ private struct VehicleHotspotLayer<Overlay: View>: View {
         let gap: CGFloat = 10
 
         var items = placements.map { placement -> ResolvedCallout in
-            let estimatedWidth: CGFloat = switch placement.hotspot {
+            let fallbackWidth: CGFloat = switch placement.hotspot {
             case .lock: 36
-            case .frunk: 52
-            case .trunk: 52
-            case .chargePort: 56
+            case .frunk: 60
+            case .trunk: 60
+            case .chargePort: 64
             }
+            let estimatedWidth = measuredWidths[placement.hotspot] ?? fallbackWidth
             let rowY: CGFloat = placement.hotspot == .lock ? 16 : 20
             let clampedX = min(max(placement.point.x, horizontalInset + estimatedWidth / 2), width - horizontalInset - estimatedWidth / 2)
             return ResolvedCallout(

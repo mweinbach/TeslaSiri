@@ -27,8 +27,14 @@ public enum VehicleCommandDeliveryState: String, AppEnum, Codable, Sendable {
     ///   - confirmed: The sentence to use when the car already acknowledged the command.
     func summary(vehicleName: String, wakingAction: String, confirmed: String) -> String {
         switch self {
-        case .wakingVehicle: "\(vehicleName) was asleep — sent the request to wake it and \(wakingAction)."
-        case .confirmed: confirmed
+        case .wakingVehicle:
+            String(
+                localized: "\(vehicleName) was asleep — sent the request to wake it and \(wakingAction).",
+                bundle: .module,
+                comment: "Spoken Siri result when a command is queued for a sleeping vehicle. First placeholder is vehicle name, second is the localized action infinitive phrase."
+            )
+        case .confirmed:
+            confirmed
         }
     }
 }
@@ -160,27 +166,53 @@ public struct CabinClimateSettings: TransientAppEntity {
     public var displayRepresentation: DisplayRepresentation {
         var parts: [String] = []
         if let targetTemperatureCelsius {
-            parts.append(String(format: "%.1f°C", targetTemperatureCelsius))
+            parts.append(FleetKitFormatting.temperature(targetTemperatureCelsius, inFahrenheit: false, fractionLength: 1))
         }
         if let enableMaxDefrost {
-            parts.append(enableMaxDefrost ? "Defrost On" : "Defrost Off")
+            parts.append(
+                enableMaxDefrost
+                    ? String(localized: "Defrost On", bundle: .module, comment: "Short climate setting summary for max defrost enabled.")
+                    : String(localized: "Defrost Off", bundle: .module, comment: "Short climate setting summary for max defrost disabled.")
+            )
         }
         if let driverSeatHeatLevel {
-            parts.append(driverSeatHeatLevel > 0 ? "Driver Seat \(driverSeatHeatLevel)" : "Driver Seat Off")
+            parts.append(
+                driverSeatHeatLevel > 0
+                    ? String(localized: "Driver Seat \(driverSeatHeatLevel)", bundle: .module, comment: "Short climate setting summary for driver seat heater level.")
+                    : String(localized: "Driver Seat Off", bundle: .module, comment: "Short climate setting summary for driver seat heater off.")
+            )
         }
         if let passengerSeatHeatLevel {
-            parts.append(passengerSeatHeatLevel > 0 ? "Passenger Seat \(passengerSeatHeatLevel)" : "Passenger Seat Off")
+            parts.append(
+                passengerSeatHeatLevel > 0
+                    ? String(localized: "Passenger Seat \(passengerSeatHeatLevel)", bundle: .module, comment: "Short climate setting summary for passenger seat heater level.")
+                    : String(localized: "Passenger Seat Off", bundle: .module, comment: "Short climate setting summary for passenger seat heater off.")
+            )
         }
         if let steeringWheelHeat {
-            parts.append(steeringWheelHeat ? "Wheel Heat On" : "Wheel Heat Off")
+            parts.append(
+                steeringWheelHeat
+                    ? String(localized: "Wheel Heat On", bundle: .module, comment: "Short climate setting summary for steering wheel heater enabled.")
+                    : String(localized: "Wheel Heat Off", bundle: .module, comment: "Short climate setting summary for steering wheel heater disabled.")
+            )
         }
         if let enablePetMode {
-            parts.append(enablePetMode ? "Dog Mode On" : "Dog Mode Off")
+            parts.append(
+                enablePetMode
+                    ? String(localized: "Dog Mode On", bundle: .module, comment: "Short climate setting summary for Dog Mode enabled.")
+                    : String(localized: "Dog Mode Off", bundle: .module, comment: "Short climate setting summary for Dog Mode disabled.")
+            )
         }
         if let enableBioweaponDefenseMode {
-            parts.append(enableBioweaponDefenseMode ? "Bioweapon Defense On" : "Bioweapon Defense Off")
+            parts.append(
+                enableBioweaponDefenseMode
+                    ? String(localized: "Bioweapon Defense On", bundle: .module, comment: "Short climate setting summary for Bioweapon Defense Mode enabled.")
+                    : String(localized: "Bioweapon Defense Off", bundle: .module, comment: "Short climate setting summary for Bioweapon Defense Mode disabled.")
+            )
         }
-        let summary = parts.isEmpty ? "Start Cabin Climate" : parts.joined(separator: " • ")
+        let summary = parts.isEmpty
+            ? String(localized: "Start Cabin Climate", bundle: .module, comment: "Fallback summary when no individual cabin climate fields are set.")
+            : parts.joined(separator: " • ")
         return DisplayRepresentation(title: "\(summary)")
     }
 
@@ -265,27 +297,31 @@ public struct DriveFilterCriteria: TransientAppEntity {
     public var displayRepresentation: DisplayRepresentation {
         var parts: [String] = []
         if let locationQuery, !locationQuery.isEmpty {
-            parts.append("Near \"\(locationQuery)\"")
+            parts.append(String(localized: "Near “\(locationQuery)”", bundle: .module, comment: "Drive filter chip for a location query matching start or destination."))
         }
         if let startLocationQuery, !startLocationQuery.isEmpty {
-            parts.append("From \"\(startLocationQuery)\"")
+            parts.append(String(localized: "From “\(startLocationQuery)”", bundle: .module, comment: "Drive filter chip for a starting location query."))
         }
         if let endLocationQuery, !endLocationQuery.isEmpty {
-            parts.append("To \"\(endLocationQuery)\"")
+            parts.append(String(localized: "To “\(endLocationQuery)”", bundle: .module, comment: "Drive filter chip for a destination query."))
         }
         if let tagQuery, !tagQuery.isEmpty {
-            parts.append("Tag \"\(tagQuery)\"")
+            parts.append(String(localized: "Tag “\(tagQuery)”", bundle: .module, comment: "Drive filter chip for a drive tag."))
         }
         if let minimumDistanceMiles {
-            parts.append(String(format: "≥ %.1f mi", minimumDistanceMiles))
+            let dist = FleetKitFormatting.distance(miles: minimumDistanceMiles, fractionLength: 1)
+            parts.append(String(localized: "≥ \(dist)", bundle: .module, comment: "Drive filter chip for minimum trip distance."))
         }
         if let minimumDurationMinutes {
-            parts.append("≥ \(minimumDurationMinutes) min")
+            let dur = FleetKitFormatting.durationMinutes(minimumDurationMinutes)
+            parts.append(String(localized: "≥ \(dur)", bundle: .module, comment: "Drive filter chip for minimum trip duration."))
         }
         if let maximumResults {
-            parts.append("Up to \(maximumResults)")
+            parts.append(String(localized: "Up to \(maximumResults)", bundle: .module, comment: "Drive filter chip for maximum result count."))
         }
-        let title = parts.isEmpty ? "Recent Drives" : parts.joined(separator: " • ")
+        let title = parts.isEmpty
+            ? String(localized: "Recent Drives", bundle: .module, comment: "Fallback title for unfiltered drive criteria.")
+            : parts.joined(separator: " • ")
         return DisplayRepresentation(title: "\(title)")
     }
 

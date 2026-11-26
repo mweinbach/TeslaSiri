@@ -37,7 +37,10 @@ struct ChargingSessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(status.map(humanizedStatus) ?? "Charging", systemImage: "bolt.fill")
+                Label(
+                    status.map(humanizedStatus) ?? String(localized: "Charging", comment: "Default label for an active charging session"),
+                    systemImage: "bolt.fill"
+                )
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(startedAt, style: .time)
@@ -48,12 +51,12 @@ struct ChargingSessionRow: View {
             HStack(spacing: 10) {
                 ChargingMetric(
                     title: "Energy added",
-                    value: formattedNumber(energyAddedKWH, fractionLength: 1, suffix: " kWh"),
+                    value: formattedEnergyKWH(energyAddedKWH),
                     systemImage: "battery.100.bolt"
                 )
                 ChargingMetric(
                     title: "Average power",
-                    value: formattedNumber(avgPowerKW, fractionLength: 1, suffix: " kW"),
+                    value: formattedPowerKW(avgPowerKW),
                     systemImage: "bolt"
                 )
             }
@@ -62,7 +65,7 @@ struct ChargingSessionRow: View {
 }
 
 private struct ChargingMetric: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let systemImage: String
 

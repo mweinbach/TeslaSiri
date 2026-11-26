@@ -136,11 +136,14 @@ public struct DriveSnippetView: View {
                                 .font(.system(size: 26, weight: .bold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
 
                             if let minutes = drive.durationMinutes {
-                                Text("\(minutes) min")
+                                Text(FleetKitFormatting.durationMinutes(minutes))
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.white.opacity(0.88))
+                                    .lineLimit(1)
                             }
                         }
 
@@ -154,8 +157,15 @@ public struct DriveSnippetView: View {
                     if allDrives.count > 1 {
                         driveCarouselStepper
                     } else if let apPct = autopilotSharePercent {
-                        Label("\(apPct)% Autopilot", systemImage: "steeringwheel")
+                        let pctText = FleetKitFormatting.percent(apPct)
+                        Label {
+                            Text("\(pctText) Autopilot", bundle: .module, comment: "Autopilot percentage badge on drive card")
+                        } icon: {
+                            Image(systemName: "steeringwheel")
+                        }
                             .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .foregroundStyle(.cyan)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -187,9 +197,9 @@ public struct DriveSnippetView: View {
                     .background(.white.opacity(0.18), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Previous drive")
+            .accessibilityLabel(Text("Previous drive", bundle: .module, comment: "Accessibility label for previous drive button"))
 
-            Text("\(selectedIndex + 1)/\(allDrives.count)")
+            Text(verbatim: "\(selectedIndex + 1)/\(allDrives.count)")
                 .font(.caption2.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(.white)
@@ -202,7 +212,7 @@ public struct DriveSnippetView: View {
                     .background(.white.opacity(0.18), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Next drive")
+            .accessibilityLabel(Text("Next drive", bundle: .module, comment: "Accessibility label for next drive button"))
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
@@ -230,7 +240,7 @@ public struct DriveSnippetView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(drive.startAddress ?? "Start location")
+                    Text(drive.startAddress ?? String(localized: "Start location", bundle: .module, comment: "Fallback start address on drive timeline"))
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                     Spacer(minLength: 4)
@@ -241,7 +251,7 @@ public struct DriveSnippetView: View {
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(drive.endAddress ?? "Destination")
+                    Text(drive.endAddress ?? String(localized: "Destination", bundle: .module, comment: "Fallback destination address on drive timeline"))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 4)
@@ -266,11 +276,22 @@ public struct DriveSnippetView: View {
             if let startSOC = drive.startingBatteryPercent, let endSOC = drive.endingBatteryPercent {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Label("\(startSOC)% → \(endSOC)%", systemImage: "battery.75percent")
+                        Label {
+                            HStack(spacing: 3) {
+                                Text(FleetKitFormatting.percent(startSOC))
+                                Image(systemName: "arrow.forward")
+                                    .font(.caption2.weight(.semibold))
+                                Text(FleetKitFormatting.percent(endSOC))
+                            }
+                        } icon: {
+                            Image(systemName: "battery.75percent")
+                        }
                             .font(.caption.weight(.semibold))
+                            .monospacedDigit()
                         Spacer()
                         if let energy = drive.energyUsedKWH {
-                            Text(String(format: "%.1f kWh used", energy))
+                            let kwh = FleetKitFormatting.energyKWH(energy)
+                            Text("\(kwh) used", bundle: .module, comment: "Energy used during a drive")
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -286,6 +307,7 @@ public struct DriveSnippetView: View {
                         FractionalCapsuleBar(fraction: min(startFrac, endFrac), minimumWidth: 4)
                             .fill(.green.gradient)
                     }
+                    .flipsForRightToLeftLayoutDirection(true)
                     .frame(height: 6)
                 }
                 .padding(.horizontal, 11)
@@ -295,22 +317,35 @@ public struct DriveSnippetView: View {
 
             HStack(spacing: 8) {
                 if let efficiency = drive.efficiencyText {
-                    snippetMetricPill(icon: "leaf.fill", tint: .green, value: efficiency, label: "Efficiency")
+                    snippetMetricPill(
+                        icon: "leaf.fill",
+                        tint: .green,
+                        value: efficiency,
+                        label: String(localized: "Efficiency", bundle: .module, comment: "Drive efficiency metric label")
+                    )
                 }
                 if let avg = drive.avgSpeedMPH {
-                    let maxPart = drive.maxSpeedMPH.map { " • \(Int($0.rounded())) top" } ?? ""
+                    let speedLabel: String = if let maxSpeed = drive.maxSpeedMPH {
+                        String(
+                            localized: "Avg • \(FleetKitFormatting.speed(mph: maxSpeed)) top",
+                            bundle: .module,
+                            comment: "Drive speed pill subtitle combining average label and top speed"
+                        )
+                    } else {
+                        String(localized: "Avg", bundle: .module, comment: "Abbreviated average speed label")
+                    }
                     snippetMetricPill(
                         icon: "speedometer",
                         tint: .blue,
-                        value: "\(Int(avg.rounded())) mph",
-                        label: "Avg\(maxPart)"
+                        value: FleetKitFormatting.speed(mph: avg),
+                        label: speedLabel
                     )
                 }
                 if let ap = drive.autopilotDistanceMiles, ap > 0.05 {
                     snippetMetricPill(
                         icon: "steeringwheel",
                         tint: .cyan,
-                        value: String(format: "%.1f mi", ap),
+                        value: FleetKitFormatting.distance(miles: ap, fractionLength: 1),
                         label: "Autopilot"
                     )
                 }
@@ -328,11 +363,13 @@ public struct DriveSnippetView: View {
                     .font(.caption.weight(.bold))
                     .monospacedDigit()
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
@@ -346,8 +383,14 @@ public struct DriveSnippetView: View {
         HStack(spacing: 8) {
             if let mapsURL = drive.appleMapsRouteURL {
                 Link(destination: mapsURL) {
-                    Label("Apple Maps", systemImage: "map.fill")
+                    Label {
+                        Text("Apple Maps", bundle: .module, comment: "Button to open drive route in Apple Maps")
+                    } icon: {
+                        Image(systemName: "map.fill")
+                    }
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -355,8 +398,14 @@ public struct DriveSnippetView: View {
             }
 
             Button(intent: OpenDriveIntent(target: drive)) {
-                Label("3D Replay", systemImage: "play.fill")
+                Label {
+                    Text("3D Replay", bundle: .module, comment: "Button to open 3D drive replay in the app")
+                } icon: {
+                    Image(systemName: "play.fill")
+                }
                     .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -374,9 +423,9 @@ struct EmptyDriveSnippetView: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("No Matching Drives")
+                Text("No Matching Drives", bundle: .module, comment: "Empty state title when no drives match")
                     .font(.subheadline.weight(.semibold))
-                Text("No completed drives matched for \(vehicleName).")
+                Text("No completed drives matched for \(vehicleName).", bundle: .module, comment: "Empty state description when no drives match")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -402,8 +451,9 @@ public struct ReleaseNotesSnippetView: View {
             HStack {
                 Label(vehicleName, systemImage: "sparkles")
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
-                Text("v\(version)")
+                Text(verbatim: "v\(version)")
                     .font(.caption.weight(.bold))
                     .monospacedDigit()
                     .padding(.horizontal, 8)
@@ -412,21 +462,23 @@ public struct ReleaseNotesSnippetView: View {
             }
 
             if notes.isEmpty {
-                Text("No release notes available for version \(version).")
+                Text("No release notes available for version \(version).", bundle: .module, comment: "Empty state when no release notes exist for a software version")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(notes.prefix(4)) { note in
+                ForEach(notes.prefix(3)) { note in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(note.title)
                                 .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
                             if let subtitle = note.subtitle,
                                !subtitle.isEmpty,
                                subtitle.caseInsensitiveCompare(note.title) != .orderedSame {
                                 Text(subtitle)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(.quaternary, in: Capsule())
@@ -447,8 +499,9 @@ public struct ReleaseNotesSnippetView: View {
                     .appEntityIdentifier(EntityIdentifier(for: ReleaseNoteEntity.self, identifier: note.id))
                 }
 
-                if notes.count > 4 {
-                    Text("+\(notes.count - 4) more feature update\(notes.count - 4 == 1 ? "" : "s")")
+                if notes.count > 3 {
+                    let remaining = notes.count - 3
+                    Text("+^[\(remaining) more feature update](inflect: true)", bundle: .module, comment: "Count of additional release notes not shown on the Siri card")
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
@@ -470,11 +523,14 @@ public struct SoftwareSnippetView: View {
             HStack {
                 Label(software.vehicleName, systemImage: "car.fill")
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
                 if let current = software.currentVersion {
-                    Text("Installed \(current)")
+                    Text("Installed \(current)", bundle: .module, comment: "Badge showing currently installed vehicle software version")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(.quaternary.opacity(0.45), in: Capsule())
@@ -501,11 +557,17 @@ public struct SoftwareSnippetView: View {
             if let progress = activeProgressPercent {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(software.installPercent ?? 0 > 0 ? "Installing Update" : "Downloaded")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                        if software.installPercent ?? 0 > 0 {
+                            Text("Installing Update", bundle: .module, comment: "Progress label while vehicle software update is installing")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Downloaded", bundle: .module, comment: "Progress label for software update download progress")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
-                        Text("\(Int(progress.rounded()))%")
+                        Text(FleetKitFormatting.percent(Int(progress.rounded())))
                             .font(.caption2.weight(.bold))
                             .monospacedDigit()
                     }
@@ -517,7 +579,13 @@ public struct SoftwareSnippetView: View {
                 HStack(spacing: 8) {
                     if software.updateAvailable || software.installable {
                         Button(intent: installIntent) {
-                            Label("Install Update", systemImage: "arrow.down.circle.fill")
+                            Label {
+                                Text("Install Update", bundle: .module, comment: "Button to start installing an available software update")
+                            } icon: {
+                                Image(systemName: "arrow.down.circle.fill")
+                            }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -525,7 +593,13 @@ public struct SoftwareSnippetView: View {
 
                     if canCancelUpdate {
                         Button(intent: cancelIntent) {
-                            Label("Cancel", systemImage: "xmark.circle.fill")
+                            Label {
+                                Text("Cancel", bundle: .module, comment: "Button to cancel a scheduled software update")
+                            } icon: {
+                                Image(systemName: "xmark.circle.fill")
+                            }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)

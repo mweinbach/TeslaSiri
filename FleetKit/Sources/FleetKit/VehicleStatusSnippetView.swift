@@ -54,11 +54,18 @@ public struct VehicleStatusSnippetView: View {
             Spacer()
 
             if topics.contains(.security), let isLocked = status.isLocked {
-                Label(
-                    isLocked ? "Locked" : "Unlocked",
-                    systemImage: isLocked ? "lock.fill" : "lock.open.fill"
-                )
+                Label {
+                    if isLocked {
+                        Text("Locked", bundle: .module, comment: "Vehicle lock status badge: locked")
+                    } else {
+                        Text("Unlocked", bundle: .module, comment: "Vehicle lock status badge: unlocked")
+                    }
+                } icon: {
+                    Image(systemName: isLocked ? "lock.fill" : "lock.open.fill")
+                }
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .foregroundStyle(isLocked ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -69,22 +76,28 @@ public struct VehicleStatusSnippetView: View {
                 Image(systemName: "record.circle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
-                    .accessibilityLabel("Sentry Mode On")
+                    .accessibilityLabel(Text("Sentry Mode On", bundle: .module, comment: "Accessibility label for active Sentry Mode icon"))
             }
         }
     }
 
     private var batteryCard: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        let metric = status.usesMetric
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: batterySymbol)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(batteryColor)
 
                 if topics == [.range] {
-                    Text(status.batteryRangeMiles.map { "\(Int($0.rounded())) mi" } ?? "Range unavailable")
+                    Text(
+                        status.batteryRangeMiles.map { FleetKitFormatting.distance(miles: $0, usesMetric: metric) }
+                            ?? String(localized: "Range unavailable", bundle: .module, comment: "Fallback when vehicle range is unknown")
+                    )
                         .font(.title.weight(.bold))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 } else {
                     Text(status.batteryDisplay)
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -92,10 +105,12 @@ public struct VehicleStatusSnippetView: View {
                 }
 
                 if topics.contains(.range), topics != [.range], let range = status.batteryRangeMiles {
-                    Text("· \(Int(range.rounded())) mi")
+                    Text(verbatim: "· \(FleetKitFormatting.distance(miles: range, usesMetric: metric))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
 
                 Spacer()
@@ -127,21 +142,24 @@ public struct VehicleStatusSnippetView: View {
                             .fill(.primary.opacity(0.75))
                     }
                 }
+                .flipsForRightToLeftLayoutDirection(true)
                 .frame(height: 10)
             }
 
             HStack {
                 if let limit = status.chargeLimitPercent {
-                    Text("Charge limit \(limit)%")
+                    let limitPct = FleetKitFormatting.percent(limit)
+                    Text("Charge limit \(limitPct)", bundle: .module, comment: "Battery charge limit caption on Siri status card")
                         .monospacedDigit()
                 }
                 Spacer()
                 if let power = status.chargerPowerKW, power > 0.2 {
-                    Text(String(format: "%.1f kW", power))
+                    Text(FleetKitFormatting.powerKW(power))
                         .foregroundStyle(.green)
                         .monospacedDigit()
                 } else if let minutes = status.minutesToFullCharge, minutes > 0 {
-                    Text("\(minutes)m to limit")
+                    let duration = FleetKitFormatting.durationMinutes(minutes)
+                    Text("\(duration) to limit", bundle: .module, comment: "Remaining charging duration until charge limit is reached")
                         .monospacedDigit()
                 }
             }
@@ -154,8 +172,10 @@ public struct VehicleStatusSnippetView: View {
 
     private func chargingBadge(for state: String) -> some View {
         let isCharging = state.localizedStandardContains("charging") && !state.localizedStandardContains("dis")
-        return Label(state.capitalized, systemImage: isCharging ? "bolt.fill" : "powerplug")
+        return Label(VehicleStatusEntity.localizedChargingState(state), systemImage: isCharging ? "bolt.fill" : "powerplug")
             .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .foregroundStyle(isCharging ? AnyShapeStyle(Color.green) : AnyShapeStyle(.secondary))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -214,8 +234,14 @@ public struct VehicleStatusSnippetView: View {
 
                 if let url = appleMapsCarURL {
                     Link(destination: url) {
-                        Label("Directions", systemImage: "arrow.triangle.turn.up.right.circle.fill")
+                        Label {
+                            Text("Directions", bundle: .module, comment: "Button to open walking directions to parked car in Apple Maps")
+                        } icon: {
+                            Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
+                        }
                             .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 5)
                             .background(Color.blue.opacity(0.16), in: Capsule())
@@ -234,26 +260,35 @@ public struct VehicleStatusSnippetView: View {
     }
 
     private var bentoGrid: some View {
-        let unit = status.temperatureUnit ?? "°F"
+        let inFahrenheit = status.temperatureUnit != "°C"
         return Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             if topics.contains(.climate) || topics.contains(.tirePressure) {
                 GridRow {
                     if topics.contains(.climate) {
                         bentoTile(
                             icon: status.isClimateOn == true ? "fan.fill" : "thermometer.medium",
-                            title: "Cabin",
-                            value: status.insideTemp.map { "\(Int($0.rounded()))\(unit)" } ?? "—",
-                            subtitle: status.outsideTemp.map { "Out \(Int($0.rounded()))\(unit)" }
-                                ?? status.isClimateOn.map { $0 ? "Climate On" : "Climate Off" },
+                            title: LocalizedStringResource("Cabin", bundle: FleetKitLocalization.bundleDescription, comment: "Cabin temperature tile header"),
+                            value: status.insideTemp.map { FleetKitFormatting.temperature($0, inFahrenheit: inFahrenheit) } ?? "—",
+                            subtitle: status.outsideTemp.map {
+                                let outTemp = FleetKitFormatting.temperature($0, inFahrenheit: inFahrenheit)
+                                return String(localized: "Out \(outTemp)", bundle: .module, comment: "Abbreviated outside temperature subtitle")
+                            }
+                                ?? status.isClimateOn.map {
+                                    $0
+                                        ? String(localized: "Climate On", bundle: .module, comment: "Cabin tile subtitle when climate is on")
+                                        : String(localized: "Climate Off", bundle: .module, comment: "Cabin tile subtitle when climate is off")
+                                },
                             accent: status.isClimateOn == true ? .orange : .secondary
                         )
                     }
                     if topics.contains(.tirePressure) {
                         bentoTile(
                             icon: hasLowTire ? "exclamationmark.tirepressure" : "car.side.rear.and.tire.marks",
-                            title: "Tires",
+                            title: LocalizedStringResource("Tires", bundle: FleetKitLocalization.bundleDescription, comment: "Tire pressure tile header"),
                             value: compactTireRange ?? "—",
-                            subtitle: hasLowTire ? "Check pressure" : status.tireSummary,
+                            subtitle: hasLowTire
+                                ? String(localized: "Check pressure", bundle: .module, comment: "Low tire pressure warning subtitle")
+                                : status.tireSummary,
                             accent: hasLowTire ? .orange : .secondary
                         )
                     }
@@ -265,7 +300,7 @@ public struct VehicleStatusSnippetView: View {
                     if topics.contains(.odometer) {
                         bentoTile(
                             icon: "gauge.with.needle",
-                            title: "Odometer",
+                            title: LocalizedStringResource("Odometer", bundle: FleetKitLocalization.bundleDescription, comment: "Odometer mileage tile header"),
                             value: status.odometerDisplay ?? "—",
                             subtitle: updatedSubtitle,
                             accent: .secondary
@@ -274,9 +309,17 @@ public struct VehicleStatusSnippetView: View {
                     if topics.contains(.security) {
                         bentoTile(
                             icon: hasOpenClosures ? "car.top.door.front.left.open" : "checkmark.shield.fill",
-                            title: "Closures",
-                            value: status.openClosures.map { $0 == "None" ? "All Closed" : $0 } ?? "—",
-                            subtitle: status.sentryModeOn.map { $0 ? "Sentry Active" : "Sentry Off" },
+                            title: LocalizedStringResource("Closures", bundle: FleetKitLocalization.bundleDescription, comment: "Doors, windows, and trunks status tile header"),
+                            value: status.openClosures.map {
+                                $0 == "None"
+                                    ? String(localized: "All Closed", bundle: .module, comment: "Closures status when all doors, windows, and trunks are closed")
+                                    : $0
+                            } ?? "—",
+                            subtitle: status.sentryModeOn.map {
+                                $0
+                                    ? String(localized: "Sentry Active", bundle: .module, comment: "Closures tile subtitle when Sentry Mode is active")
+                                    : String(localized: "Sentry Off", bundle: .module, comment: "Closures tile subtitle when Sentry Mode is off")
+                            },
                             accent: hasOpenClosures ? .orange : .green
                         )
                     }
@@ -285,23 +328,26 @@ public struct VehicleStatusSnippetView: View {
         }
     }
 
-    private func bentoTile(icon: String, title: String, value: String, subtitle: String?, accent: Color) -> some View {
+    private func bentoTile(icon: String, title: LocalizedStringResource, value: String, subtitle: String?, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label(title, systemImage: icon)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(accent)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,23 +360,51 @@ public struct VehicleStatusSnippetView: View {
         HStack(spacing: 8) {
             if status.isLocked == true {
                 Button(intent: unlockIntent) {
-                    Label("Unlock", systemImage: "lock.open.fill")
+                    Label {
+                        Text("Unlock", bundle: .module, comment: "Quick control button to unlock vehicle")
+                    } icon: {
+                        Image(systemName: "lock.open.fill")
+                    }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity)
                 }
             } else if status.isLocked == false {
                 Button(intent: lockIntent) {
-                    Label("Lock", systemImage: "lock.fill")
+                    Label {
+                        Text("Lock", bundle: .module, comment: "Quick control button to lock vehicle")
+                    } icon: {
+                        Image(systemName: "lock.fill")
+                    }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .frame(maxWidth: .infinity)
                 }
             }
 
             Button(intent: startClimateIntent) {
-                Label(status.isClimateOn == true ? "Warming" : "Climate", systemImage: "fan.fill")
+                Label {
+                    if status.isClimateOn == true {
+                        Text("Warming", bundle: .module, comment: "Quick control button label when cabin climate is running")
+                    } else {
+                        Text("Climate", bundle: .module, comment: "Quick control button label to start cabin climate")
+                    }
+                } icon: {
+                    Image(systemName: "fan.fill")
+                }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity)
             }
 
             Button(intent: honkIntent) {
-                Label("Honk", systemImage: "speaker.wave.2.fill")
+                Label {
+                    Text("Honk", bundle: .module, comment: "Quick control button to honk vehicle horn")
+                } icon: {
+                    Image(systemName: "speaker.wave.2.fill")
+                }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -368,17 +442,20 @@ public struct VehicleStatusSnippetView: View {
         if let lat = status.latitude, let lon = status.longitude {
             return String(format: "%.4f, %.4f", lat, lon)
         }
-        return "\(status.vehicleName) Location"
+        return String(localized: "\(status.vehicleName) Location", bundle: .module, comment: "Fallback location headline on vehicle map card")
     }
 
     private var locationSubheadline: String? {
         if let speed = status.speedMPH, speed > 1 {
-            return "Driving · \(Int(speed.rounded())) mph"
+            let speedText = FleetKitFormatting.speed(mph: speed, usesMetric: status.usesMetric)
+            return String(localized: "Driving · \(speedText)", bundle: .module, comment: "Map card subtitle when the car is moving")
         }
         if let gear = status.gear, !gear.isEmpty {
-            return gear == "P" ? "Parked · Apple Maps" : "Gear \(gear) · Apple Maps"
+            return gear == "P"
+                ? String(localized: "Parked · Apple Maps", bundle: .module, comment: "Map card subtitle when the car is parked")
+                : String(localized: "Gear \(gear) · Apple Maps", bundle: .module, comment: "Map card subtitle showing active gear")
         }
-        return "Parked · Apple Maps"
+        return String(localized: "Parked · Apple Maps", bundle: .module, comment: "Map card subtitle when the car is parked")
     }
 
     private var appleMapsCarURL: URL? {
@@ -407,9 +484,16 @@ public struct VehicleStatusSnippetView: View {
         guard let minPSI = psis.min(), let maxPSI = psis.max() else {
             return status.tireSummary
         }
+        let metric = status.usesMetric
+        let minText = FleetKitFormatting.tirePressure(psi: minPSI, usesMetric: metric)
+        let maxText = FleetKitFormatting.tirePressure(psi: maxPSI, usesMetric: metric)
+        if minText == maxText { return minText }
+        if metric {
+            let minBar = (minPSI * 0.0689476).formatted(.number.precision(.fractionLength(1)))
+            return "\(minBar)–\(maxText)"
+        }
         let minInt = Int(minPSI.rounded())
-        let maxInt = Int(maxPSI.rounded())
-        return minInt == maxInt ? "\(minInt) PSI" : "\(minInt)–\(maxInt) PSI"
+        return "\(minInt)–\(maxText)"
     }
 
     private var hasOpenClosures: Bool {
@@ -419,7 +503,8 @@ public struct VehicleStatusSnippetView: View {
 
     private var updatedSubtitle: String? {
         guard let updatedAt = status.updatedAt else { return nil }
-        return "Updated \(updatedAt.formatted(date: .omitted, time: .shortened))"
+        let formattedTime = updatedAt.formatted(date: .omitted, time: .shortened)
+        return String(localized: "Updated \(formattedTime)", bundle: .module, comment: "Timestamp subtitle showing when telemetry was last updated")
     }
 
     private var vehicle: VehicleEntity {
@@ -498,20 +583,36 @@ public struct ClimateControlSnippetView: View {
     public var body: some View {
         let isRunning = displayedRunning
         let waking = isWaking
-        let unit = displayUnit == .celsius ? "°C" : "°F"
-        let currentTargetF = displayedTarget?.converted(to: .fahrenheit).value
+        let inFahrenheit = displayUnit != .celsius
+        let coolerTargetF: Double? = displayedTarget.map { target in
+            if displayUnit == .celsius {
+                return Measurement(value: target.converted(to: .celsius).value - 1, unit: UnitTemperature.celsius)
+                    .converted(to: .fahrenheit).value
+            }
+            return target.converted(to: .fahrenheit).value - 2
+        }
+        let warmerTargetF: Double? = displayedTarget.map { target in
+            if displayUnit == .celsius {
+                return Measurement(value: target.converted(to: .celsius).value + 1, unit: UnitTemperature.celsius)
+                    .converted(to: .fahrenheit).value
+            }
+            return target.converted(to: .fahrenheit).value + 2
+        }
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Label(vehicle.name, systemImage: waking ? "moon.zzz.fill" : (isRunning == false ? "fan.slash.fill" : "fan.fill"))
                     .font(.headline)
+                    .lineLimit(1)
                     .foregroundStyle(waking ? AnyShapeStyle(Color.orange) : (isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary)))
 
                 Spacer()
 
                 if waking {
-                    Text("Waking Car…")
+                    Text("Waking Car…", bundle: .module, comment: "Climate card status badge while waking the car")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .foregroundStyle(Color.orange)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
@@ -520,8 +621,16 @@ public struct ClimateControlSnippetView: View {
                             in: Capsule()
                         )
                 } else if let isRunning {
-                    Text(isRunning ? "Conditioning" : "Climate Off")
+                    Group {
+                        if isRunning {
+                            Text("Conditioning", bundle: .module, comment: "Climate card status badge when cabin climate is running")
+                        } else {
+                            Text("Climate Off", bundle: .module, comment: "Climate card status badge when cabin climate is off")
+                        }
+                    }
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .foregroundStyle(isRunning ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.secondary))
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
@@ -534,10 +643,19 @@ public struct ClimateControlSnippetView: View {
 
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("TARGET")
+                    Text("Target", bundle: .module, comment: "Label above target cabin temperature")
+                        .textCase(.uppercase)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text(displayedTarget.map { "\($0.value.formatted(.number.precision(.fractionLength(0...1))))\(unit)" } ?? "—")
+                    Text(displayedTarget.map {
+                        $0.formatted(
+                            .measurement(
+                                width: .abbreviated,
+                                usage: .asProvided,
+                                numberFormatStyle: .number.precision(.fractionLength(0...1))
+                            )
+                        )
+                    } ?? "—")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(isRunning == true ? AnyShapeStyle(thermalAccent) : AnyShapeStyle(.primary))
                         .monospacedDigit()
@@ -547,18 +665,29 @@ public struct ClimateControlSnippetView: View {
 
                 VStack(alignment: .trailing, spacing: 4) {
                     if let inside = status?.insideTemp {
-                        Label("Cabin \(Int(inside.rounded()))\(unit)", systemImage: "car.fill")
+                        let temp = FleetKitFormatting.temperature(inside, inFahrenheit: inFahrenheit)
+                        Label {
+                            Text("Cabin \(temp)", bundle: .module, comment: "Current inside cabin temperature readout")
+                        } icon: {
+                            Image(systemName: "car.fill")
+                        }
                             .font(.caption.weight(.semibold))
                             .monospacedDigit()
                     }
                     if let outside = status?.outsideTemp {
-                        Label("Outside \(Int(outside.rounded()))\(unit)", systemImage: "cloud.sun.fill")
+                        let temp = FleetKitFormatting.temperature(outside, inFahrenheit: inFahrenheit)
+                        Label {
+                            Text("Outside \(temp)", bundle: .module, comment: "Current outside temperature readout")
+                        } icon: {
+                            Image(systemName: "cloud.sun.fill")
+                        }
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                     if let updated = status?.updatedAt, status?.insideTemp != nil || status?.outsideTemp != nil {
-                        Text("Observed \(updated, format: .dateTime.hour().minute())")
+                        let formattedTime = updated.formatted(.dateTime.hour().minute())
+                        Text("Observed \(formattedTime)", bundle: .module, comment: "Timestamp showing when temperature reading was observed")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -579,13 +708,16 @@ public struct ClimateControlSnippetView: View {
             )
 
             if !waking, !comfortBadges.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(comfortBadges, id: \.title) { badge in
-                        Label(badge.title, systemImage: badge.icon)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.quaternary, in: Capsule())
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(comfortBadges, id: \.title) { badge in
+                            Label(badge.title, systemImage: badge.icon)
+                                .font(.caption2.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(.quaternary, in: Capsule())
+                        }
                     }
                 }
             } else {
@@ -597,19 +729,41 @@ public struct ClimateControlSnippetView: View {
 
             if !vehicle.id.isEmpty {
                 HStack(spacing: 8) {
-                    if let currentTargetF {
-                        Button(intent: adjust(targetFahrenheit: currentTargetF - 2)) {
-                            Label("Cooler", systemImage: "minus")
+                    if let coolerTargetF, let warmerTargetF {
+                        Button(intent: adjust(targetFahrenheit: coolerTargetF)) {
+                            Label {
+                                Text("Cooler", bundle: .module, comment: "Button to lower cabin target temperature")
+                            } icon: {
+                                Image(systemName: "minus")
+                            }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                         }
-                        Button(intent: adjust(targetFahrenheit: currentTargetF + 2)) {
-                            Label("Warmer", systemImage: "plus")
+                        Button(intent: adjust(targetFahrenheit: warmerTargetF)) {
+                            Label {
+                                Text("Warmer", bundle: .module, comment: "Button to raise cabin target temperature")
+                            } icon: {
+                                Image(systemName: "plus")
+                            }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     if let isRunning {
                         Button(intent: adjust(turnOff: isRunning)) {
-                            Label(isRunning ? "Off" : "Turn On", systemImage: isRunning ? "power" : "fan.fill")
+                            Label {
+                                if isRunning {
+                                    Text("Off", bundle: .module, comment: "Button to turn off cabin climate")
+                                } else {
+                                    Text("Turn On", bundle: .module, comment: "Button to turn on cabin climate")
+                                }
+                            } icon: {
+                                Image(systemName: isRunning ? "power" : "fan.fill")
+                            }
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -665,17 +819,17 @@ public struct ClimateControlSnippetView: View {
     private var comfortBadges: [(title: String, icon: String)] {
         var items: [(String, String)] = []
         if status?.maxDefrostOn == true {
-            items.append(("Max Defrost", "windshield.front.and.heat.waves"))
+            items.append((String(localized: "Max Defrost", bundle: .module, comment: "Active comfort badge for Max Defrost"), "windshield.front.and.heat.waves"))
         }
         if status?.steeringWheelHeaterOn == true {
-            items.append(("Wheel Heat", "steeringwheel.and.heat.waves"))
+            items.append((String(localized: "Wheel Heat", bundle: .module, comment: "Active comfort badge for steering wheel heater"), "steeringwheel.and.heat.waves"))
         }
         if let seats = status?.seatHeaterSummary,
            seats.contains(where: { $0 == "1" || $0 == "2" || $0 == "3" }) {
-            items.append(("Seat Heat", "carseat.left.and.heat.waves.fill"))
+            items.append((String(localized: "Seat Heat", bundle: .module, comment: "Active comfort badge for seat heaters"), "carseat.left.and.heat.waves.fill"))
         }
         if status?.dogModeOn == true {
-            items.append(("Dog Mode", "pawprint.fill"))
+            items.append((String(localized: "Dog Mode", bundle: .module, comment: "Active comfort badge for Dog Mode"), "pawprint.fill"))
         }
         return items
     }

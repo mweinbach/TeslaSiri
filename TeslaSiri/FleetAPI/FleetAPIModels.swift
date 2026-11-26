@@ -1,3 +1,4 @@
+import FleetKit
 import Foundation
 
 nonisolated enum JSONValue: Codable, Hashable, Sendable {
@@ -550,11 +551,7 @@ nonisolated struct FleetTirePressures: Codable, Equatable, Sendable {
     }
 
     private static func formatPSI(_ value: Double) -> String {
-        let rounded = (value * 10).rounded() / 10
-        if rounded.rounded() == rounded {
-            return "\(Int(rounded)) psi"
-        }
-        return String(format: "%.1f psi", rounded)
+        FleetKitFormatting.tirePressure(psi: value, usesMetric: Locale.current.measurementSystem == .metric)
     }
 }
 

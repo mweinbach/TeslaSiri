@@ -48,7 +48,7 @@ private struct VehicleStatusHero: View {
                 updatedAt: snapshot.updatedAtDate
             )
 
-            BatterySummary(snapshot: snapshot)
+            BatterySummary(snapshot: snapshot, units: units)
 
             StatusBadgesRow(snapshot: snapshot)
 
@@ -171,6 +171,7 @@ private struct VehicleHeroHeader: View {
 
 private struct BatterySummary: View {
     let snapshot: FleetLatestSnapshot
+    let units: String?
 
     private var isCharging: Bool {
         snapshot.chargingState?.localizedCaseInsensitiveContains("charging") == true
@@ -192,12 +193,16 @@ private struct BatterySummary: View {
 
     private var summary: String {
         if isCharging, let timeToFull = snapshot.timeToFullCharge, timeToFull > 0 {
-            return "Charging · \(formattedNumber(timeToFull, fractionLength: 1, suffix: " hr remaining"))"
+            let duration = Duration.seconds(Int((timeToFull * 3_600).rounded())).formatted(
+                .units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2)
+            )
+            return String(localized: "Charging · \(duration) remaining", comment: "Battery summary while charging with remaining time")
         }
         if let speed = snapshot.speed, speed > 0 {
-            return "Driving · \(formattedNumber(speed, fractionLength: 0, suffix: " mph"))"
+            let speedText = formattedSpeed(mph: speed, units: units)
+            return String(localized: "Driving · \(speedText)", comment: "Battery summary while driving with current speed")
         }
-        return "Battery"
+        return String(localized: "Battery", comment: "Battery label in vehicle status hero")
     }
 
     var body: some View {
@@ -220,13 +225,13 @@ private struct BatterySummary: View {
                 .tint(batteryColor)
                 .background(Color.white.opacity(0.12), in: Capsule())
                 .accessibilityLabel("Battery level")
-                .accessibilityValue(formattedNumber(snapshot.batteryLevel, suffix: "%"))
+                .accessibilityValue(formattedPercent(snapshot.batteryLevel))
         }
     }
 
     private var batteryReading: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(formattedNumber(snapshot.batteryLevel, suffix: "%"))
+            Text(formattedPercent(snapshot.batteryLevel))
                 .font(.system(size: 54, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(batteryColor)
@@ -243,12 +248,12 @@ private struct BatterySummary: View {
         if snapshot.chargeRateMPH != nil || snapshot.chargerPowerKW != nil {
             VStack(alignment: .trailing, spacing: 3) {
                 if let rate = snapshot.chargeRateMPH {
-                    Text(formattedNumber(rate, fractionLength: 0, suffix: " mi/hr"))
+                    Text(formattedSpeed(mph: rate, units: units))
                         .font(.headline)
                         .monospacedDigit()
                 }
                 if let power = snapshot.chargerPowerKW {
-                    Text(formattedNumber(power, fractionLength: 1, suffix: " kW"))
+                    Text(formattedPowerKW(power))
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(.white.opacity(0.62))
@@ -284,18 +289,18 @@ private struct StatusBadgesRow: View {
     @ViewBuilder
     private var badges: some View {
         if let state = snapshot.chargingState {
-            StatusBadge(state.capitalized, systemImage: "bolt.fill", tint: .orange)
+            StatusBadge(humanizedStatus(state), systemImage: "bolt.fill", tint: .orange)
         }
         if let locked = snapshot.locked {
             StatusBadge(
-                locked ? "Locked" : "Unlocked",
+                locked ? LocalizedStringKey("Locked") : LocalizedStringKey("Unlocked"),
                 systemImage: locked ? "lock.fill" : "lock.open.fill",
                 tint: locked ? .green : .orange
             )
         }
         if let sentry = snapshot.sentryMode {
             StatusBadge(
-                sentry ? "Sentry on" : "Sentry off",
+                sentry ? LocalizedStringKey("Sentry on") : LocalizedStringKey("Sentry off"),
                 systemImage: "shield.lefthalf.filled",
                 tint: sentry ? .blue : .gray
             )
@@ -314,11 +319,13 @@ private struct MetricsGrid: View {
 
     private struct Metric: Identifiable {
         let id: String
+        let title: LocalizedStringKey
         let value: String
         let systemImage: String
 
-        init(_ title: String, _ value: String, _ systemImage: String) {
-            self.id = title
+        init(_ id: String, title: LocalizedStringKey, _ value: String, _ systemImage: String) {
+            self.id = id
+            self.title = title
             self.value = value
             self.systemImage = systemImage
         }
@@ -331,35 +338,38 @@ private struct MetricsGrid: View {
         return [GridItem(.adaptive(minimum: 132), spacing: 10)]
     }
 
-    private var temperatureSuffix: String {
-        units == "metric" ? "°C" : "°F"
+    private var isFahrenheit: Bool {
+        !prefersMetricUnits(units)
     }
 
     private var metrics: [Metric] {
         var items: [Metric] = []
         if let limit = snapshot.chargeLimitSOC {
-            items.append(Metric("Charge limit", formattedNumber(limit, suffix: "%"), "battery.100"))
+            items.append(Metric("charge_limit", title: "Charge limit", formattedPercent(limit), "battery.100"))
         }
         if let speed = snapshot.speed {
-            items.append(Metric("Speed", formattedNumber(speed, fractionLength: 0, suffix: " mph"), "speedometer"))
+            items.append(Metric("speed", title: "Speed", formattedSpeed(mph: speed, units: units), "speedometer"))
         }
         if let inside = snapshot.insideTemp {
-            items.append(Metric("Cabin", formattedNumber(inside, fractionLength: 0, suffix: temperatureSuffix), "thermometer.medium"))
+            items.append(Metric("cabin", title: "Cabin", formattedTemperature(inside, inFahrenheit: isFahrenheit), "thermometer.medium"))
         }
         if let outside = snapshot.outsideTemp {
-            items.append(Metric("Outside", formattedNumber(outside, fractionLength: 0, suffix: temperatureSuffix), "thermometer.medium.slash"))
+            items.append(Metric("outside", title: "Outside", formattedTemperature(outside, inFahrenheit: isFahrenheit), "thermometer.medium.slash"))
         }
         if let timeToFull = snapshot.timeToFullCharge, timeToFull > 0 {
-            items.append(Metric("Time to full", formattedNumber(timeToFull, fractionLength: 1, suffix: " hr"), "clock"))
+            let duration = Duration.seconds(Int((timeToFull * 3_600).rounded())).formatted(
+                .units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2)
+            )
+            items.append(Metric("time_to_full", title: "Time to full", duration, "clock"))
         }
         if let odometer = snapshot.odometer {
-            items.append(Metric("Odometer", formattedNumber(odometer, fractionLength: 0, suffix: " mi"), "gauge.with.needle"))
+            items.append(Metric("odometer", title: "Odometer", formattedDistance(miles: odometer, units: units), "gauge.with.needle"))
         }
         if let freshness = snapshot.freshnessMS, freshness > 0 {
-            items.append(Metric("Data age", formattedDuration(milliseconds: freshness), "antenna.radiowaves.left.and.right"))
+            items.append(Metric("data_age", title: "Data age", formattedDuration(milliseconds: freshness), "antenna.radiowaves.left.and.right"))
         }
         if snapshot.latitude != nil, snapshot.longitude != nil {
-            items.append(Metric("Location", formattedCoordinate(latitude: snapshot.latitude, longitude: snapshot.longitude), "location"))
+            items.append(Metric("location", title: "Location", formattedCoordinate(latitude: snapshot.latitude, longitude: snapshot.longitude), "location"))
         }
         return items
     }
@@ -367,14 +377,14 @@ private struct MetricsGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 10) {
             ForEach(metrics) { metric in
-                MetricTile(title: metric.id, value: metric.value, systemImage: metric.systemImage)
+                MetricTile(title: metric.title, value: metric.value, systemImage: metric.systemImage)
             }
         }
     }
 }
 
 private struct MetricTile: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let systemImage: String
 

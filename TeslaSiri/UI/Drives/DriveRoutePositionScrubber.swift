@@ -69,12 +69,14 @@ struct DriveRoutePositionSummary: View {
     let index: Int
     let count: Int
     let driveSessionID: String?
+    let units: String?
 
-    init(point: FleetRoutePoint, index: Int, count: Int, driveSessionID: String? = nil) {
+    init(point: FleetRoutePoint, index: Int, count: Int, driveSessionID: String? = nil, units: String? = nil) {
         self.point = point
         self.index = index
         self.count = count
         self.driveSessionID = driveSessionID
+        self.units = units
     }
 
     var body: some View {
@@ -84,7 +86,7 @@ struct DriveRoutePositionSummary: View {
         ) {
             DriveMetricTile(
                 title: "Speed",
-                value: formattedNumber(point.speed, fractionLength: 0, suffix: " mph"),
+                value: formattedSpeed(mph: point.speed, units: units, fractionLength: 0),
                 systemImage: "speedometer"
             )
             DriveMetricTile(
@@ -107,5 +109,5 @@ private func routeProgress(index: Int, count: Int) -> String {
         return "--"
     }
     let percent = Double(index) / Double(count - 1) * 100
-    return percent.formatted(.number.precision(.fractionLength(0))) + "%"
+    return formattedPercent(percent)
 }

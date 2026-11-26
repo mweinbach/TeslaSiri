@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "FleetKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS("27.3"),
         .macOS("27.3")
@@ -11,7 +12,12 @@ let package = Package(
         .library(name: "FleetKit", targets: ["FleetKit"])
     ],
     targets: [
-        .target(name: "FleetKit"),
+        .target(
+            name: "FleetKit",
+            resources: [
+                .process("Resources")
+            ]
+        ),
         .testTarget(name: "FleetKitTests", dependencies: ["FleetKit"])
     ]
 )

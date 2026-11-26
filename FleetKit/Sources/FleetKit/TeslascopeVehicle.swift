@@ -76,7 +76,7 @@ extension TeslascopeClient {
         let detail = try await vehicleDetail(publicID: publicID)
         guard detail["public_id"] as? String == publicID,
               TeslascopeVehicleRecord.normalizedVIN(detail["vin"] as? String) == vin else {
-            throw FleetKitError.api("Teslascope returned details for an unrecognized vehicle.")
+            throw FleetKitError.api(String(localized: "Teslascope returned details for an unrecognized vehicle.", bundle: .module, comment: "Error when Teslascope returns vehicle details for an unexpected VIN"))
         }
 
         var state: [String: Any] = [:]

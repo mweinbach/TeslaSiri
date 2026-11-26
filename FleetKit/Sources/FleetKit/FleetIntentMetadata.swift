@@ -2,12 +2,30 @@ import AppIntents
 
 /// Shared copy and helpers for vehicle-scoped App Intent metadata.
 enum FleetIntentMetadata {
-    static let vehicleParameterTitle: LocalizedStringResource = "Vehicle"
-    static let vehicleParameterDescription: LocalizedStringResource =
-        "The Tesla vehicle from the user's fleet account to target. Optional; omit to target the user's currently selected vehicle (or the first active vehicle on the account)."
-    static let vehicleRequestDialog = IntentDialog("Which vehicle?")
-    static let vehicleDisambiguationDialog = IntentDialog("Which vehicle?")
-    static let myCar = "my car"
+    static let vehicleParameterTitle = LocalizedStringResource(
+        "Vehicle",
+        bundle: FleetKitLocalization.bundleDescription,
+        comment: "Title for the vehicle parameter across Siri intents."
+    )
+    static let vehicleParameterDescription = LocalizedStringResource(
+        "The Tesla vehicle from the user's fleet account to target. Optional; omit to target the user's currently selected vehicle (or the first active vehicle on the account).",
+        bundle: FleetKitLocalization.bundleDescription,
+        comment: "Description for the optional vehicle parameter across Siri intents."
+    )
+    static let vehicleRequestDialog = IntentDialog(
+        LocalizedStringResource(
+            "Which vehicle?",
+            bundle: FleetKitLocalization.bundleDescription,
+            comment: "Prompt asking the user to choose a vehicle."
+        )
+    )
+    static let vehicleDisambiguationDialog = IntentDialog(
+        LocalizedStringResource(
+            "Which vehicle?",
+            bundle: FleetKitLocalization.bundleDescription,
+            comment: "Disambiguation prompt asking the user to pick among multiple vehicles."
+        )
+    )
 }
 
 /// Loads vehicles from the Fleet API for App Shortcut parameter pickers and
@@ -21,22 +39,5 @@ public struct SelectedVehicleOptionsProvider: DynamicOptionsProvider {
 
     public func defaultResult() async -> VehicleEntity? {
         try? await results().first
-    }
-}
-
-extension VehicleEntity {
-    /// Siri/Shortcuts label for proactive suggestions when a vehicle is optional.
-    static func predictionTitle(verb: String, vehicle: VehicleEntity?) -> LocalizedStringResource {
-        if let vehicle {
-            return LocalizedStringResource(stringLiteral: "\(verb) \(vehicle.name)")
-        }
-        return LocalizedStringResource(stringLiteral: "\(verb) \(FleetIntentMetadata.myCar)")
-    }
-
-    static func predictionTitle(verb: String, vehicle: VehicleEntity?, suffix: String) -> LocalizedStringResource {
-        if let vehicle {
-            return LocalizedStringResource(stringLiteral: "\(verb) \(vehicle.name) \(suffix)")
-        }
-        return LocalizedStringResource(stringLiteral: "\(verb) my car \(suffix)")
     }
 }

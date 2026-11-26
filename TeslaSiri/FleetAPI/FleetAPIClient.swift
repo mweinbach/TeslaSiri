@@ -35,27 +35,37 @@ enum FleetAPIError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAccessToken:
-            return "A vehicle provider access token is required."
+            return String(localized: "A vehicle provider access token is required.", comment: "Error shown when no provider access token is configured")
         case .invalidURL(let path):
-            return "The Tessie API URL could not be built for \(path)."
+            return String(localized: "The Tessie API URL could not be built for \(path).", comment: "Error shown when an API request URL cannot be constructed")
         case .invalidHistoryRange:
-            return "Tessie history requires a valid start and end time."
+            return String(localized: "Tessie history requires a valid start and end time.", comment: "Error shown when requesting drive or telemetry history with an invalid time range")
         case .transport(let error):
-            return "Network request failed: \(error.localizedDescription)"
+            return String(localized: "Network request failed: \(error.localizedDescription)", comment: "Error shown when a network request fails")
         case .decoding(let error, let requestID):
-            return withRequestID("The Tessie response could not be decoded: \(decodingMessage(error))", requestID: requestID)
+            return withRequestID(
+                String(localized: "The Tessie response could not be decoded: \(decodingMessage(error))", comment: "Error shown when an API response cannot be parsed"),
+                requestID: requestID
+            )
         case .apiFailure(let error, _, let requestID):
-            return withRequestID("Tessie API error: \(error)", requestID: requestID)
+            return withRequestID(
+                String(localized: "Tessie API error: \(error)", comment: "Error shown when the Tessie API returns an error message"),
+                requestID: requestID
+            )
         case .missingData(let requestID):
-            return withRequestID("Tessie returned a success response without data.", requestID: requestID)
+            return withRequestID(
+                String(localized: "Tessie returned a success response without data.", comment: "Error shown when the API returns an empty payload"),
+                requestID: requestID
+            )
         case .unacceptableStatus(let statusCode, let error, _, let requestID):
-            let base = error.map { "Tessie request failed with HTTP \(statusCode): \($0)" }
-                ?? "Tessie request failed with HTTP \(statusCode)."
+            let base = error.map {
+                String(localized: "Tessie request failed with HTTP \(statusCode): \($0)", comment: "Error shown when an HTTP request fails with a status code and server message")
+            } ?? String(localized: "Tessie request failed with HTTP \(statusCode).", comment: "Error shown when an HTTP request fails with a status code")
             return withRequestID(base, requestID: requestID)
         case .unsupportedFeature(let feature):
-            return "\(feature) is not available through the Tessie API."
+            return String(localized: "\(feature) is not available through the Tessie API.", comment: "Error shown when an action is unsupported by the Tessie API")
         case .keychain(let status):
-            return "Keychain operation failed with status \(status)."
+            return String(localized: "Keychain operation failed with status \(status).", comment: "Error shown when saving or reading a credential in Keychain fails")
         }
     }
 
@@ -81,7 +91,7 @@ enum FleetAPIError: Error, LocalizedError {
 
     private func withRequestID(_ message: String, requestID: String?) -> String {
         guard let requestID else { return message }
-        return "\(message) Request ID: \(requestID)."
+        return String(localized: "\(message) Request ID: \(requestID).", comment: "Appends an API request identifier to an error message")
     }
 }
 
@@ -277,7 +287,10 @@ struct FleetAPIClient {
         ))
         guard response.data.result else {
             throw FleetAPIError.apiFailure(
-                error: "The vehicle did not wake up in time.",
+                error: String(
+                    localized: "The vehicle did not wake up in time.",
+                    comment: "Error shown when a wake request times out before the vehicle comes online"
+                ),
                 requiredScope: nil,
                 requestID: response.requestID
             )
@@ -471,7 +484,12 @@ struct FleetAPIClient {
     }
 
     func chargingCurve(sessionID: String, limit: Int? = nil) async throws -> FleetAPIPage<[FleetTelemetrySeriesPoint]> {
-        throw FleetAPIError.unsupportedFeature("Per-session charging curves")
+        throw FleetAPIError.unsupportedFeature(
+            String(
+                localized: "Per-session charging curves",
+                comment: "Feature name interpolated into the unsupported feature error message"
+            )
+        )
     }
 
     // MARK: - Software and commands
@@ -531,7 +549,12 @@ struct FleetAPIClient {
         case "auto_conditioning_stop": commandName = "stop_climate"
         case "window_control":
             guard params["command"]?.tessieStringValue == "vent" else {
-                throw FleetAPIError.unsupportedFeature("That window command")
+                throw FleetAPIError.unsupportedFeature(
+                    String(
+                        localized: "That window command",
+                        comment: "Feature phrase interpolated into the unsupported feature error message when an unsupported window action is requested"
+                    )
+                )
             }
             commandName = "vent_windows"
         case "actuate_trunk":

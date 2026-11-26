@@ -38,14 +38,15 @@ nonisolated struct FleetWebhookNotificationPayload: Codable, Equatable, Sendable
         }
 
         if let vehicleName, !vehicleName.isEmpty {
-            return "\(vehicleName) reported \(event)."
+            return String(localized: "\(vehicleName) reported \(event).", comment: "Fallback push notification body with vehicle name and event type")
         }
 
         if let vin, !vin.isEmpty {
-            return "Vehicle \(String(vin.suffix(6))) reported \(event)."
+            let suffix = String(vin.suffix(6))
+            return String(localized: "Vehicle \(suffix) reported \(event).", comment: "Fallback push notification body with VIN suffix and event type")
         }
 
-        return "A fleet event was received."
+        return String(localized: "A fleet event was received.", comment: "Fallback push notification body when no vehicle details are present")
     }
 
     var notificationIdentifier: String {
@@ -201,7 +202,10 @@ enum FleetNotificationError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notificationsNotAuthorized:
-            return "Notifications are not authorized for this app."
+            return String(
+                localized: "Notifications are not authorized for this app.",
+                comment: "Error message shown when local notifications permission has not been granted"
+            )
         }
     }
 }
@@ -627,7 +631,10 @@ enum FleetNotificationWebhookError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingCallbackURL:
-            return "Enter an HTTPS notification webhook callback URL before creating a hook."
+            return String(
+                localized: "Enter an HTTPS notification webhook callback URL before creating a hook.",
+                comment: "Error message shown when creating a notification webhook without a valid HTTPS URL"
+            )
         }
     }
 }

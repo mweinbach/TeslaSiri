@@ -150,7 +150,7 @@ struct WidgetGalleryView: View {
         }
     }
 
-    private func instructionRow(_ title: String, symbol: String, tint: Color, text: String) -> some View {
+    private func instructionRow(_ title: LocalizedStringKey, symbol: String, tint: Color, text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol)
                 .font(.subheadline.weight(.semibold))

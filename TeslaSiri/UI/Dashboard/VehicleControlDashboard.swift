@@ -358,7 +358,8 @@ private struct VehicleHeroStats: View {
             value: rangeValue,
             unit: rangeUnit,
             caption: Text("Range"),
-            accessibilityLabel: "Estimated range"
+            accessibilityLabel: "Estimated range",
+            accessibilityValue: formattedDistance(miles: snapshot.batteryRange, units: units)
         )
     }
 
@@ -370,7 +371,8 @@ private struct VehicleHeroStats: View {
             caption: snapshot.isActivelyCharging
                 ? Text("\(Image(systemName: "bolt.fill")) Charging").foregroundStyle(AppTheme.chargeGreen)
                 : Text("Battery"),
-            accessibilityLabel: snapshot.isActivelyCharging ? "Battery, charging" : "Battery"
+            accessibilityLabel: snapshot.isActivelyCharging ? "Battery, charging" : "Battery",
+            accessibilityValue: formattedPercent(snapshot.batteryLevel)
         )
     }
 
@@ -382,7 +384,8 @@ private struct VehicleHeroStats: View {
             caption: snapshot.climateOn == true
                 ? Text("Climate On").foregroundStyle(AppTheme.climateBlue)
                 : Text("Inside"),
-            accessibilityLabel: snapshot.climateOn == true ? "Cabin temperature, climate on" : "Cabin temperature"
+            accessibilityLabel: snapshot.climateOn == true ? "Cabin temperature, climate on" : "Cabin temperature",
+            accessibilityValue: formattedTemperature(snapshot.insideTemp, inFahrenheit: !prefersMetricUnits(units))
         )
     }
 
@@ -398,7 +401,8 @@ private struct VehicleHeroStats: View {
         unit: String?,
         valueTint: Color = .primary,
         caption: Text,
-        accessibilityLabel: String
+        accessibilityLabel: LocalizedStringKey,
+        accessibilityValue: String
     ) -> some View {
         VStack(spacing: 3) {
             MetricValueText(
@@ -417,17 +421,17 @@ private struct VehicleHeroStats: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue([value, unit].compactMap { $0 }.joined(separator: " "))
+        .accessibilityValue(accessibilityValue)
     }
 
     private var rangeValue: String {
         guard let batteryRange = snapshot.batteryRange else { return "--" }
-        let value = units == "metric" ? batteryRange * 1.609_344 : batteryRange
+        let value = prefersMetricUnits(units) ? batteryRange * 1.609_344 : batteryRange
         return formattedNumber(value, fractionLength: 0)
     }
 
     private var rangeUnit: String {
-        units == "metric" ? "km" : "mi"
+        prefersMetricUnits(units) ? UnitLength.kilometers.symbol : UnitLength.miles.symbol
     }
 
     private var statusEntityIdentifier: EntityIdentifier? {
@@ -482,7 +486,7 @@ struct VehicleQuickActionBar: View {
             .sensoryFeedback(.impact(flexibility: .solid), trigger: hapticTrigger)
 
             if isWaking {
-                VehicleControlStatusLine(message: "Waking vehicle…", isRunning: true, isError: false)
+                VehicleControlStatusLine(message: LocalizedStringKey("Waking vehicle…"), isRunning: true, isError: false)
             } else if let controlMessage {
                 VehicleControlStatusLine(
                     message: controlMessage,
@@ -490,7 +494,7 @@ struct VehicleQuickActionBar: View {
                     isError: controlMessageIsError
                 )
             } else if isRefreshing {
-                VehicleControlStatusLine(message: "Refreshing vehicle data…", isRunning: true, isError: false)
+                VehicleControlStatusLine(message: LocalizedStringKey("Refreshing vehicle data…"), isRunning: true, isError: false)
             } else if let updatedAt = snapshot.updatedAtDate {
                 RelativeTimeText(date: updatedAt, style: .updated)
                     .font(.caption)
@@ -511,7 +515,9 @@ struct VehicleQuickActionBar: View {
             isActive: !isLocked,
             tint: AppTheme.alertAmber,
             accessibilityLabel: isLocked ? "Unlock vehicle" : "Lock vehicle",
-            accessibilityValue: isLocked ? "Locked" : "Unlocked"
+            accessibilityValue: isLocked
+                ? String(localized: "Locked", comment: "Accessibility value when vehicle is locked")
+                : String(localized: "Unlocked", comment: "Accessibility value when vehicle is unlocked")
         )
 
         quickAction(
@@ -526,13 +532,15 @@ struct VehicleQuickActionBar: View {
         )
 
         quickAction(
-            title: "Frunk",
+            title: Text(LocalizedStringResource("quickAction.frunk", defaultValue: "Frunk", comment: "Short quick-action tile label for front trunk")),
             systemImage: "car.side.front.open",
             command: .openFrunk,
             isActive: isFrunkOpen,
             tint: AppTheme.alertAmber,
             accessibilityLabel: isFrunkOpen ? "Front trunk" : "Open front trunk",
-            accessibilityValue: isFrunkOpen ? "Open" : "Closed"
+            accessibilityValue: isFrunkOpen
+                ? String(localized: "Open", comment: "Accessibility value when a trunk or compartment is open")
+                : String(localized: "Closed", comment: "Accessibility value when a trunk or compartment is closed")
         )
 
         quickAction(
@@ -542,27 +550,51 @@ struct VehicleQuickActionBar: View {
             isActive: isTrunkOpen,
             tint: AppTheme.alertAmber,
             accessibilityLabel: isTrunkOpen ? "Close rear trunk" : "Open rear trunk",
-            accessibilityValue: isTrunkOpen ? "Open" : "Closed"
+            accessibilityValue: isTrunkOpen
+                ? String(localized: "Open", comment: "Accessibility value when a trunk or compartment is open")
+                : String(localized: "Closed", comment: "Accessibility value when a trunk or compartment is closed")
         )
 
         moreMenu
     }
 
     private func quickAction(
-        title: String,
+        title: LocalizedStringKey,
         systemImage: String,
         command: VehicleControlCommand,
         isActive: Bool,
         tint: Color,
         rotates: Bool = false,
-        accessibilityLabel: String,
+        accessibilityLabel: LocalizedStringKey,
+        accessibilityValue: String
+    ) -> some View {
+        quickAction(
+            title: Text(title),
+            systemImage: systemImage,
+            command: command,
+            isActive: isActive,
+            tint: tint,
+            rotates: rotates,
+            accessibilityLabel: accessibilityLabel,
+            accessibilityValue: accessibilityValue
+        )
+    }
+
+    private func quickAction(
+        title: Text,
+        systemImage: String,
+        command: VehicleControlCommand,
+        isActive: Bool,
+        tint: Color,
+        rotates: Bool = false,
+        accessibilityLabel: LocalizedStringKey,
         accessibilityValue: String
     ) -> some View {
         Button {
             trigger(command)
         } label: {
             QuickActionLabel(
-                title: title,
+                titleText: title,
                 systemImage: systemImage,
                 isBusy: isBusy(command),
                 rotates: rotates
@@ -595,11 +627,14 @@ struct VehicleQuickActionBar: View {
             }
 
             Section("Security & Alerts") {
-                Button(
-                    isSentryOn ? "Turn Off Sentry Mode" : "Turn On Sentry Mode",
-                    systemImage: isSentryOn ? "eye.slash" : "eye.fill"
-                ) {
-                    trigger(.sentryMode(shouldTurnOn: !isSentryOn))
+                if isSentryOn {
+                    Button("Turn Off Sentry Mode", systemImage: "eye.slash") {
+                        trigger(.sentryMode(shouldTurnOn: false))
+                    }
+                } else {
+                    Button("Turn On Sentry Mode", systemImage: "eye.fill") {
+                        trigger(.sentryMode(shouldTurnOn: true))
+                    }
                 }
                 Button("Flash Lights", systemImage: "light.max") {
                     trigger(.flashLights)
@@ -617,9 +652,11 @@ struct VehicleQuickActionBar: View {
     }
 
     private var climateAccessibilityValue: String {
-        let suffix = units == "metric" ? "°C" : "°F"
-        let cabin = formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: suffix)
-        return isClimateOn ? "On, cabin \(cabin)" : "Off, cabin \(cabin)"
+        let cabin = formattedTemperature(snapshot.insideTemp, inFahrenheit: !prefersMetricUnits(units))
+        if isClimateOn {
+            return String(localized: "On, cabin \(cabin)", comment: "VoiceOver value when climate is on with cabin temperature")
+        }
+        return String(localized: "Off, cabin \(cabin)", comment: "VoiceOver value when climate is off with cabin temperature")
     }
 
     private func isBusy(_ command: VehicleControlCommand) -> Bool {
@@ -633,10 +670,24 @@ struct VehicleQuickActionBar: View {
 }
 
 private struct QuickActionLabel: View {
-    let title: String
+    let titleText: Text
     let systemImage: String
     var isBusy: Bool = false
     var rotates: Bool = false
+
+    init(titleText: Text, systemImage: String, isBusy: Bool = false, rotates: Bool = false) {
+        self.titleText = titleText
+        self.systemImage = systemImage
+        self.isBusy = isBusy
+        self.rotates = rotates
+    }
+
+    init(title: LocalizedStringKey, systemImage: String, isBusy: Bool = false, rotates: Bool = false) {
+        self.titleText = Text(title)
+        self.systemImage = systemImage
+        self.isBusy = isBusy
+        self.rotates = rotates
+    }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -652,7 +703,7 @@ private struct QuickActionLabel: View {
             }
             .frame(height: 24)
 
-            Text(title)
+            titleText
                 .font(.caption2.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -719,34 +770,57 @@ extension FleetLatestSnapshot {
 
     /// One-line driving/charging + lock summary shown as the navigation subtitle.
     var heroStatusLine: String {
+        heroStatusLine(units: nil)
+    }
+
+    func heroStatusLine(units: String?) -> String {
         var parts: [String] = []
         if isActivelyCharging {
             if let power = chargerPowerKW, power > 0 {
-                parts.append("Charging at \(formattedNumber(power, fractionLength: 1, suffix: " kW"))")
+                let powerText = formattedPowerKW(power)
+                parts.append(String(localized: "Charging at \(powerText)", comment: "Vehicle subtitle when actively charging with power"))
             } else {
-                parts.append("Charging")
+                parts.append(String(localized: "Charging", comment: "Vehicle subtitle when actively charging"))
             }
         } else if let speed, speed > 0 {
-            parts.append("Driving \(formattedNumber(speed, fractionLength: 0, suffix: " mph"))")
+            let speedText = formattedSpeed(mph: speed, units: units)
+            parts.append(String(localized: "Driving \(speedText)", comment: "Vehicle subtitle when driving with current speed"))
         } else if let gear, !gear.isEmpty, gear != "P" {
-            parts.append("In \(gear)")
+            parts.append(String(localized: "In \(gear)", comment: "Vehicle subtitle showing current shift gear"))
         } else {
-            parts.append("Parked")
+            parts.append(String(localized: "Parked", comment: "Vehicle subtitle when parked"))
         }
         if let locked {
-            parts.append(locked ? "Locked" : "Unlocked")
+            parts.append(
+                locked
+                    ? String(localized: "Locked", comment: "Vehicle subtitle lock state: locked")
+                    : String(localized: "Unlocked", comment: "Vehicle subtitle lock state: unlocked")
+            )
         }
         if sentryMode == true {
-            parts.append("Sentry On")
+            parts.append(String(localized: "Sentry On", comment: "Vehicle subtitle when Sentry Mode is active"))
         }
         return parts.joined(separator: " · ")
     }
 }
 
 private struct VehicleControlStatusLine: View {
-    let message: String
+    let message: Text
     let isRunning: Bool
     var isError: Bool = false
+
+    init(message: LocalizedStringKey, isRunning: Bool, isError: Bool = false) {
+        self.message = Text(message)
+        self.isRunning = isRunning
+        self.isError = isError
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(message: S, isRunning: Bool, isError: Bool = false) {
+        self.message = Text(message)
+        self.isRunning = isRunning
+        self.isError = isError
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -762,7 +836,7 @@ private struct VehicleControlStatusLine: View {
                     .foregroundStyle(AppTheme.chargeGreen)
                     .accessibilityHidden(true)
             }
-            Text(message)
+            message
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }

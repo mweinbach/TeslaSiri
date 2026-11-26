@@ -62,8 +62,15 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     }
 
     public var climateDescription: String {
-        if isClimateStarting() { return "Climate starting…" }
-        return climateOn.map { $0 ? "Climate on" : "Climate off" } ?? "Climate status unavailable"
+        if isClimateStarting() {
+            return String(localized: "Climate starting…", bundle: .module, comment: "Widget climate caption while a sleeping car is waking to start HVAC.")
+        }
+        guard let climateOn else {
+            return String(localized: "Climate status unavailable", bundle: .module, comment: "Widget climate caption when HVAC state is missing.")
+        }
+        return climateOn
+            ? String(localized: "Climate on", bundle: .module, comment: "Widget climate caption when HVAC is running.")
+            : String(localized: "Climate off", bundle: .module, comment: "Widget climate caption when HVAC is off.")
     }
 
     public var canStartCharging: Bool {
@@ -72,35 +79,48 @@ public struct FleetWidgetSnapshot: Codable, Sendable, Equatable {
     }
 
     public var chargingDescription: String {
-        guard let chargingState else { return "Charge status unavailable" }
+        guard let chargingState else {
+            return String(localized: "Charge status unavailable", bundle: .module, comment: "Widget charging caption when charging state is missing.")
+        }
         switch chargingState.lowercased() {
-        case "charging": return "Charging"
-        case "complete": return "Charge complete"
-        case "disconnected": return "Unplugged"
-        case "stopped": return "Charging paused"
-        case "nopower", "no_power": return "Waiting for power"
-        case "connected": return "Plugged in"
-        default: return chargingState.replacingOccurrences(of: "_", with: " ").capitalized
+        case "charging":
+            return String(localized: "Charging", bundle: .module, comment: "Widget charging status while actively charging.")
+        case "complete":
+            return String(localized: "Charge complete", bundle: .module, comment: "Widget charging status when charge reached its limit.")
+        case "disconnected":
+            return String(localized: "Unplugged", bundle: .module, comment: "Widget charging status when charge cable is disconnected.")
+        case "stopped":
+            return String(localized: "Charging paused", bundle: .module, comment: "Widget charging status when plugged in but paused.")
+        case "nopower", "no_power":
+            return String(localized: "Waiting for power", bundle: .module, comment: "Widget charging status when plugged in without power.")
+        case "connected":
+            return String(localized: "Plugged in", bundle: .module, comment: "Widget charging status when cable is connected.")
+        default:
+            return chargingState.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 
     public var lockDescription: String {
         switch locked {
-        case true: "Locked"
-        case false: "Unlocked"
-        default: "Lock status unavailable"
+        case true:
+            String(localized: "Locked", bundle: .module, comment: "Widget security status when doors are locked.")
+        case false:
+            String(localized: "Unlocked", bundle: .module, comment: "Widget security status when doors are unlocked.")
+        default:
+            String(localized: "Lock status unavailable", bundle: .module, comment: "Widget security status when lock state is missing.")
         }
     }
 
     public var rangeDescription: String {
-        guard let rangeMiles else { return "Range unavailable" }
-        let distance = usesMetric ? rangeMiles * 1.609344 : rangeMiles
-        return "\(distance.formatted(.number.precision(.fractionLength(0)))) \(usesMetric ? "km" : "mi")"
+        guard let rangeMiles else {
+            return String(localized: "Range unavailable", bundle: .module, comment: "Widget range caption when battery range is missing.")
+        }
+        return FleetKitFormatting.distance(miles: rangeMiles, usesMetric: usesMetric, width: .abbreviated, fractionLength: 0)
     }
 
     public func temperatureDescription(_ value: Double?) -> String {
         guard let value else { return "—" }
-        return "\(value.formatted(.number.precision(.fractionLength(0))))°\(temperatureInFahrenheit ? "F" : "C")"
+        return FleetKitFormatting.temperature(value, inFahrenheit: temperatureInFahrenheit, width: .abbreviated, fractionLength: 0)
     }
 
     public var vehicleURL: URL? {

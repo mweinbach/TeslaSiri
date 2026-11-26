@@ -68,10 +68,14 @@ public enum FleetWidgetAction: String, AppEnum, Sendable {
 
     public var title: String {
         switch self {
-        case .lock: "Lock car"
-        case .startClimate: "Start climate"
-        case .startCharging: "Start charging"
-        case .refresh: "Refresh vehicle"
+        case .lock:
+            String(localized: "Lock car", bundle: .module, comment: "Widget quick action label to lock the vehicle.")
+        case .startClimate:
+            String(localized: "Start climate", bundle: .module, comment: "Widget quick action label to start cabin climate.")
+        case .startCharging:
+            String(localized: "Start charging", bundle: .module, comment: "Widget quick action label to start charging.")
+        case .refresh:
+            String(localized: "Refresh vehicle", bundle: .module, comment: "Widget quick action label to refresh vehicle telemetry.")
         }
     }
 }

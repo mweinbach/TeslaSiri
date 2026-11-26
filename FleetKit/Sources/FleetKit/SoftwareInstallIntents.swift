@@ -52,7 +52,20 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Update", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Update \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for installing a software update on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Update my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for installing a software update on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -64,7 +77,11 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
 
             let info = try await service.software(vin: resolved.vin)
             guard info.updateAvailable || info.installable else {
-                let summary = "\(resolved.name) is already up to date."
+                let summary = String(
+                    localized: "\(resolved.name) is already up to date.",
+                    bundle: .module,
+                    comment: "Siri response when no software update is available."
+                )
                 let result = VehicleCommandResultEntity(
                     vehicle: resolved,
                     action: "schedule_software_update",
@@ -73,7 +90,7 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
                     summary: summary
                 )
                 log.success("\(resolved.name) already up to date")
-                return .result(value: result, dialog: IntentDialog("\(summary)"))
+                return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
             }
 
             guard info.installable else {
@@ -87,27 +104,61 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
                     summary: status
                 )
                 log.success("\(resolved.name) update not installable yet (\(info.status ?? "unknown"))")
-                return .result(value: result, dialog: IntentDialog("\(status)"))
+                return .result(value: result, dialog: IntentDialog(stringLiteral: status))
             }
 
             let offsetSec = startTime.map { max(Int($0.timeIntervalSinceNow.rounded()), 0) } ?? 0
             try service.checkSoftwareCommand(for: resolved, installAfter: offsetSec)
-            let whenText = offsetSec > 60
-                ? " at \((startTime ?? .now).formatted(date: .omitted, time: .shortened))"
-                : " now"
-            let version = info.availableVersion.map { " \($0)" } ?? ""
-            try await confirmWithSafetyGate(
-                dialog: IntentDialog("Install software update\(version) on \(resolved.name)\(whenText)? The car can't be driven while it installs.")
-            )
+            let isScheduled = offsetSec > 60
+            let scheduledTime = (startTime ?? .now).formatted(date: .omitted, time: .shortened)
+            let confirmResource: LocalizedStringResource = switch (info.availableVersion, isScheduled) {
+            case let (version?, true):
+                LocalizedStringResource(
+                    "Install software update \(version) on \(resolved.name) at \(scheduledTime)? The car can't be driven while it installs.",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before scheduling a named software update version for a future time."
+                )
+            case let (version?, false):
+                LocalizedStringResource(
+                    "Install software update \(version) on \(resolved.name) now? The car can't be driven while it installs.",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before installing a named software update version immediately."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Install software update on \(resolved.name) at \(scheduledTime)? The car can't be driven while it installs.",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before scheduling a software update for a future time."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Install software update on \(resolved.name) now? The car can't be driven while it installs.",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before installing a software update immediately."
+                )
+            }
+            try await confirmWithSafetyGate(dialog: IntentDialog(confirmResource))
 
             try await performSandboxAwareBackgroundTask(
-                description: "Scheduling software update on \(resolved.name)"
+                description: String(
+                    localized: "Scheduling software update on \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while scheduling a software update."
+                )
             ) {
                 try await service.installSoftwareUpdate(vin: resolved.vin, offsetSec: offsetSec)
             }
-            let summary = offsetSec > 60
-                ? "\(resolved.name) will install the update\(whenText)."
-                : "Starting the software update on \(resolved.name)."
+            let summary = isScheduled
+                ? String(
+                    localized: "\(resolved.name) will install the update at \(scheduledTime).",
+                    bundle: .module,
+                    comment: "Siri confirmation after scheduling a software update for a later time."
+                )
+                : String(
+                    localized: "Starting the software update on \(resolved.name).",
+                    bundle: .module,
+                    comment: "Siri confirmation after starting a software update immediately."
+                )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "schedule_software_update",
@@ -115,7 +166,7 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
                 summary: summary
             )
             log.success("started software update on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -154,7 +205,20 @@ public struct CancelSoftwareUpdateIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Cancel update on", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Cancel update on \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for canceling a software update on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Cancel update on my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for canceling a software update on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -164,16 +228,28 @@ public struct CancelSoftwareUpdateIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             try service.checkSoftwareCommand(for: resolved, installAfter: nil)
-            try await confirmWithSafetyGate(dialog: IntentDialog("Cancel the software update on \(resolved.name)?"))
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Cancel the software update on \(resolved.name)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt before canceling a scheduled software update."
+                    )
+                )
+            )
             try await service.cancelSoftwareUpdate(vin: resolved.vin)
-            let summary = "Canceled the software update on \(resolved.name)."
+            let summary = String(
+                localized: "Canceled the software update on \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after canceling a scheduled software update."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "cancel_software_update",
                 summary: summary
             )
             log.success("canceled software update on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

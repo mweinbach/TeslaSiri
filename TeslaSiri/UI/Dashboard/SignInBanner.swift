@@ -38,10 +38,16 @@ struct SignInBanner: View {
                         Image(systemName: "key.fill")
                     }
 
-                    Text(isAuthenticating ? "Connecting…" : "Connect \(provider.displayName)")
-                        .fontWeight(.semibold)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        if isAuthenticating {
+                            Text("Connecting…")
+                        } else {
+                            Text("Connect \(provider.displayName)")
+                        }
+                    }
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -93,12 +99,16 @@ struct SignInBanner: View {
                 .font(.title3.weight(.bold))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Text(provider == .tessie
-                 ? "Paste a Tessie access token to view live telemetry, controls, and drive history."
-                 : "Create a personal access token with the tesla-accounts and vehicles scopes. Add controls with a Teslascope premium subscription.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if provider == .tessie {
+                    Text("Paste a Tessie access token to view live telemetry, controls, and drive history.")
+                } else {
+                    Text("Create a personal access token with the tesla-accounts and vehicles scopes. Add controls with a Teslascope premium subscription.")
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

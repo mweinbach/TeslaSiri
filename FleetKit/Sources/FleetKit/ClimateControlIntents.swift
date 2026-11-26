@@ -38,7 +38,20 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Stop climate in", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Stop climate in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for stopping climate in a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Stop climate in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for stopping climate in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -49,19 +62,27 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
             let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let deliveryState = try await performSandboxAwareBackgroundTask(
-                description: "Turning off climate in \(resolved.name)"
+                description: String(
+                    localized: "Turning off climate in \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while stopping cabin climate."
+                )
             ) {
                 try await service.runControl(
                     action: "auto_conditioning_stop",
                     vin: resolved.vin,
-                    humanName: "stopping climate",
+                    humanName: String(localized: "stopping climate", bundle: .module, comment: "Action name used in vehicle command error messages for stopping climate."),
                     allowAsyncWake: true
                 )
             }
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "turn off climate",
-                confirmed: "Climate is turning off in \(resolved.name)."
+                wakingAction: String(localized: "turn off climate", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off climate."),
+                confirmed: String(
+                    localized: "Climate is turning off in \(resolved.name).",
+                    bundle: .module,
+                    comment: "Siri confirmation after turning off cabin climate."
+                )
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -72,7 +93,7 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
             log.success("stopped climate in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(
                 value: result,
-                dialog: IntentDialog("\(summary)"),
+                dialog: IntentDialog(stringLiteral: summary),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
                     appliedSummary: summary,
@@ -142,7 +163,20 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Set cabin temperature in", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Set cabin temperature in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting cabin temperature in a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Set cabin temperature in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting cabin temperature in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -161,13 +195,17 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
             // rather than firing two `wait_for_completion=false` requests at a sleeping car,
             // which could race or drop `set_temps` before HVAC starts.
             try await performSandboxAwareBackgroundTask(
-                description: "Setting cabin temperature in \(resolved.name)"
+                description: String(
+                    localized: "Setting cabin temperature in \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while setting cabin temperature."
+                )
             ) {
                 if shouldStartClimate {
                     try await service.runControl(
                         action: "auto_conditioning_start",
                         vin: resolved.vin,
-                        humanName: "starting climate"
+                        humanName: String(localized: "starting climate", bundle: .module, comment: "Action name used in vehicle command error messages for starting climate.")
                     )
                 }
                 try await service.runControl(
@@ -177,7 +215,7 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
                         "driver_temp": .double(targetCelsius),
                         "passenger_temp": .double(targetCelsius)
                     ],
-                    humanName: "setting the cabin temperature"
+                    humanName: String(localized: "setting the cabin temperature", bundle: .module, comment: "Action name used in vehicle command error messages for setting cabin temperature.")
                 )
             }
 
@@ -185,8 +223,8 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
                 .converted(to: temperature.unit)
                 .formatted(.measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1))))
             let summary = shouldStartClimate
-                ? "Started climate and set \(resolved.name)'s cabin to \(applied)."
-                : "Set \(resolved.name)'s cabin to \(applied)."
+                ? String(localized: "Started climate and set \(resolved.name)'s cabin to \(applied).", bundle: .module, comment: "Siri confirmation after starting climate and setting a target temperature.")
+                : String(localized: "Set \(resolved.name)'s cabin to \(applied).", bundle: .module, comment: "Siri confirmation after changing the cabin target temperature.")
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_temps",
@@ -196,7 +234,7 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
             log.success("\(shouldStartClimate ? "started climate and " : "")set \(resolved.name) cabin to \(targetCelsius)°C")
             return .result(
                 value: result,
-                dialog: IntentDialog("\(summary)"),
+                dialog: IntentDialog(stringLiteral: summary),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
                     appliedSummary: summary,
@@ -251,8 +289,33 @@ public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableInte
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$on)) { vehicle, on in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Turn max defrost \(on ? "on" : "off") in \(target)"))
+            let title: LocalizedStringResource = switch (vehicle, on) {
+            case let (vehicle?, true):
+                LocalizedStringResource(
+                    "Turn max defrost on in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on max defrost in a specific vehicle."
+                )
+            case let (vehicle?, false):
+                LocalizedStringResource(
+                    "Turn max defrost off in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off max defrost in a specific vehicle."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Turn max defrost on in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on max defrost in the user's selected car."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Turn max defrost off in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off max defrost in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -264,21 +327,25 @@ public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableInte
             let enable = on
             let deliveryState = try await performSandboxAwareBackgroundTask(
                 description: enable
-                    ? "Turning on max defrost in \(resolved.name)"
-                    : "Turning off max defrost in \(resolved.name)"
+                    ? String(localized: "Turning on max defrost in \(resolved.name)", bundle: .module, comment: "Progress label while turning on max defrost.")
+                    : String(localized: "Turning off max defrost in \(resolved.name)", bundle: .module, comment: "Progress label while turning off max defrost.")
             ) {
                 try await service.runControl(
                     action: "remote_defrost",
                     vin: resolved.vin,
                     params: ["on": .bool(enable)],
-                    humanName: "setting max defrost",
+                    humanName: String(localized: "setting max defrost", bundle: .module, comment: "Action name used in vehicle command error messages for setting max defrost."),
                     allowAsyncWake: true
                 )
             }
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "turn \(enable ? "on" : "off") max defrost",
-                confirmed: enable ? "Max defrost is on in \(resolved.name)." : "Max defrost is off in \(resolved.name)."
+                wakingAction: enable
+                    ? String(localized: "turn on max defrost", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning on max defrost.")
+                    : String(localized: "turn off max defrost", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off max defrost."),
+                confirmed: enable
+                    ? String(localized: "Max defrost is on in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning on max defrost.")
+                    : String(localized: "Max defrost is off in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off max defrost.")
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -288,7 +355,7 @@ public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableInte
                 summary: summary
             )
             log.success("max defrost \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -332,8 +399,33 @@ public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent 
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$on)) { vehicle, on in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Turn dog mode \(on ? "on" : "off") in \(target)"))
+            let title: LocalizedStringResource = switch (vehicle, on) {
+            case let (vehicle?, true):
+                LocalizedStringResource(
+                    "Turn Dog Mode on in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on Dog Mode in a specific vehicle."
+                )
+            case let (vehicle?, false):
+                LocalizedStringResource(
+                    "Turn Dog Mode off in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off Dog Mode in a specific vehicle."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Turn Dog Mode on in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on Dog Mode in the user's selected car."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Turn Dog Mode off in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off Dog Mode in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -345,25 +437,37 @@ public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent 
             let enable = on
             if !enable {
                 // Turning dog mode off remotely could leave a pet without climate.
-                try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
+                try await confirmWithSafetyGate(
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "Turn off dog mode in \(resolved.name)?",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Confirmation prompt before disabling Dog Mode."
+                        )
+                    )
+                )
             }
             let deliveryState = try await performSandboxAwareBackgroundTask(
                 description: enable
-                    ? "Turning on Dog Mode in \(resolved.name)"
-                    : "Turning off Dog Mode in \(resolved.name)"
+                    ? String(localized: "Turning on Dog Mode in \(resolved.name)", bundle: .module, comment: "Progress label while turning on Dog Mode.")
+                    : String(localized: "Turning off Dog Mode in \(resolved.name)", bundle: .module, comment: "Progress label while turning off Dog Mode.")
             ) {
                 try await service.runControl(
                     action: "set_pet_mode",
                     vin: resolved.vin,
                     params: ["on": .bool(enable)],
-                    humanName: "setting dog mode",
+                    humanName: String(localized: "setting dog mode", bundle: .module, comment: "Action name used in vehicle command error messages for Dog Mode."),
                     allowAsyncWake: true
                 )
             }
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "turn \(enable ? "on" : "off") Dog Mode",
-                confirmed: enable ? "Dog mode is on in \(resolved.name)." : "Dog mode is off in \(resolved.name)."
+                wakingAction: enable
+                    ? String(localized: "turn on Dog Mode", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning on Dog Mode.")
+                    : String(localized: "turn off Dog Mode", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off Dog Mode."),
+                confirmed: enable
+                    ? String(localized: "Dog mode is on in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning on Dog Mode.")
+                    : String(localized: "Dog mode is off in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off Dog Mode.")
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -373,7 +477,7 @@ public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent 
                 summary: summary
             )
             log.success("dog mode \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -417,8 +521,33 @@ public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableI
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$on)) { vehicle, on in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Turn Bioweapon Defense \(on ? "on" : "off") in \(target)"))
+            let title: LocalizedStringResource = switch (vehicle, on) {
+            case let (vehicle?, true):
+                LocalizedStringResource(
+                    "Turn Bioweapon Defense on in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on Bioweapon Defense Mode in a specific vehicle."
+                )
+            case let (vehicle?, false):
+                LocalizedStringResource(
+                    "Turn Bioweapon Defense off in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off Bioweapon Defense Mode in a specific vehicle."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Turn Bioweapon Defense on in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on Bioweapon Defense Mode in the user's selected car."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Turn Bioweapon Defense off in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off Bioweapon Defense Mode in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -430,21 +559,25 @@ public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableI
             let enable = on
             let deliveryState = try await performSandboxAwareBackgroundTask(
                 description: enable
-                    ? "Turning on Bioweapon Defense in \(resolved.name)"
-                    : "Turning off Bioweapon Defense in \(resolved.name)"
+                    ? String(localized: "Turning on Bioweapon Defense in \(resolved.name)", bundle: .module, comment: "Progress label while turning on Bioweapon Defense Mode.")
+                    : String(localized: "Turning off Bioweapon Defense in \(resolved.name)", bundle: .module, comment: "Progress label while turning off Bioweapon Defense Mode.")
             ) {
                 try await service.runControl(
                     action: "set_bioweapon_mode",
                     vin: resolved.vin,
                     params: ["on": .bool(enable), "manual_override": .bool(false)],
-                    humanName: "setting Bioweapon Defense Mode",
+                    humanName: String(localized: "setting Bioweapon Defense Mode", bundle: .module, comment: "Action name used in vehicle command error messages for Bioweapon Defense Mode."),
                     allowAsyncWake: true
                 )
             }
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "turn \(enable ? "on" : "off") Bioweapon Defense Mode",
-                confirmed: enable ? "Bioweapon Defense Mode is on in \(resolved.name)." : "Bioweapon Defense Mode is off in \(resolved.name)."
+                wakingAction: enable
+                    ? String(localized: "turn on Bioweapon Defense Mode", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning on Bioweapon Defense Mode.")
+                    : String(localized: "turn off Bioweapon Defense Mode", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off Bioweapon Defense Mode."),
+                confirmed: enable
+                    ? String(localized: "Bioweapon Defense Mode is on in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning on Bioweapon Defense Mode.")
+                    : String(localized: "Bioweapon Defense Mode is off in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off Bioweapon Defense Mode.")
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -454,7 +587,7 @@ public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableI
                 summary: summary
             )
             log.success("Bioweapon Defense \(enable ? "on" : "off") in \(resolved.name) (\(deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

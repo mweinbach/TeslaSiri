@@ -44,7 +44,20 @@ public struct StartChargingIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Start charging", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Start charging \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for starting charging on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Start charging my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for starting charging on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -53,11 +66,19 @@ public struct StartChargingIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "charge_start", vin: resolved.vin, humanName: "starting charging")
-            let summary = "Started charging \(resolved.name)."
+            try await service.runControl(
+                action: "charge_start",
+                vin: resolved.vin,
+                humanName: String(localized: "starting charging", bundle: .module, comment: "Action name used in vehicle command error messages for starting charging.")
+            )
+            let summary = String(
+                localized: "Started charging \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after starting charging."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "charge_start", summary: summary)
             log.success("started charging \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -95,7 +116,20 @@ public struct StopChargingIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Stop charging", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Stop charging \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for stopping charging on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Stop charging my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for stopping charging on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -104,12 +138,28 @@ public struct StopChargingIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await confirmWithSafetyGate(dialog: IntentDialog("Stop charging \(resolved.name)?"))
-            try await service.runControl(action: "charge_stop", vin: resolved.vin, humanName: "stopping charging")
-            let summary = "Stopped charging \(resolved.name)."
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Stop charging \(resolved.name)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt before stopping charging."
+                    )
+                )
+            )
+            try await service.runControl(
+                action: "charge_stop",
+                vin: resolved.vin,
+                humanName: String(localized: "stopping charging", bundle: .module, comment: "Action name used in vehicle command error messages for stopping charging.")
+            )
+            let summary = String(
+                localized: "Stopped charging \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after stopping charging."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "charge_stop", summary: summary)
             log.success("stopped charging \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -154,8 +204,33 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$action)) { vehicle, action in
-            let verb = action == .open ? "Open" : "Close"
-            return DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: verb, vehicle: vehicle, suffix: "charge port"))
+            let title: LocalizedStringResource = switch (vehicle, action) {
+            case let (vehicle?, .open):
+                LocalizedStringResource(
+                    "Open \(vehicle.name) charge port",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the charge port on a specific vehicle."
+                )
+            case let (vehicle?, .close):
+                LocalizedStringResource(
+                    "Close \(vehicle.name) charge port",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for closing the charge port on a specific vehicle."
+                )
+            case (nil, .open):
+                LocalizedStringResource(
+                    "Open my car charge port",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the charge port on the user's selected car."
+                )
+            case (nil, .close):
+                LocalizedStringResource(
+                    "Close my car charge port",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for closing the charge port on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -165,14 +240,24 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             if action == .open {
-                try await confirmWithSafetyGate(dialog: IntentDialog("Open the charge port on \(resolved.name)?"))
+                try await confirmWithSafetyGate(
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "Open the charge port on \(resolved.name)?",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Confirmation prompt before opening the charge port."
+                        )
+                    )
+                )
             }
             let controlAction = action == .open ? "charge_port_door_open" : "charge_port_door_close"
-            let humanName = action == .open ? "opening the charge port" : "closing the charge port"
+            let humanName = action == .open
+                ? String(localized: "opening the charge port", bundle: .module, comment: "Action name used in vehicle command error messages for opening the charge port.")
+                : String(localized: "closing the charge port", bundle: .module, comment: "Action name used in vehicle command error messages for closing the charge port.")
             try await service.runControl(action: controlAction, vin: resolved.vin, humanName: humanName)
             let summary = action == .open
-                ? "Opened the charge port on \(resolved.name)."
-                : "Closed the charge port on \(resolved.name)."
+                ? String(localized: "Opened the charge port on \(resolved.name).", bundle: .module, comment: "Siri confirmation after opening the charge port.")
+                : String(localized: "Closed the charge port on \(resolved.name).", bundle: .module, comment: "Siri confirmation after closing the charge port.")
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: controlAction,
@@ -180,7 +265,7 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
                 summary: summary
             )
             log.success("\(action.rawValue) charge port on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -225,8 +310,33 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$on)) { vehicle, on in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Turn Sentry Mode \(on ? "on" : "off") on \(target)"))
+            let title: LocalizedStringResource = switch (vehicle, on) {
+            case let (vehicle?, true):
+                LocalizedStringResource(
+                    "Turn Sentry Mode on for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for enabling Sentry Mode on a specific vehicle."
+                )
+            case let (vehicle?, false):
+                LocalizedStringResource(
+                    "Turn Sentry Mode off for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for disabling Sentry Mode on a specific vehicle."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Turn Sentry Mode on for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for enabling Sentry Mode on the user's selected car."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Turn Sentry Mode off for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for disabling Sentry Mode on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -236,15 +346,25 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             if !on {
-                try await confirmWithSafetyGate(dialog: IntentDialog("Turn off Sentry Mode on \(resolved.name)?"))
+                try await confirmWithSafetyGate(
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "Turn off Sentry Mode on \(resolved.name)?",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Confirmation prompt before disabling Sentry Mode."
+                        )
+                    )
+                )
             }
             try await service.runControl(
                 action: "set_sentry_mode",
                 vin: resolved.vin,
                 params: ["on": .bool(on)],
-                humanName: "setting Sentry Mode"
+                humanName: String(localized: "setting Sentry Mode", bundle: .module, comment: "Action name used in vehicle command error messages for Sentry Mode.")
             )
-            let summary = on ? "Sentry Mode is on for \(resolved.name)." : "Sentry Mode is off for \(resolved.name)."
+            let summary = on
+                ? String(localized: "Sentry Mode is on for \(resolved.name).", bundle: .module, comment: "Siri confirmation after enabling Sentry Mode.")
+                : String(localized: "Sentry Mode is off for \(resolved.name).", bundle: .module, comment: "Siri confirmation after disabling Sentry Mode.")
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_sentry_mode",
@@ -252,7 +372,7 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
                 summary: summary
             )
             log.success("Sentry Mode \(on ? "on" : "off") on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -306,13 +426,25 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
                 throw FleetKitError.unsupportedAction(unavailable.label)
             }
             if settings.enablePetMode == false {
-                try await confirmWithSafetyGate(dialog: IntentDialog("Turn off dog mode in \(resolved.name)?"))
+                try await confirmWithSafetyGate(
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "Turn off dog mode in \(resolved.name)?",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Confirmation prompt before disabling Dog Mode."
+                        )
+                    )
+                )
             }
 
             let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
             let targetCelsius = settings.roundedTargetCelsius
             let outcome = try await performSandboxAwareBackgroundTask(
-                description: "Configuring cabin climate in \(resolved.name)"
+                description: String(
+                    localized: "Configuring cabin climate in \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while configuring cabin climate."
+                )
             ) {
                 try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
             }
@@ -322,8 +454,8 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
             let partialSummary = outcome.partialFailureSummary(vehicleName: resolved.name)
             let summary = partialSummary ?? deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "apply: \(detail)",
-                confirmed: "Configured \(resolved.name) (\(detail))."
+                wakingAction: String(localized: "apply: \(detail)", bundle: .module, comment: "Infinitive action phrase in wake-up message listing requested car controls."),
+                confirmed: String(localized: "Configured \(resolved.name) (\(detail)).", bundle: .module, comment: "Siri confirmation after configuring multiple cabin climate settings.")
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -343,7 +475,7 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
             let appliedTarget = outcome.accepted.contains { $0.action == "set_temps" } ? targetCelsius : nil
             return .result(
                 value: result,
-                dialog: IntentDialog("\(summary)"),
+                dialog: IntentDialog(stringLiteral: summary),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
                     appliedSummary: deliveryState == .wakingVehicle || partialSummary != nil ? summary : detail,
@@ -481,25 +613,38 @@ public struct FindDrivesIntent: AppIntent {
 
             let dialogText: String
             if results.isEmpty {
-                dialogText = "No drives matched those criteria for \(resolved.name)."
+                dialogText = String(
+                    localized: "No drives matched those criteria for \(resolved.name).",
+                    bundle: .module,
+                    comment: "Siri answer when a drive search returns no results."
+                )
             } else if results.count == 1, let only = results.first {
-                dialogText = "Found 1 matching drive for \(resolved.name). \(only.spokenSummary(vehicleName: resolved.name))"
+                let topSummary = only.spokenSummary(vehicleName: resolved.name)
+                dialogText = String(
+                    localized: "Found 1 matching drive for \(resolved.name). \(topSummary)",
+                    bundle: .module,
+                    comment: "Siri answer when a drive search returns a single drive."
+                )
             } else if let top = results.first {
                 let totalMiles = results.compactMap(\.distanceMiles).reduce(0, +)
+                let distanceText = FleetKitFormatting.distance(miles: totalMiles, width: .wide, fractionLength: 1)
+                let topSummary = top.spokenSummary(vehicleName: resolved.name)
                 dialogText = String(
-                    format: "Found %d matching drives for %@ totaling %.1f miles. Top match: %@",
-                    results.count,
-                    resolved.name,
-                    totalMiles,
-                    top.spokenSummary(vehicleName: resolved.name)
+                    localized: "Found \(results.count) matching drives for \(resolved.name) totaling \(distanceText). Top match: \(topSummary)",
+                    bundle: .module,
+                    comment: "Siri answer when a drive search returns multiple drives, summarizing count, total distance, and top match."
                 )
             } else {
-                dialogText = "Found \(results.count) matching drives for \(resolved.name)."
+                dialogText = String(
+                    localized: "Found \(results.count) matching drives for \(resolved.name).",
+                    bundle: .module,
+                    comment: "Fallback Siri answer reporting matching drive count."
+                )
             }
 
             return .result(
                 value: results,
-                dialog: IntentDialog("\(dialogText)"),
+                dialog: IntentDialog(stringLiteral: dialogText),
                 snippetIntent: DriveRouteSnippetIntent(
                     drives: results,
                     vehicleName: resolved.name,
@@ -562,7 +707,20 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Read release notes for", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Read release notes for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for reading software release notes for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Read release notes for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for reading software release notes for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -583,10 +741,17 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
             }
 
             guard let targetVersion, !targetVersion.isEmpty else {
+                let unknownVersion = String(localized: "Unknown", bundle: .module, comment: "Placeholder when a vehicle's software version is unavailable.")
                 return .result(
                     value: [],
-                    dialog: IntentDialog("No software version was reported for \(resolved.name)."),
-                    view: ReleaseNotesSnippetView(vehicleName: resolved.name, version: "Unknown", notes: [])
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "No software version was reported for \(resolved.name).",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Siri answer when no software version is available for release notes."
+                        )
+                    ),
+                    view: ReleaseNotesSnippetView(vehicleName: resolved.name, version: unknownVersion, notes: [])
                 )
             }
 
@@ -617,7 +782,7 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
             )
             return .result(
                 value: notes,
-                dialog: IntentDialog("\(dialogText)"),
+                dialog: IntentDialog(stringLiteral: dialogText),
                 view: ReleaseNotesSnippetView(vehicleName: resolved.name, version: targetVersion, notes: notes)
             )
         } catch {
@@ -629,10 +794,14 @@ public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
         switch query.lowercased() {
         case "fsd":
             [query, "Full Self-Driving", "Full Self Driving"]
-        case "autopilot", "ap":
+        case "autopilot", "ap", "piloto automático", "piloto automatico":
             [query, "Autopilot", "Autosteer", "Full Self-Driving"]
-        case "ac", "hvac":
+        case "ac", "hvac", "clima", "aire acondicionado":
             [query, "Climate", "Preconditioning", "Air Conditioning"]
+        case "navegación", "navegacion":
+            [query, "Navigation", "Maps", "Route"]
+        case "cámara", "camara", "dashcam":
+            [query, "Dashcam", "Camera", "Sentry"]
         default:
             [query]
         }
@@ -670,7 +839,20 @@ public struct CloseWindowsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Close", vehicle: vehicle, suffix: "windows"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Close \(vehicle.name) windows",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for closing windows on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Close my car windows",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for closing windows on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -679,14 +861,26 @@ public struct CloseWindowsIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await confirmWithSafetyGate(dialog: IntentDialog("Close windows on \(resolved.name)?"))
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Close windows on \(resolved.name)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt before closing vehicle windows."
+                    )
+                )
+            )
             try await service.runControl(
                 action: "window_control",
                 vin: resolved.vin,
                 params: ["command": .string("close")],
-                humanName: "closing windows"
+                humanName: String(localized: "closing windows", bundle: .module, comment: "Action name used in vehicle command error messages for closing windows.")
             )
-            let summary = "Closed windows on \(resolved.name)."
+            let summary = String(
+                localized: "Closed windows on \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after closing vehicle windows."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "window_control",
@@ -694,7 +888,7 @@ public struct CloseWindowsIntent: AppIntent, PredictableIntent {
                 summary: summary
             )
             log.success("closed windows on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

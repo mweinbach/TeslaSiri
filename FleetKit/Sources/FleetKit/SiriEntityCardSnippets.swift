@@ -146,7 +146,7 @@ private struct VehicleEntityCardView: View {
                 Spacer(minLength: 4)
 
                 if vehicle.isDefaultCar == true {
-                    Text("Default")
+                    Text(String(localized: "Default", bundle: .module, comment: "Badge marking the default vehicle on the Siri vehicle card"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tint)
                         .padding(.horizontal, 8)
@@ -167,6 +167,14 @@ private struct VehicleEntityCardView: View {
 private struct VehicleStatusCardView: View {
     let status: VehicleStatusEntity
     let compact: Bool
+
+    private var usesMetricTemperature: Bool {
+        status.temperatureUnit?.localizedCaseInsensitiveContains("c") == true
+    }
+
+    private func formattedTemperature(_ value: Double) -> String {
+        FleetKitFormatting.temperature(value, inFahrenheit: !usesMetricTemperature)
+    }
 
     var body: some View {
         if compact {
@@ -189,14 +197,14 @@ private struct VehicleStatusCardView: View {
                         .foregroundStyle(batteryColor)
                         .monospacedDigit()
                     if let range = status.batteryRangeMiles {
-                        Text("\(Int(range.rounded())) mi")
+                        Text(FleetKitFormatting.distance(miles: range))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
                     Spacer(minLength: 0)
                     if let inside = status.insideTemp {
-                        Text("\(Int(inside.rounded()))\(status.temperatureUnit ?? "°F")")
+                        Text(formattedTemperature(inside))
                             .font(.caption.weight(.semibold))
                             .monospacedDigit()
                     }
@@ -204,7 +212,6 @@ private struct VehicleStatusCardView: View {
             }
             .padding(10)
         } else {
-            let unit = status.temperatureUnit ?? "°F"
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Label(status.vehicleName, systemImage: "car.fill")
@@ -215,7 +222,9 @@ private struct VehicleStatusCardView: View {
 
                     if let isLocked = status.isLocked {
                         Label(
-                            isLocked ? "Locked" : "Unlocked",
+                            isLocked
+                                ? String(localized: "Locked", bundle: .module, comment: "Vehicle lock status badge: locked")
+                                : String(localized: "Unlocked", bundle: .module, comment: "Vehicle lock status badge: unlocked"),
                             systemImage: isLocked ? "lock.fill" : "lock.open.fill"
                         )
                         .font(.caption.weight(.semibold))
@@ -240,7 +249,7 @@ private struct VehicleStatusCardView: View {
                             .monospacedDigit()
 
                         if let range = status.batteryRangeMiles {
-                            Text("· \(Int(range.rounded())) mi")
+                            Text(verbatim: "· \(FleetKitFormatting.distance(miles: range))")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
@@ -250,7 +259,7 @@ private struct VehicleStatusCardView: View {
 
                         if let state = status.chargingState, !state.isEmpty {
                             let isCharging = state.localizedStandardContains("charging") && !state.localizedStandardContains("dis")
-                            Label(state.capitalized, systemImage: isCharging ? "bolt.fill" : "powerplug")
+                            Label(FleetKitFormatting.localizedChargingState(state), systemImage: isCharging ? "bolt.fill" : "powerplug")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(isCharging ? AnyShapeStyle(Color.green) : AnyShapeStyle(.secondary))
                                 .padding(.horizontal, 8)
@@ -288,15 +297,15 @@ private struct VehicleStatusCardView: View {
                         cardMetricTile(
                             icon: status.isClimateOn == true ? "fan.fill" : "thermometer.medium",
                             tint: status.isClimateOn == true ? .orange : .secondary,
-                            label: "Cabin",
-                            value: "\(Int(inside.rounded()))\(unit)"
+                            label: String(localized: "Cabin", bundle: .module, comment: "Cabin temperature metric label"),
+                            value: formattedTemperature(inside)
                         )
                     }
                     if let odometer = status.odometerDisplay {
                         cardMetricTile(
                             icon: "gauge.with.needle",
                             tint: .secondary,
-                            label: "Odometer",
+                            label: String(localized: "Odometer", bundle: .module, comment: "Odometer metric label"),
                             value: odometer
                         )
                     }
@@ -304,7 +313,7 @@ private struct VehicleStatusCardView: View {
                         cardMetricTile(
                             icon: "car.side.rear.and.tire.marks",
                             tint: .secondary,
-                            label: "Tires",
+                            label: String(localized: "Tires", bundle: .module, comment: "Tire pressure metric label"),
                             value: tires
                         )
                     }
@@ -337,7 +346,7 @@ private struct DriveEntityCardView: View {
                         .font(.subheadline.weight(.bold))
                         .monospacedDigit()
                     if let duration = drive.durationText {
-                        Text("· \(duration)")
+                        Text(verbatim: "· \(duration)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -362,7 +371,7 @@ private struct DriveEntityCardView: View {
                         .monospacedDigit()
 
                     if let duration = drive.durationText {
-                        Text("· \(duration)")
+                        Text(verbatim: "· \(duration)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -388,7 +397,7 @@ private struct DriveEntityCardView: View {
                         Circle()
                             .fill(.green)
                             .frame(width: 8, height: 8)
-                        Text(drive.startAddress ?? "Start location")
+                        Text(drive.startAddress ?? String(localized: "Start location", bundle: .module, comment: "Fallback start address label on drive card"))
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                     }
@@ -396,7 +405,7 @@ private struct DriveEntityCardView: View {
                         Circle()
                             .fill(.red)
                             .frame(width: 8, height: 8)
-                        Text(drive.endAddress ?? "Destination")
+                        Text(drive.endAddress ?? String(localized: "Destination", bundle: .module, comment: "Fallback destination address label on drive card"))
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                     }
@@ -408,17 +417,27 @@ private struct DriveEntityCardView: View {
 
                 HStack(spacing: 8) {
                     if let battery = drive.batterySummaryText {
-                        cardMetricTile(icon: "battery.75percent", tint: .green, label: "Battery", value: battery)
+                        cardMetricTile(
+                            icon: "battery.75percent",
+                            tint: .green,
+                            label: String(localized: "Battery", bundle: .module, comment: "Drive battery metric label"),
+                            value: battery
+                        )
                     }
                     if let efficiency = drive.efficiencyText {
-                        cardMetricTile(icon: "leaf.fill", tint: .green, label: "Efficiency", value: efficiency)
+                        cardMetricTile(
+                            icon: "leaf.fill",
+                            tint: .green,
+                            label: String(localized: "Efficiency", bundle: .module, comment: "Drive efficiency metric label"),
+                            value: efficiency
+                        )
                     }
                     if let energy = drive.energyUsedKWH {
                         cardMetricTile(
                             icon: "bolt.fill",
                             tint: .orange,
-                            label: "Energy",
-                            value: String(format: "%.1f kWh", energy)
+                            label: String(localized: "Energy", bundle: .module, comment: "Drive energy metric label"),
+                            value: FleetKitFormatting.energyKWH(energy)
                         )
                     }
                 }
@@ -475,7 +494,11 @@ private struct ChargeSessionCardView: View {
 
                     Spacer(minLength: 4)
 
-                    Text(session.isSupercharger ? "Supercharger" : "AC")
+                    Text(
+                        session.isSupercharger
+                            ? String(localized: "Supercharger", bundle: .module, comment: "Charger type badge for Tesla Supercharger")
+                            : String(localized: "AC", bundle: .module, comment: "Charger type badge for AC charging")
+                    )
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(accentColor)
                         .padding(.horizontal, 8)
@@ -490,7 +513,7 @@ private struct ChargeSessionCardView: View {
                         .monospacedDigit()
 
                     if let cost = session.formattedCost {
-                        Text("· \(cost)")
+                        Text(verbatim: "· \(cost)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -504,18 +527,28 @@ private struct ChargeSessionCardView: View {
 
                 HStack(spacing: 8) {
                     if let battery = session.batterySummaryText {
-                        cardMetricTile(icon: "battery.100percent.bolt", tint: .green, label: "Battery", value: battery)
+                        cardMetricTile(
+                            icon: "battery.100percent.bolt",
+                            tint: .green,
+                            label: String(localized: "Battery", bundle: .module, comment: "Charge session battery metric label"),
+                            value: battery
+                        )
                     }
                     if let miles = session.milesAdded, miles > 0 {
                         cardMetricTile(
                             icon: "road.lanes",
                             tint: .blue,
-                            label: "Range",
-                            value: String(format: "+%.0f mi", miles)
+                            label: String(localized: "Range", bundle: .module, comment: "Charge session added range metric label"),
+                            value: "+\(FleetKitFormatting.distance(miles: miles))"
                         )
                     }
                     if let minutes = session.durationMinutes, minutes > 0 {
-                        cardMetricTile(icon: "clock", tint: .secondary, label: "Duration", value: "\(minutes) min")
+                        cardMetricTile(
+                            icon: "clock",
+                            tint: .secondary,
+                            label: String(localized: "Duration", bundle: .module, comment: "Charge session duration metric label"),
+                            value: FleetKitFormatting.durationMinutes(minutes)
+                        )
                     }
                 }
             }
@@ -542,7 +575,7 @@ private struct SoftwareUpdateStaticCardView: View {
                     .font(.headline)
                 Spacer()
                 if let current = software.currentVersion {
-                    Text("Installed \(current)")
+                    Text(String(localized: "Installed \(current)", bundle: .module, comment: "Badge showing the currently installed software version"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
@@ -571,11 +604,15 @@ private struct SoftwareUpdateStaticCardView: View {
             if let progress = activeProgressPercent {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(software.installPercent ?? 0 > 0 ? "Installing Update" : "Downloaded")
+                        Text(
+                            software.installPercent ?? 0 > 0
+                                ? String(localized: "Installing Update", bundle: .module, comment: "Software update progress label while installing")
+                                : String(localized: "Downloaded", bundle: .module, comment: "Software update progress label while downloading")
+                        )
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(Int(progress.rounded()))%")
+                        Text(FleetKitFormatting.percent(progress))
                             .font(.caption2.weight(.bold))
                             .monospacedDigit()
                     }
@@ -627,7 +664,7 @@ private struct ReleaseNoteCardView: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if let version = note.version, !version.isEmpty {
-                        Text("v\(version)")
+                        Text(verbatim: "v\(version)")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -651,7 +688,7 @@ private struct ReleaseNoteCardView: View {
                     Spacer(minLength: 4)
 
                     if let version = note.version, !version.isEmpty {
-                        Text("v\(version)")
+                        Text(verbatim: "v\(version)")
                             .font(.caption2.weight(.bold))
                             .monospacedDigit()
                             .padding(.horizontal, 8)
@@ -700,10 +737,15 @@ private struct DrivingStatsCompactCardView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(String(format: "%.1f mi", stats.totalDistanceMiles))
+                Text(FleetKitFormatting.distance(miles: stats.totalDistanceMiles, fractionLength: 1))
                     .font(.title3.weight(.bold))
                     .monospacedDigit()
-                Text("· \(stats.driveCount) drive\(stats.driveCount == 1 ? "" : "s")")
+                let driveCountText = String(
+                    localized: "\(stats.driveCount) drives",
+                    bundle: .module,
+                    comment: "Compact driving stats count of drives"
+                )
+                Text(verbatim: "· \(driveCountText)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -728,12 +770,12 @@ private struct ChargingStatsCompactCardView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(String(format: "+%.1f kWh", stats.totalEnergyAddedKWH))
+                Text(verbatim: "+\(FleetKitFormatting.energyKWH(stats.totalEnergyAddedKWH))")
                     .font(.title3.weight(.bold))
                     .foregroundStyle(.green)
                     .monospacedDigit()
                 if let cost = stats.formattedCost {
-                    Text("· \(cost)")
+                    Text(verbatim: "· \(cost)")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -755,15 +797,15 @@ private struct BatteryHealthCompactCardView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if let health = battery.healthPercent {
-                    Text(String(format: "%.1f%%", health))
+                    Text(FleetKitFormatting.percent(health, fractionLength: 1))
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.green)
                         .monospacedDigit()
-                    Text("Pack Health")
+                    Text(String(localized: "Pack Health", bundle: .module, comment: "Compact battery health card subtitle"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 } else if let remaining = battery.energyRemainingKWH {
-                    Text(String(format: "%.1f kWh", remaining))
+                    Text(FleetKitFormatting.energyKWH(remaining))
                         .font(.title3.weight(.bold))
                         .monospacedDigit()
                 }

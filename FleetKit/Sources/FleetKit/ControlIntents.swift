@@ -38,7 +38,20 @@ public struct LockVehicleIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Lock", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Lock \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for locking a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Lock my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for locking the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -47,11 +60,19 @@ public struct LockVehicleIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await service.runControl(action: "door_lock", vin: resolved.vin, humanName: "locking")
-            let summary = "Locked \(resolved.name)."
+            try await service.runControl(
+                action: "door_lock",
+                vin: resolved.vin,
+                humanName: String(localized: "locking", bundle: .module, comment: "Action name used in vehicle command error messages for locking doors.")
+            )
+            let summary = String(
+                localized: "Locked \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after locking a vehicle."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "door_lock", summary: summary)
             log.success("locked \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -90,7 +111,20 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Unlock", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Unlock \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for unlocking a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Unlock my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for unlocking the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -99,12 +133,28 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
-            try await confirmWithSafetyGate(dialog: IntentDialog("Unlock \(resolved.name)?"))
-            try await service.runControl(action: "door_unlock", vin: resolved.vin, humanName: "unlocking")
-            let summary = "Unlocked \(resolved.name)."
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Unlock \(resolved.name)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt before unlocking a vehicle."
+                    )
+                )
+            )
+            try await service.runControl(
+                action: "door_unlock",
+                vin: resolved.vin,
+                humanName: String(localized: "unlocking", bundle: .module, comment: "Action name used in vehicle command error messages for unlocking doors.")
+            )
+            let summary = String(
+                localized: "Unlocked \(resolved.name).",
+                bundle: .module,
+                comment: "Siri confirmation after unlocking a vehicle."
+            )
             let result = VehicleCommandResultEntity(vehicle: resolved, action: "door_unlock", summary: summary)
             log.success("unlocked \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -146,7 +196,20 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Warm up", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Warm up \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for starting climate in a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Warm up my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for starting climate in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -157,19 +220,27 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
             let scope = service.sessionScopeID
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let deliveryState = try await performSandboxAwareBackgroundTask(
-                description: "Starting climate in \(resolved.name)"
+                description: String(
+                    localized: "Starting climate in \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while starting cabin climate."
+                )
             ) {
                 try await service.runControl(
                     action: "auto_conditioning_start",
                     vin: resolved.vin,
-                    humanName: "starting climate",
+                    humanName: String(localized: "starting climate", bundle: .module, comment: "Action name used in vehicle command error messages for starting climate."),
                     allowAsyncWake: true
                 )
             }
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "start climate",
-                confirmed: "Climate is starting in \(resolved.name)."
+                wakingAction: String(localized: "start climate", bundle: .module, comment: "Infinitive action phrase used in wake-up messages for starting climate."),
+                confirmed: String(
+                    localized: "Climate is starting in \(resolved.name).",
+                    bundle: .module,
+                    comment: "Siri confirmation after starting cabin climate."
+                )
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -180,7 +251,7 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
             log.success("started climate in \(resolved.name) (\(deliveryState.rawValue))")
             return .result(
                 value: result,
-                dialog: IntentDialog("\(summary)"),
+                dialog: IntentDialog(stringLiteral: summary),
                 snippetIntent: ClimateControlSnippetIntent(
                     vehicle: VehicleEntity(id: resolved.vin, name: resolved.name),
                     appliedSummary: summary,
@@ -226,7 +297,20 @@ public struct VentWindowsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Vent", vehicle: vehicle, suffix: "windows"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Vent \(vehicle.name) windows",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for venting windows on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Vent my car windows",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for venting windows on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -239,9 +323,13 @@ public struct VentWindowsIntent: AppIntent, PredictableIntent {
                 action: "window_control",
                 vin: resolved.vin,
                 params: ["command": .string("vent")],
-                humanName: "venting the windows"
+                humanName: String(localized: "venting the windows", bundle: .module, comment: "Action name used in vehicle command error messages for venting windows.")
             )
-            let summary = "Venting \(resolved.name)'s windows."
+            let summary = String(
+                localized: "Venting \(resolved.name)'s windows.",
+                bundle: .module,
+                comment: "Siri confirmation after venting vehicle windows."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "window_control",
@@ -249,7 +337,7 @@ public struct VentWindowsIntent: AppIntent, PredictableIntent {
                 summary: summary
             )
             log.success("venting windows on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -277,8 +365,10 @@ public enum TrunkPosition: String, AppEnum, Sendable {
 
     var spokenName: String {
         switch self {
-        case .rear: "trunk"
-        case .front: "frunk"
+        case .rear:
+            String(localized: "trunk", bundle: .module, comment: "Spoken name for the rear trunk.")
+        case .front:
+            String(localized: "frunk", bundle: .module, comment: "Spoken name for the front trunk (frunk).")
         }
     }
 }
@@ -327,7 +417,33 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$trunk)) { vehicle, trunk in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Open", vehicle: vehicle, suffix: trunk.spokenName))
+            let title: LocalizedStringResource = switch (vehicle, trunk) {
+            case let (vehicle?, .rear):
+                LocalizedStringResource(
+                    "Open \(vehicle.name) trunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the rear trunk on a specific vehicle."
+                )
+            case let (vehicle?, .front):
+                LocalizedStringResource(
+                    "Open \(vehicle.name) frunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the frunk on a specific vehicle."
+                )
+            case (nil, .rear):
+                LocalizedStringResource(
+                    "Open my car trunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the rear trunk on the user's selected car."
+                )
+            case (nil, .front):
+                LocalizedStringResource(
+                    "Open my car frunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the frunk on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -337,8 +453,8 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
             let result = try await Self.open(trunk, vehicle: vehicle) { dialog in
                 try await confirmWithSafetyGate(dialog: dialog)
             }
-            log.success("opened \(trunk.spokenName) on \(result.vehicleName)")
-            return .result(value: result, dialog: IntentDialog("\(result.summary)"))
+            log.success("opened \(trunk.rawValue) on \(result.vehicleName)")
+            return .result(value: result, dialog: IntentDialog(stringLiteral: result.summary))
         } catch {
             throw log.failure(error)
         }
@@ -352,18 +468,48 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
     ) async throws -> VehicleCommandResultEntity {
         let service = FleetIntentService.make()
         let resolved = try await service.resolvedVehicle(vehicle?.id)
-        try await confirm(IntentDialog("Open the \(trunk.spokenName) on \(resolved.name)?"))
+        let confirmDialog = switch trunk {
+        case .rear:
+            IntentDialog(
+                LocalizedStringResource(
+                    "Open the trunk on \(resolved.name)?",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before opening the rear trunk."
+                )
+            )
+        case .front:
+            IntentDialog(
+                LocalizedStringResource(
+                    "Open the frunk on \(resolved.name)?",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Confirmation prompt before opening the front trunk (frunk)."
+                )
+            )
+        }
+        try await confirm(confirmDialog)
+        let humanName = switch trunk {
+        case .rear:
+            String(localized: "opening the trunk", bundle: .module, comment: "Action name used in vehicle command error messages for opening the rear trunk.")
+        case .front:
+            String(localized: "opening the frunk", bundle: .module, comment: "Action name used in vehicle command error messages for opening the frunk.")
+        }
         try await service.runControl(
             action: "actuate_trunk",
             vin: resolved.vin,
             params: ["which_trunk": .string(trunk.rawValue)],
-            humanName: "opening the \(trunk.spokenName)"
+            humanName: humanName
         )
+        let summary = switch trunk {
+        case .rear:
+            String(localized: "Opening the trunk on \(resolved.name).", bundle: .module, comment: "Siri confirmation after opening the rear trunk.")
+        case .front:
+            String(localized: "Opening the frunk on \(resolved.name).", bundle: .module, comment: "Siri confirmation after opening the frunk.")
+        }
         return VehicleCommandResultEntity(
             vehicle: resolved,
             action: "actuate_trunk",
             appliedValue: trunk.rawValue,
-            summary: "Opening the \(trunk.spokenName) on \(resolved.name)."
+            summary: summary
         )
     }
 }
@@ -400,7 +546,20 @@ public struct OpenFrunkIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Open", vehicle: vehicle, suffix: "frunk"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Open \(vehicle.name) frunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the frunk on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Open my car frunk",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for opening the frunk on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -411,7 +570,7 @@ public struct OpenFrunkIntent: AppIntent, PredictableIntent {
                 try await confirmWithSafetyGate(dialog: dialog)
             }
             log.success("opened frunk on \(result.vehicleName)")
-            return .result(value: result, dialog: IntentDialog("\(result.summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: result.summary))
         } catch {
             throw log.failure(error)
         }
@@ -456,8 +615,21 @@ public struct SetChargeLimitIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$percent)) { vehicle, percent in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Set \(target) charge limit to \(percent)%"))
+            let percentText = FleetKitFormatting.percent(percent)
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Set \(vehicle.name) charge limit to \(percentText)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting the battery charge limit on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Set my car charge limit to \(percentText)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting the battery charge limit on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -467,22 +639,35 @@ public struct SetChargeLimitIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let clampedPercent = min(max(percent, 50), 100)
-            try await confirmWithSafetyGate(dialog: IntentDialog("Set \(resolved.name)'s charge limit to \(clampedPercent)%?"))
+            let percentText = FleetKitFormatting.percent(clampedPercent)
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Set \(resolved.name)'s charge limit to \(percentText)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt before changing the battery charge limit."
+                    )
+                )
+            )
             try await service.runControl(
                 action: "set_charge_limit",
                 vin: resolved.vin,
                 params: ["percent": .int(clampedPercent)],
-                humanName: "setting the charge limit"
+                humanName: String(localized: "setting the charge limit", bundle: .module, comment: "Action name used in vehicle command error messages for setting the charge limit.")
             )
-            let summary = "Set \(resolved.name)'s charge limit to \(clampedPercent)%."
+            let summary = String(
+                localized: "Set \(resolved.name)'s charge limit to \(percentText).",
+                bundle: .module,
+                comment: "Siri confirmation after changing the battery charge limit."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_charge_limit",
-                appliedValue: "\(clampedPercent)%",
+                appliedValue: percentText,
                 summary: summary
             )
             log.success("charge limit \(clampedPercent)% on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

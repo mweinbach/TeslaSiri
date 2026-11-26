@@ -126,7 +126,7 @@ Siri, Shortcuts, Spotlight, and background intent execution live in a **local Sw
 
 | Area | Path | Role |
 |------|------|------|
-| Package manifest | `FleetKit/Package.swift` | Single `FleetKit` library target, **iOS/macOS 27.3** (required for `@AppIntent(.tool)` & `@AppEntity(.generable)`), no resources (Siri skills ship from the app target) |
+| Package manifest | `FleetKit/Package.swift` | Single `FleetKit` library target, **iOS/macOS 27.3** (required for `@AppIntent(.tool)` & `@AppEntity(.generable)`), `defaultLocalization: "en"`, processes `Resources/` (`Localizable.xcstrings`); Siri skills ship from the app target |
 | Intents, entities, API | `FleetKit/Sources/FleetKit/*.swift` | All `@AppIntent(.tool)` & schema intents, `SyncableEntity` models, `FleetIntentClient`, snippet views |
 | Siri AI generable & result types | `FleetKit/Sources/FleetKit/FleetSiriAITypes.swift` | `VehicleCommandResultEntity` (`TransientAppEntity`), `DriveSortOrder` (`AppEnum`) + `@AppEntity(.generable)` `CabinClimateSettings` & `DriveFilterCriteria` |
 | Siri AI workflow tools | `FleetKit/Sources/FleetKit/SiriAIWorkflowIntents.swift` | Charging start/stop, charge port open/close, Sentry Mode, composite cabin climate, filtered drive search (`FindDrivesIntent`), spoken release notes (`GetReleaseNotesIntent`), close windows |
@@ -280,10 +280,27 @@ Control, analytics & workflow intent files in `FleetKit/Sources/FleetKit/`:
 - Car names: Siri's `carName` is matched against the roster by VIN (`vocabularyIdentifier`, set during resolution), exact name, partial name, or model ("Model Y"). Generic names ("my car", "Tesla") use the selected car; duplicates ask for disambiguation. The app registers visible car names with `INVocabulary` `.carName` from `FleetTokenBridge.sync` and clears them on sign-out.
 - Lock, unlock, honk and flash use `runControl(…, allowAsyncWake: true)`: a sleeping car returns `.inProgress` instead of making Siri wait for the wake. Unlock is in `IntentsRestrictedWhileLocked`; Apple also requires an unlocked iPhone for both lock and unlock.
 - Missing or rejected credentials return `.failureRequiringAppLaunch`; other errors return `.failure`.
+- Every intent in the extension's `IntentsSupported` needs localized example phrases in `TeslaSiri/<lang>.lproj/AppIntentVocabulary.plist` for every supported language (`en`, `es`, etc. — main app bundle, `IntentPhrases` → `IntentName` + `IntentExamples`). Without them App Store Connect warns `ITMS-90626: Invalid Siri Support` (build 15 hit this for all five car intents). Add phrases for every supported language whenever you add a SiriKit intent, and check the built app's `<lang>.lproj/` folders for the file.
 - SiriKit needs Siri permission. `AppIntentDiscoveryCard` shows **Allow Siri Car Commands** while the status is not determined and a Settings link if denied. `NSSiriUsageDescription` is set on the app target.
 - Maps EV routing only plans charging stops with Apple's charging and consumption models (`chargingFormulaArguments` / `consumptionFormulaArguments`), which Apple provides to automaker partners. The extension reports the car list, charge, range and charging state but no formula arguments, battery capacity, connector power or live `startSendingUpdates` updates. Charging inlets come from the device region (NACS in North America, Japan, Korea, Taiwan; GB/T in China; CCS2/Type 2 elsewhere) because the roster doesn't report them.
 - SiriKit car commands only work on a device with a signed build; adding the Siri capability required `bitrig build --provision` to register it and the new extension ID with Apple.
 - Do not mirror refresh tokens or full token sets to the extension — access token only.
+
+### Localization
+
+- Supported languages: English (`en`, development language) and Spanish (`es`), registered in `TeslaSiri.xcodeproj/project.xcproj` (`localizations.supported`) and `FleetKit/Package.swift` (`defaultLocalization: "en"`).
+- String Catalog locations:
+  - `TeslaSiri/Localizable.xcstrings` — main app UI (QA Diagnostics developer chrome is marked `"shouldTranslate": false` except Demo Car Mode in `SandboxDebugSection.swift` and `"Sign Out"` in `BackendSection.swift`), plus mirrored static `FleetKit` App Intents metadata keys.
+  - `TeslaSiri/AppShortcuts.xcstrings` — Siri App Shortcut phrases (`${applicationName}` / `${vehicle}`).
+  - `TeslaSiri/InfoPlist.xcstrings` — `CFBundleDisplayName` and `NSSiriUsageDescription`.
+  - `Widget Extension/Localizable.xcstrings` & `Widget Extension/InfoPlist.xcstrings` — widgets, controls, display name, plus mirrored static `FleetKit` App Intents metadata keys.
+  - `TeslaSiriCarIntents/Localizable.xcstrings` & `TeslaSiriCarIntents/InfoPlist.xcstrings` — SiriKit Car Commands extension strings.
+  - `TeslaSiriAppIntents/Localizable.xcstrings` & `TeslaSiriAppIntents/InfoPlist.xcstrings` — ExtensionKit host display name and mirrored static `FleetKit` App Intents metadata keys.
+  - `FleetKit/Sources/FleetKit/Resources/Localizable.xcstrings` — runtime `FleetKit` intents, entities, dialogs, errors, and SwiftUI snippet views.
+- **FleetKit bundle rule**: Runtime SwiftUI `Text`, `String(localized:)`, and `LocalizedStringResource` inside `FleetKit` must pass `bundle: .module` (or `FleetKitLocalization.bundleDescription`) so lookups hit `FleetKit_FleetKit.bundle` rather than `Bundle.main`.
+- **Static App Intents metadata rule**: `appintentsmetadataprocessor` merges static `AppIntentsPackage` metadata from `FleetKit` into each host target's `Metadata.appintents/extract.actionsdata` without a bundle reference, so Siri, Shortcuts, Spotlight, and `sirimetadataanalyzer` resolve those keys in the host bundle's `Localizable.strings` (not `FleetKit_FleetKit.bundle`). Mirror `extract.actionsdata` keys from `FleetKit`'s catalog into `TeslaSiri/Localizable.xcstrings`, `TeslaSiriAppIntents/Localizable.xcstrings`, and `Widget Extension/Localizable.xcstrings` with `"extractionState": "manual"` and `"generatesSymbol": false`, and verify both `xcrun sirimetadataanalyzer <app>` and `xcrun sirimetadataanalyzer --language es <app>` report 0 findings.
+- **SiriKit vocabulary**: Keep `TeslaSiri/<lang>.lproj/AppIntentVocabulary.plist` in sync for every intent in `TeslaSiriCarIntents`'s `IntentsSupported` across every supported language (`en`, `es`, …).
+- **Siri skills**: `TeslaSiri/Skills.skillsbundle/Skills/*/SKILL.md` stays in English (unsupported in the iOS 27.3 SDK).
 
 ### Background work
 

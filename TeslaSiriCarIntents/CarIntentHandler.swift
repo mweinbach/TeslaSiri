@@ -39,7 +39,13 @@ final class CarCommandsHandler: NSObject,
     private func vehicle(named name: INSpeakableString?) async throws -> FleetVehicleInfo {
         switch try await SiriCarCommandService().resolveCar(identifier: name?.vocabularyIdentifier, spokenName: name?.spokenPhrase) {
         case .car(let vehicle): return vehicle
-        case .ambiguous, .noMatch: throw FleetKitError.api("That car isn't on this account.")
+        case .ambiguous, .noMatch:
+            throw FleetKitError.api(
+                String(
+                    localized: "That car isn't on this account.",
+                    comment: "Error returned by SiriKit Car Commands when the requested car is not found on the signed-in account."
+                )
+            )
         }
     }
 

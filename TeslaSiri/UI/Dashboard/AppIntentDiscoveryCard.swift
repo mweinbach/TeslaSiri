@@ -132,11 +132,11 @@ struct AppIntentDiscoveryCard: View {
                     .foregroundStyle(isAdded ? AnyShapeStyle(AppTheme.chargeGreen) : AnyShapeStyle(.tint))
                     .frame(width: 18)
 
-                Text("\"\(existing?.invocationPhrase ?? item.phrase)\"")
+                Text("“\(existing?.invocationPhrase ?? item.phrase)”")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.75)
 
                 Spacer(minLength: 0)
             }
@@ -146,7 +146,11 @@ struct AppIntentDiscoveryCard: View {
             .background(AppTheme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isAdded ? "Edit Siri phrase \(existing?.invocationPhrase ?? item.phrase)" : "Add Siri phrase \(item.phrase)")
+        .accessibilityLabel(
+            isAdded
+                ? Text("Edit Siri phrase \(existing?.invocationPhrase ?? item.phrase)")
+                : Text("Add Siri phrase \(item.phrase)")
+        )
     }
 
     private var statusIntent: GetVehicleStatusIntent {
@@ -180,12 +184,21 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     enum FilterSection: String, CaseIterable, Identifiable {
-        case all = "All"
-        case drives = "Drives"
-        case vehicle = "Car & Climate"
-        case charging = "Charging"
+        case all
+        case drives
+        case vehicle
+        case charging
 
         var id: String { rawValue }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .all: "All"
+            case .drives: "Drives"
+            case .vehicle: "Car & Climate"
+            case .charging: "Charging"
+            }
+        }
     }
 
     @State private var selectedSection: FilterSection = .all
@@ -230,7 +243,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 Picker("Widget Category", selection: $selectedSection) {
                     ForEach(FilterSection.allCases) { section in
-                        Text(section.rawValue).tag(section)
+                        Text(section.title).tag(section)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -239,7 +252,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                     if !drives.isEmpty {
                         let safeIndex = min(max(selectedDriveIndex, 0), drives.count - 1)
                         siriPlatterCard(
-                            prompt: "\"Show my recent drives\" or \"How was my last drive?\"",
+                            prompt: "“Show my recent drives” or “How was my last drive?”",
                             subtitle: "Interactive Apple Maps route, start & end timeline, Autopilot segments, Satellite toggle & multi-drive stepper"
                         ) {
                             DriveSnippetView(
@@ -255,8 +268,8 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
 
                     if let drivingStats {
                         siriPlatterCard(
-                            prompt: "\"What are my driving stats this week?\"",
-                            subtitle: "Autopilot share progress bar & Wh/mi efficiency breakdown"
+                            prompt: "“What are my driving stats this week?”",
+                            subtitle: "Autopilot share progress bar & efficiency breakdown"
                         ) {
                             DrivingStatsSnippetView(stats: drivingStats)
                         }
@@ -266,20 +279,20 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                 if selectedSection == .all || selectedSection == .vehicle {
                     if let statusEntity {
                         siriPlatterCard(
-                            prompt: "\"How's my car?\" or \"Where is my car?\"",
+                            prompt: "“How's my car?” or “Where is my car?”",
                             subtitle: "Battery & charge-limit gauge, Apple Maps parked-car pin, Directions link & live controls"
                         ) {
                             VehicleStatusSnippetView(status: statusEntity, mapData: vehicleMapData)
                         }
 
                         siriPlatterCard(
-                            prompt: "\"Warm up my car\"",
+                            prompt: "“Warm up my car”",
                             subtitle: "Interactive cabin temperature +/- controls & active comfort badges"
                         ) {
                             ClimateControlSnippetView(
                                 vehicle: vehicleEntity,
                                 status: statusEntity,
-                                appliedSummary: "Climate on · warming cabin"
+                                appliedSummary: String(localized: "Climate on · warming cabin", comment: "Preview status subtitle for the Siri climate snippet card")
                             )
                         }
                     }
@@ -289,7 +302,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                     if !charges.isEmpty {
                         let safeChargeIdx = min(max(selectedChargeIndex, 0), charges.count - 1)
                         siriPlatterCard(
-                            prompt: "\"How much did my last charge cost?\"",
+                            prompt: "“How much did my last charge cost?”",
                             subtitle: "Apple Maps charger pin, battery-added fill bar & session stepper"
                         ) {
                             ChargeSessionSnippetView(
@@ -389,8 +402,8 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
     }
 
     private func siriPlatterCard<Content: View>(
-        prompt: String,
-        subtitle: String,
+        prompt: LocalizedStringKey,
+        subtitle: LocalizedStringKey,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {

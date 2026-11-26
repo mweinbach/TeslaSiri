@@ -6,6 +6,7 @@ struct DriveSessionSummary: View {
     let drive: FleetDriveSession
     let endpointAddresses: DriveEndpointAddresses?
     let hasRoute: Bool
+    var units: String? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -25,7 +26,7 @@ struct DriveSessionSummary: View {
                 ) {
                     DriveMetricTile(
                         title: "Distance",
-                        value: formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi"),
+                        value: formattedDistance(miles: drive.distanceMiles, units: units, fractionLength: 1),
                         systemImage: "point.topleft.down.to.point.bottomright.curvepath"
                     )
                     DriveMetricTile(
@@ -35,12 +36,14 @@ struct DriveSessionSummary: View {
                     )
                     DriveMetricTile(
                         title: "Average",
-                        value: formattedNumber(drive.avgSpeedMPH, fractionLength: 0, suffix: " mph"),
+                        value: formattedSpeed(mph: drive.avgSpeedMPH, units: units, fractionLength: 0),
                         systemImage: "speedometer"
                     )
                     DriveMetricTile(
                         title: "Route",
-                        value: hasRoute ? "Mapped" : "Missing",
+                        value: hasRoute
+                            ? String(localized: "Mapped", comment: "Drive route status when GPS route data is available")
+                            : String(localized: "Missing", comment: "Drive route status when GPS route data is unavailable"),
                         systemImage: "map"
                     )
                 }
@@ -50,14 +53,14 @@ struct DriveSessionSummary: View {
                 VStack(alignment: .leading, spacing: 0) {
                     DriveEndpointRow(
                         title: "Start",
-                        address: endpointAddresses?.start ?? drive.startAddress ?? "Unknown location",
+                        address: endpointAddresses?.start ?? drive.startAddress ?? String(localized: "Unknown location", comment: "Fallback address when a drive endpoint location is unknown"),
                         systemImage: "circle.fill",
                         tint: AppTheme.chargeGreen,
                         showsTrailingConnector: true
                     )
                     DriveEndpointRow(
                         title: "Destination",
-                        address: endpointAddresses?.end ?? drive.endAddress ?? "Unknown location",
+                        address: endpointAddresses?.end ?? drive.endAddress ?? String(localized: "Unknown location", comment: "Fallback address when a drive endpoint location is unknown"),
                         systemImage: "flag.checkered",
                         tint: AppTheme.accent,
                         showsTrailingConnector: false
@@ -70,7 +73,7 @@ struct DriveSessionSummary: View {
 }
 
 private struct DriveEndpointRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let address: String
     let systemImage: String
     let tint: Color

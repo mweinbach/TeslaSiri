@@ -29,9 +29,15 @@ struct DrivePlacesStrip: View {
             }
 
             if places.isEmpty {
-                Text(isIndexing ? "Finding the places you drive to…" : "No places found")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Group {
+                    if isIndexing {
+                        Text("Finding the places you drive to…")
+                    } else {
+                        Text("No places found")
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 8) {
@@ -74,7 +80,7 @@ private struct PlaceChip: View {
                     Text(place.displayName)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
-                    Text(place.visitCount == 1 ? "1 visit" : "\(place.visitCount) visits")
+                    Text("\(place.visitCount) visits")
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
                 }
@@ -97,7 +103,7 @@ private struct PlaceChip: View {
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
         .accessibilityLabel(place.displayName)
-        .accessibilityValue(place.visitCount == 1 ? "1 visit" : "\(place.visitCount) visits")
+        .accessibilityValue(String(localized: "\(place.visitCount) visits", comment: "Number of visits to a frequent drive destination"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Edit Nickname", onEditNickname)
     }

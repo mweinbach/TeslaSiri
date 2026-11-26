@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "App display name on the Home Screen (brand name kept as Wattie).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wattie"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wattie"
+          }
+        }
+      }
+    },
+    "NSSiriUsageDescription" : {
+      "comment" : "Privacy permission prompt explaining why Wattie requests Siri access.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siri uses Wattie to lock, unlock, honk, and check the charge of your car, and Maps uses it to plan EV routes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siri usa Wattie para bloquear, desbloquear, tocar la bocina y consultar la carga de tu vehículo, y Mapas lo usa para planificar rutas de vehículo eléctrico."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

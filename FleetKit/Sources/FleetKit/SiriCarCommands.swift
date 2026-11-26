@@ -61,14 +61,17 @@ public struct SiriCarCommandService: Sendable {
         return roster.count == 1 ? .car(roster[0]) : .noMatch
     }
 
-    private static let genericCarNames: Set<String> = ["", "car", "vehicle", "tesla", "truck", "ev", "auto", "automobile"]
+    private static let genericCarNames: Set<String> = [
+        "", "car", "vehicle", "tesla", "truck", "ev", "auto", "automobile",
+        "coche", "carro", "vehiculo", "camioneta", "electrico"
+    ]
 
     static func normalizedCarName(_ name: String) -> String {
         var words = name
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
-        while let first = words.first, ["my", "the", "our"].contains(first) {
+        while let first = words.first, ["my", "the", "our", "mi", "el", "la", "nuestro", "nuestra"].contains(first) {
             words.removeFirst()
         }
         return words.joined(separator: " ")
@@ -86,7 +89,9 @@ public struct SiriCarCommandService: Sendable {
         try await service.runControl(
             action: locked ? "door_lock" : "door_unlock",
             vin: vin,
-            humanName: locked ? "locking" : "unlocking",
+            humanName: locked
+                ? String(localized: "locking", bundle: .module, comment: "Action gerund used in unsupported-action error messages.")
+                : String(localized: "unlocking", bundle: .module, comment: "Action gerund used in unsupported-action error messages."),
             allowAsyncWake: true
         )
     }
@@ -95,11 +100,21 @@ public struct SiriCarCommandService: Sendable {
     public func activateSignals(flashLights: Bool, honkHorn: Bool, vin: String) async throws -> VehicleCommandDeliveryState {
         var delivery = VehicleCommandDeliveryState.confirmed
         if flashLights {
-            let state = try await service.runControl(action: "flash_lights", vin: vin, humanName: "flashing the lights", allowAsyncWake: true)
+            let state = try await service.runControl(
+                action: "flash_lights",
+                vin: vin,
+                humanName: String(localized: "flashing the lights", bundle: .module, comment: "Action gerund used in unsupported-action error messages."),
+                allowAsyncWake: true
+            )
             if state == .wakingVehicle { delivery = .wakingVehicle }
         }
         if honkHorn {
-            let state = try await service.runControl(action: "honk_horn", vin: vin, humanName: "honking the horn", allowAsyncWake: true)
+            let state = try await service.runControl(
+                action: "honk_horn",
+                vin: vin,
+                humanName: String(localized: "honking the horn", bundle: .module, comment: "Action gerund used in unsupported-action error messages."),
+                allowAsyncWake: true
+            )
             if state == .wakingVehicle { delivery = .wakingVehicle }
         }
         return delivery

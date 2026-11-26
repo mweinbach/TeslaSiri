@@ -81,7 +81,7 @@ actor DriveEndpointAddressGeocoder {
     private func formattedAddress(from mapItem: MKMapItem) -> String {
         [mapItem.address?.shortAddress, mapItem.address?.fullAddress, mapItem.name]
             .compactMap(normalizedPlacemarkPart)
-            .first ?? "Address unavailable"
+            .first ?? String(localized: "Address unavailable", comment: "Fallback when reverse geocoding returns no address")
     }
 
     private func normalizedPlacemarkPart(_ value: String?) -> String? {

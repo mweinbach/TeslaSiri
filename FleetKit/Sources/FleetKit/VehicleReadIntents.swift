@@ -33,7 +33,20 @@ public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check", vehicle: vehicle, suffix: "battery"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check \(vehicle.name) battery",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking battery level on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check my car battery",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking battery level on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -45,13 +58,56 @@ public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
             let snapshot = try await service.snapshot(vin: resolved.vin)
             let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
 
-            let battery = entity.batteryPercent.map { "\($0)%" } ?? "an unknown level"
-            let range = entity.batteryRangeMiles.map { " (\(Int($0.rounded())) mi range)" } ?? ""
-            let charging = (snapshot.chargingState?.lowercased() == "charging") ? " and charging" : ""
-            log.success("\(resolved.name) at \(battery)\(range)\(charging)")
+            let isCharging = snapshot.chargingState?.lowercased() == "charging"
+            let dialogText: String
+            switch (entity.batteryPercent, entity.batteryRangeMiles, isCharging) {
+            case let (percent?, range?, true):
+                let percentText = FleetKitFormatting.percent(percent)
+                let rangeText = FleetKitFormatting.distance(miles: range, usesMetric: entity.usesMetric, fractionLength: 0)
+                dialogText = String(
+                    localized: "\(resolved.name) is at \(percentText) (\(rangeText) range) and charging.",
+                    bundle: .module,
+                    comment: "Siri battery readout with percentage, range, and active charging."
+                )
+            case let (percent?, range?, false):
+                let percentText = FleetKitFormatting.percent(percent)
+                let rangeText = FleetKitFormatting.distance(miles: range, usesMetric: entity.usesMetric, fractionLength: 0)
+                dialogText = String(
+                    localized: "\(resolved.name) is at \(percentText) (\(rangeText) range).",
+                    bundle: .module,
+                    comment: "Siri battery readout with percentage and range."
+                )
+            case let (percent?, nil, true):
+                let percentText = FleetKitFormatting.percent(percent)
+                dialogText = String(
+                    localized: "\(resolved.name) is at \(percentText) and charging.",
+                    bundle: .module,
+                    comment: "Siri battery readout with percentage and active charging."
+                )
+            case let (percent?, nil, false):
+                let percentText = FleetKitFormatting.percent(percent)
+                dialogText = String(
+                    localized: "\(resolved.name) is at \(percentText).",
+                    bundle: .module,
+                    comment: "Siri battery readout with percentage only."
+                )
+            case (nil, _, true):
+                dialogText = String(
+                    localized: "\(resolved.name) is charging at an unknown battery level.",
+                    bundle: .module,
+                    comment: "Siri battery readout when charging but percentage is unavailable."
+                )
+            case (nil, _, false):
+                dialogText = String(
+                    localized: "\(resolved.name) is at an unknown battery level.",
+                    bundle: .module,
+                    comment: "Siri battery readout when percentage is unavailable."
+                )
+            }
+            log.success(dialogText)
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(resolved.name) is at \(battery)\(range)\(charging).")
+                dialog: IntentDialog(stringLiteral: dialogText)
             )
         } catch {
             throw log.failure(error)
@@ -91,7 +147,20 @@ public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check", vehicle: vehicle, suffix: "mileage"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check \(vehicle.name) mileage",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking mileage on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check my car mileage",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking mileage on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -102,11 +171,24 @@ public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
             let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
-            let mileage = entity.odometerDisplay ?? "unknown mileage"
-            log.success("\(resolved.name) odometer \(mileage)")
+            let dialogText: String
+            if let mileage = entity.odometerDisplay {
+                dialogText = String(
+                    localized: "\(resolved.name)'s odometer is \(mileage).",
+                    bundle: .module,
+                    comment: "Siri readout for vehicle odometer distance."
+                )
+            } else {
+                dialogText = String(
+                    localized: "\(resolved.name)'s odometer reading is unavailable.",
+                    bundle: .module,
+                    comment: "Siri fallback when vehicle odometer distance is unavailable."
+                )
+            }
+            log.success(dialogText)
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(resolved.name)'s odometer is \(mileage).")
+                dialog: IntentDialog(stringLiteral: dialogText)
             )
         } catch {
             throw log.failure(error)
@@ -146,7 +228,20 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check", vehicle: vehicle, suffix: "tire pressure"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check \(vehicle.name) tire pressure",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking tire pressure on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check my car tire pressure",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking tire pressure on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -157,11 +252,24 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
             let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
-            let tires = entity.tireSummary ?? "no recent tire pressure reading"
-            log.success("\(resolved.name) tires: \(tires)")
+            let dialogText: String
+            if let tires = entity.tireSummary {
+                dialogText = String(
+                    localized: "\(resolved.name)'s tire pressure: \(tires).",
+                    bundle: .module,
+                    comment: "Siri readout for vehicle tire pressures."
+                )
+            } else {
+                dialogText = String(
+                    localized: "\(resolved.name) has no recent tire pressure reading.",
+                    bundle: .module,
+                    comment: "Siri fallback when tire pressure readings are unavailable."
+                )
+            }
+            log.success(dialogText)
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(resolved.name)'s tire pressure: \(tires).")
+                dialog: IntentDialog(stringLiteral: dialogText)
             )
         } catch {
             throw log.failure(error)
@@ -201,7 +309,20 @@ public struct GetVehicleStatusIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check", vehicle: vehicle, suffix: "status"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check \(vehicle.name) status",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking status of a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check my car status",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking status of the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -226,7 +347,13 @@ public struct GetVehicleStatusIntent: AppIntent, PredictableIntent {
             log.success("status snippet for \(resolved.name)")
             return .result(
                 value: entity,
-                dialog: IntentDialog("Here's the latest on \(resolved.name)."),
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Here's the latest on \(resolved.name).",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Short spoken introduction when presenting a vehicle status card."
+                    )
+                ),
                 snippetIntent: VehicleStatusSnippetIntent(status: entity, topics: VehicleInfoTopic.allCases)
             )
         } catch {

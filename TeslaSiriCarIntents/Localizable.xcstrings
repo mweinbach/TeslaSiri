@@ -1,0 +1,1007 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "${action} charge port on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${action} el puerto de carga de ${vehicle}"
+          }
+        }
+      }
+    },
+    "${action} charge port on my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${action} el puerto de carga de mi vehículo"
+          }
+        }
+      }
+    },
+    "Cancel update on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar la actualización en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Cancel update on my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar la actualización en mi vehículo"
+          }
+        }
+      }
+    },
+    "Check ${vehicle} battery": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la batería de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check ${vehicle} mileage": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el kilometraje de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check ${vehicle} status": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el estado de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check ${vehicle} tire pressure": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la presión de neumáticos de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check battery health for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la salud de la batería de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check my car battery": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la batería de mi vehículo"
+          }
+        }
+      }
+    },
+    "Check my car battery health": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la salud de la batería de mi vehículo"
+          }
+        }
+      }
+    },
+    "Check my car mileage": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el kilometraje de mi vehículo"
+          }
+        }
+      }
+    },
+    "Check my car status": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el estado de mi vehículo"
+          }
+        }
+      }
+    },
+    "Check my car tire pressure": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar la presión de neumáticos de mi vehículo"
+          }
+        }
+      }
+    },
+    "Check software on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el software de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Check software on my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultar el software de mi vehículo"
+          }
+        }
+      }
+    },
+    "Close my car windows": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar las ventanillas de mi vehículo"
+          }
+        }
+      }
+    },
+    "Close windows on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar las ventanillas de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Configure cabin climate in ${vehicle} with ${settings}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar la climatización de ${vehicle} con ${settings}"
+          }
+        }
+      }
+    },
+    "Configure cabin climate in my car with ${settings}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar la climatización de mi vehículo con ${settings}"
+          }
+        }
+      }
+    },
+    "Control ${vehicle} with ${changes}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlar ${vehicle} con ${changes}"
+          }
+        }
+      }
+    },
+    "Control my car with ${changes}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlar mi vehículo con ${changes}"
+          }
+        }
+      }
+    },
+    "Find drives for ${vehicle} matching ${filter}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar viajes de ${vehicle} que coincidan con ${filter}"
+          }
+        }
+      }
+    },
+    "Find drives for my car matching ${filter}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar viajes de mi vehículo que coincidan con ${filter}"
+          }
+        }
+      }
+    },
+    "Flash ${vehicle} lights": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destellar las luces de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Flash my car lights": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destellar las luces de mi vehículo"
+          }
+        }
+      }
+    },
+    "Get ${period} charging stats for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener estadísticas de carga de ${period} para ${vehicle}"
+          }
+        }
+      }
+    },
+    "Get ${period} charging stats for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener estadísticas de carga de ${period} para mi vehículo"
+          }
+        }
+      }
+    },
+    "Get ${period} driving stats for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener estadísticas de conducción de ${period} para ${vehicle}"
+          }
+        }
+      }
+    },
+    "Get ${period} driving stats for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener estadísticas de conducción de ${period} para mi vehículo"
+          }
+        }
+      }
+    },
+    "Get ${topics} for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener ${topics} de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Get ${topics} for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtener ${topics} de mi vehículo"
+          }
+        }
+      }
+    },
+    "Get details for ${charge}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles de ${charge}"
+          }
+        }
+      }
+    },
+    "Get details for ${drive}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles de ${drive}"
+          }
+        }
+      }
+    },
+    "Get details for ${vehicle}'s latest charge": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles de la última carga de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Get details for ${vehicle}'s latest drive": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles del último viaje de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Get details for my car's latest charge": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles de la última carga de mi vehículo"
+          }
+        }
+      }
+    },
+    "Get details for my car's latest drive": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver detalles del último viaje de mi vehículo"
+          }
+        }
+      }
+    },
+    "Honk ${vehicle} horn": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocar la bocina de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Honk my car horn": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocar la bocina de mi vehículo"
+          }
+        }
+      }
+    },
+    "Lock ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear ${vehicle}"
+          }
+        }
+      }
+    },
+    "Lock my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear mi vehículo"
+          }
+        }
+      }
+    },
+    "Open ${vehicle} ${trunk}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir ${trunk} de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Open ${vehicle} frunk": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero delantero de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Open my car ${trunk}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir ${trunk} de mi vehículo"
+          }
+        }
+      }
+    },
+    "Open my car frunk": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero delantero de mi vehículo"
+          }
+        }
+      }
+    },
+    "Read release notes for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer notas de la versión de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Read release notes for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer notas de la versión de mi vehículo"
+          }
+        }
+      }
+    },
+    "Send ${destination} to ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar ${destination} a ${vehicle}"
+          }
+        }
+      }
+    },
+    "Send ${destination} to my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar ${destination} a mi vehículo"
+          }
+        }
+      }
+    },
+    "Set ${seat} ${mode} to ${level}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar ${mode} de ${seat} al nivel ${level}"
+          }
+        }
+      }
+    },
+    "Set ${seat} ${mode} to ${level} in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar ${mode} de ${seat} al nivel ${level} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Set ${vehicle} cabin to ${temperature}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar la cabina de ${vehicle} a ${temperature}"
+          }
+        }
+      }
+    },
+    "Set ${vehicle} charge limit to ${percent}%": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar el límite de carga de ${vehicle} al ${percent}%"
+          }
+        }
+      }
+    },
+    "Set ${vehicle} charging current to ${amps} A": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar la corriente de carga de ${vehicle} a ${amps} A"
+          }
+        }
+      }
+    },
+    "Set my car cabin to ${temperature}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar la cabina de mi vehículo a ${temperature}"
+          }
+        }
+      }
+    },
+    "Set my car charge limit to ${percent}%": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar el límite de carga de mi vehículo al ${percent}%"
+          }
+        }
+      }
+    },
+    "Set my car charging current to ${amps} A": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar la corriente de carga de mi vehículo a ${amps} A"
+          }
+        }
+      }
+    },
+    "Show ${count} recent charges for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ${count} cargas recientes de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Show ${count} recent charges for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ${count} cargas recientes de mi vehículo"
+          }
+        }
+      }
+    },
+    "Show ${count} recent drives for ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ${count} viajes recientes de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Show ${count} recent drives for my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ${count} viajes recientes de mi vehículo"
+          }
+        }
+      }
+    },
+    "Show ${vehicle} last drive": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar el último viaje de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Show my car last drive": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar el último viaje de mi vehículo"
+          }
+        }
+      }
+    },
+    "Start charging ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar carga de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Start charging my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar carga de mi vehículo"
+          }
+        }
+      }
+    },
+    "Stop charging ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener carga de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Stop charging my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener carga de mi vehículo"
+          }
+        }
+      }
+    },
+    "Stop climate in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagar la climatización de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Stop climate in my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagar la climatización de mi vehículo"
+          }
+        }
+      }
+    },
+    "That car isn't on this account.": {
+      "comment": "Error returned by SiriKit Car Commands when the requested car is not found on the signed-in account.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ese vehículo no está en esta cuenta."
+          }
+        }
+      }
+    },
+    "Turn Bioweapon Defense ${on} in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Defensa Biológica a ${on} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Turn Bioweapon Defense ${on} in my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Defensa Biológica a ${on} en mi vehículo"
+          }
+        }
+      }
+    },
+    "Turn Sentry Mode ${on} on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Modo Centinela a ${on} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Turn Sentry Mode ${on} on my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Modo Centinela a ${on} en mi vehículo"
+          }
+        }
+      }
+    },
+    "Turn dog mode ${on} in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Modo Perro a ${on} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Turn dog mode ${on} in my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar Modo Perro a ${on} en mi vehículo"
+          }
+        }
+      }
+    },
+    "Turn max defrost ${on} in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar desempañado máximo a ${on} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Turn max defrost ${on} in my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar desempañado máximo a ${on} en mi vehículo"
+          }
+        }
+      }
+    },
+    "Turn steering wheel heater ${on}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar calefacción del volante a ${on}"
+          }
+        }
+      }
+    },
+    "Turn steering wheel heater ${on} in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar calefacción del volante a ${on} en ${vehicle}"
+          }
+        }
+      }
+    },
+    "Unlock ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear ${vehicle}"
+          }
+        }
+      }
+    },
+    "Unlock my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear mi vehículo"
+          }
+        }
+      }
+    },
+    "Update ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar ${vehicle}"
+          }
+        }
+      }
+    },
+    "Update ${vehicle} at ${startTime}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar ${vehicle} a las ${startTime}"
+          }
+        }
+      }
+    },
+    "Update my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar mi vehículo"
+          }
+        }
+      }
+    },
+    "Update my car at ${startTime}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar mi vehículo a las ${startTime}"
+          }
+        }
+      }
+    },
+    "Vent ${vehicle} windows": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ventilar las ventanillas de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Vent my car windows": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ventilar las ventanillas de mi vehículo"
+          }
+        }
+      }
+    },
+    "Warm up my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calentar mi vehículo"
+          }
+        }
+      }
+    },
+    "Warm up or start climate in ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calentar o encender la climatización de ${vehicle}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

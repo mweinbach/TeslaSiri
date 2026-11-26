@@ -84,9 +84,8 @@ struct SoftwareUpdateCard: View {
                     .disabled(store.isLoadingSoftware || store.isMutatingSoftware)
                 }
 
-                if !store.softwareActionMessage.isEmpty,
-                   store.softwareActionMessage != "Not run" {
-                    Text(store.softwareActionMessage)
+                if let softwareActionMessage = store.softwareActionMessage, !softwareActionMessage.isEmpty {
+                    Text(softwareActionMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -139,7 +138,7 @@ struct SoftwareUpdateCard: View {
                     DashboardCardLinkLabel(
                         title: "All Release Notes",
                         systemImage: "doc.text",
-                        detail: "\(update.releaseNotes.count)"
+                        detail: update.releaseNotes.count.formatted()
                     )
                     .padding(.vertical, 8)
                 }
@@ -167,14 +166,14 @@ struct SoftwareUpdateCard: View {
 
     private var statusText: String {
         if update.updateAvailable || normalizedAvailableVersion != nil {
-            return "Update Available"
+            return String(localized: "Update Available", comment: "Software card status badge when an update is available")
         }
         guard let raw = update.status, !raw.isEmpty else {
-            return "Up to Date"
+            return String(localized: "Up to Date", comment: "Software card status badge when software is current")
         }
         let lowered = raw.lowercased()
         if lowered == "current" || lowered == "up_to_date" || lowered == "up to date" {
-            return "Up to Date"
+            return String(localized: "Up to Date", comment: "Software card status badge when software is current")
         }
         return humanizedStatus(raw)
     }
@@ -244,7 +243,7 @@ private extension View {
 }
 
 private struct SoftwareProgressRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let percent: Double
 
     var body: some View {
@@ -253,7 +252,7 @@ private struct SoftwareProgressRow: View {
                 Text(label)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(formattedNumber(percent, fractionLength: 0, suffix: "%"))
+                Text(formattedPercent(percent))
                     .fontWeight(.semibold)
                     .monospacedDigit()
             }

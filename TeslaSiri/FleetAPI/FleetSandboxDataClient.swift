@@ -27,7 +27,7 @@ struct FleetSandboxDataClient: FleetDataLoading {
                 name: "Demo Driver",
                 role: "owner",
                 scopes: ["vehicles:read", "vehicle_commands", "vehicle_history", "telemetry:read"],
-                units: "imperial"
+                units: nil
             ),
             vehicles: [vehicle]
         )
@@ -314,7 +314,11 @@ struct FleetSandboxDataClient: FleetDataLoading {
     }
 
     private static func makeSnapshot(from state: FleetDemoVehicleState) -> FleetLatestSnapshot {
-        FleetLatestSnapshot(
+        let metric = FleetKitFormatting.prefersMetric()
+        let displayTemp: (Double) -> Double = { fahrenheit in
+            metric ? ((fahrenheit - 32) * 5 / 9) : fahrenheit
+        }
+        return FleetLatestSnapshot(
             batteryLevel: state.batteryLevel,
             batteryRange: state.batteryRangeMiles,
             chargeLimitSOC: state.chargeLimitSOC,
@@ -338,16 +342,16 @@ struct FleetSandboxDataClient: FleetDataLoading {
             freshnessMS: 500,
             gear: "P",
             heading: 315,
-            insideTemp: state.insideTempF,
+            insideTemp: displayTemp(state.insideTempF),
             latitude: state.latitude,
             locked: state.locked,
             longitude: state.longitude,
             odometer: state.odometerMiles,
-            outsideTemp: state.outsideTempF,
+            outsideTemp: displayTemp(state.outsideTempF),
             sentryMode: state.sentryModeOn,
             software: makeSoftwareUpdate(from: state, includeReleaseNotes: true),
             speed: nil,
-            targetTemperature: state.targetTempF,
+            targetTemperature: displayTemp(state.targetTempF),
             timeToFullCharge: state.timeToFullCharge > 0 ? state.timeToFullCharge : nil,
             timestamp: state.updatedAtMS,
             tires: FleetTirePressures(

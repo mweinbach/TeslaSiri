@@ -123,28 +123,39 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     }
 
     public var distanceText: String {
-        distanceMiles.map { String(format: "%.1f mi", $0) } ?? "Drive"
+        distanceMiles.map { FleetKitFormatting.distance(miles: $0, fractionLength: 1) }
+            ?? String(localized: "Drive", bundle: .module, comment: "Fallback title for a drive without distance")
     }
 
     public var durationText: String? {
-        durationMinutes.map { "\($0) min" }
+        durationMinutes.map { FleetKitFormatting.durationMinutes($0) }
     }
 
     public var batterySummaryText: String? {
         guard let start = startingBatteryPercent, let end = endingBatteryPercent else { return nil }
-        return "\(start)% → \(end)%"
+        return "\(FleetKitFormatting.percent(start)) → \(FleetKitFormatting.percent(end))"
     }
 
     public var efficiencyText: String? {
-        efficiencyWhPerMile.map { String(format: "%.0f Wh/mi", $0) }
+        guard let whPerMile = efficiencyWhPerMile else { return nil }
+        if FleetKitFormatting.prefersMetric() {
+            let whPerKm = Int((whPerMile / 1.609344).rounded())
+            return String(localized: "\(whPerKm) Wh/km", bundle: .module, comment: "Driving energy efficiency in watt-hours per kilometer")
+        }
+        let rounded = Int(whPerMile.rounded())
+        return String(localized: "\(rounded) Wh/mi", bundle: .module, comment: "Driving energy efficiency in watt-hours per mile")
     }
 
     public var routeText: String {
         if let startAddress, let endAddress {
-            return "\(startAddress) to \(endAddress)"
+            return String(localized: "\(startAddress) to \(endAddress)", bundle: .module, comment: "Drive route from start address to destination address")
         }
-        if let startAddress { return "Started at \(startAddress)" }
-        if let endAddress { return "Ended at \(endAddress)" }
+        if let startAddress {
+            return String(localized: "Started at \(startAddress)", bundle: .module, comment: "Drive route when only the starting address is known")
+        }
+        if let endAddress {
+            return String(localized: "Ended at \(endAddress)", bundle: .module, comment: "Drive route when only the destination address is known")
+        }
         return startedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
@@ -170,9 +181,15 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     public var detailText: String {
         var parts: [String] = [routeText]
         if let durationText { parts.append(durationText) }
-        if let avgSpeedMPH { parts.append("avg \(Int(avgSpeedMPH.rounded())) mph") }
-        if let maxSpeedMPH { parts.append("max \(Int(maxSpeedMPH.rounded())) mph") }
-        if let energyUsedKWH { parts.append(String(format: "%.1f kWh", energyUsedKWH)) }
+        if let avgSpeedMPH {
+            let speed = FleetKitFormatting.speed(mph: avgSpeedMPH)
+            parts.append(String(localized: "avg \(speed)", bundle: .module, comment: "Abbreviated average speed on a drive, e.g. 'avg 24 mph'"))
+        }
+        if let maxSpeedMPH {
+            let speed = FleetKitFormatting.speed(mph: maxSpeedMPH)
+            parts.append(String(localized: "max \(speed)", bundle: .module, comment: "Abbreviated maximum speed on a drive, e.g. 'max 55 mph'"))
+        }
+        if let energyUsedKWH { parts.append(FleetKitFormatting.energyKWH(energyUsedKWH)) }
         if let efficiencyText { parts.append(efficiencyText) }
         if let batterySummaryText { parts.append(batterySummaryText) }
         return parts.joined(separator: " • ")
@@ -181,54 +198,78 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     /// Detailed natural-language summary suitable for Siri voice readout.
     public func spokenSummary(vehicleName: String? = nil) -> String {
         let whenText = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let subject = vehicleName ?? "Your Tesla"
+        let subject = vehicleName ?? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken drive summary")
+        let durationPhrase = durationMinutes.map { FleetKitFormatting.durationMinutes($0, width: .wide) }
         var sentences: [String] = []
 
-        var lead = "On \(whenText), \(subject) drove \(distanceText)"
         if let startAddress, let endAddress {
-            lead += " from \(startAddress) to \(endAddress)"
+            if let durationPhrase {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) from \(startAddress) to \(endAddress) in \(durationPhrase).", bundle: .module, comment: "Spoken drive summary lead with start, destination, and duration"))
+            } else {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) from \(startAddress) to \(endAddress).", bundle: .module, comment: "Spoken drive summary lead with start and destination"))
+            }
         } else if let endAddress {
-            lead += " to \(endAddress)"
+            if let durationPhrase {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) to \(endAddress) in \(durationPhrase).", bundle: .module, comment: "Spoken drive summary lead with destination and duration"))
+            } else {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) to \(endAddress).", bundle: .module, comment: "Spoken drive summary lead with destination"))
+            }
         } else if let startAddress {
-            lead += " starting at \(startAddress)"
+            if let durationPhrase {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) starting at \(startAddress) in \(durationPhrase).", bundle: .module, comment: "Spoken drive summary lead with start address and duration"))
+            } else {
+                sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) starting at \(startAddress).", bundle: .module, comment: "Spoken drive summary lead with start address"))
+            }
+        } else if let durationPhrase {
+            sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText) in \(durationPhrase).", bundle: .module, comment: "Spoken drive summary lead with duration"))
+        } else {
+            sentences.append(String(localized: "On \(whenText), \(subject) drove \(distanceText).", bundle: .module, comment: "Spoken drive summary lead"))
         }
-        if let minutes = durationMinutes {
-            lead += " in \(minutes) minute\(minutes == 1 ? "" : "s")"
-        }
-        sentences.append("\(lead).")
 
-        var energyParts: [String] = []
         if let start = startingBatteryPercent, let end = endingBatteryPercent {
-            energyParts.append("battery went from \(start)% to \(end)%")
-        }
-        if let energy = energyUsedKWH {
-            energyParts.append(String(format: "using %.1f kWh", energy))
-        }
-        if let whPerMi = efficiencyWhPerMile {
-            energyParts.append(String(format: "(%.0f Wh/mi)", whPerMi))
-        }
-        if !energyParts.isEmpty {
-            let joined = energyParts.joined(separator: " ")
-            sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
+            let startPct = FleetKitFormatting.percent(start)
+            let endPct = FleetKitFormatting.percent(end)
+            if let energy = energyUsedKWH, let efficiency = efficiencyText {
+                let kwh = FleetKitFormatting.energyKWH(energy)
+                sentences.append(String(localized: "Battery went from \(startPct) to \(endPct), using \(kwh) (\(efficiency)).", bundle: .module, comment: "Spoken battery, energy, and efficiency sentence for a drive"))
+            } else if let energy = energyUsedKWH {
+                let kwh = FleetKitFormatting.energyKWH(energy)
+                sentences.append(String(localized: "Battery went from \(startPct) to \(endPct), using \(kwh).", bundle: .module, comment: "Spoken battery and energy sentence for a drive"))
+            } else if let efficiency = efficiencyText {
+                sentences.append(String(localized: "Battery went from \(startPct) to \(endPct) (\(efficiency)).", bundle: .module, comment: "Spoken battery and efficiency sentence for a drive"))
+            } else {
+                sentences.append(String(localized: "Battery went from \(startPct) to \(endPct).", bundle: .module, comment: "Spoken battery change sentence for a drive"))
+            }
+        } else if let energy = energyUsedKWH, let efficiency = efficiencyText {
+            let kwh = FleetKitFormatting.energyKWH(energy)
+            sentences.append(String(localized: "Used \(kwh) (\(efficiency)).", bundle: .module, comment: "Spoken energy and efficiency sentence for a drive"))
+        } else if let energy = energyUsedKWH {
+            let kwh = FleetKitFormatting.energyKWH(energy)
+            sentences.append(String(localized: "Used \(kwh).", bundle: .module, comment: "Spoken energy used sentence for a drive"))
+        } else if let efficiency = efficiencyText {
+            sentences.append(String(localized: "Efficiency was \(efficiency).", bundle: .module, comment: "Spoken efficiency sentence for a drive"))
         }
 
-        var speedParts: [String] = []
         if let avg = avgSpeedMPH {
-            speedParts.append("average speed \(Int(avg.rounded())) mph")
+            let avgText = FleetKitFormatting.speed(mph: avg)
+            if let max = maxSpeedMPH {
+                let maxText = FleetKitFormatting.speed(mph: max)
+                sentences.append(String(localized: "Average speed was \(avgText), with a top speed of \(maxText).", bundle: .module, comment: "Spoken average and top speed for a drive"))
+            } else {
+                sentences.append(String(localized: "Average speed was \(avgText).", bundle: .module, comment: "Spoken average speed for a drive"))
+            }
+        } else if let max = maxSpeedMPH {
+            let maxText = FleetKitFormatting.speed(mph: max)
+            sentences.append(String(localized: "Top speed was \(maxText).", bundle: .module, comment: "Spoken top speed for a drive"))
         }
-        if let max = maxSpeedMPH {
-            speedParts.append("top speed \(Int(max.rounded())) mph")
-        }
+
         if let ap = autopilotDistanceMiles, ap > 0.05 {
-            speedParts.append(String(format: "%.1f miles on Autopilot", ap))
-        }
-        if !speedParts.isEmpty {
-            let joined = speedParts.joined(separator: ", ")
-            sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
+            let apDistance = FleetKitFormatting.distance(miles: ap, width: .wide, fractionLength: 1)
+            sentences.append(String(localized: "\(apDistance) on Autopilot.", bundle: .module, comment: "Spoken Autopilot distance on a drive"))
         }
 
         if let tag, !tag.isEmpty {
-            sentences.append("Tagged as \(tag).")
+            sentences.append(String(localized: "Tagged as \(tag).", bundle: .module, comment: "Spoken drive tag label"))
         }
 
         return sentences.joined(separator: " ")
@@ -236,23 +277,44 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
 
     public var displayRepresentation: DisplayRepresentation {
         let date = startedAt.formatted(date: .abbreviated, time: .shortened)
-        return DisplayRepresentation(title: "\(distanceText) • \(date)", subtitle: "\(detailText)")
+        return DisplayRepresentation(
+            title: LocalizedStringResource(stringLiteral: "\(distanceText) • \(date)"),
+            subtitle: LocalizedStringResource(stringLiteral: detailText)
+        )
     }
 
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
-        let title = "Tesla Drive \(startedAt.formatted(date: .abbreviated, time: .shortened))"
-        let description = "Tesla drive for vehicle \(FleetKitLog.vin(vin)). \(distanceText). \(detailText)."
+        let formattedDate = startedAt.formatted(date: .abbreviated, time: .shortened)
+        let title = String(localized: "Tesla Drive \(formattedDate)", bundle: .module, comment: "Spotlight title for a completed Tesla drive")
+        let description = String(
+            localized: "Tesla drive for vehicle \(FleetKitLog.vin(vin)). \(distanceText). \(detailText).",
+            bundle: .module,
+            comment: "Spotlight searchable description for a completed Tesla drive"
+        )
         attributes.title = title
         attributes.displayName = title
-        attributes.kind = "Tesla Drive"
+        attributes.kind = String(localized: "Tesla Drive", bundle: .module, comment: "Spotlight kind for a Tesla drive")
         attributes.contentCreationDate = startedAt
         attributes.contentModificationDate = endedAt ?? startedAt
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
-            "Tesla", "drive", "trip", "route", "miles", "mileage", "distance", "duration",
-            "time", "average speed", "avg speed", "max speed", "energy", "kWh", "efficiency",
+            "Tesla",
+            String(localized: "drive", bundle: .module, comment: "Spotlight keyword for a drive"),
+            String(localized: "trip", bundle: .module, comment: "Spotlight keyword for a trip"),
+            String(localized: "route", bundle: .module, comment: "Spotlight keyword for a route"),
+            String(localized: "miles", bundle: .module, comment: "Spotlight keyword for miles"),
+            String(localized: "mileage", bundle: .module, comment: "Spotlight keyword for mileage"),
+            String(localized: "distance", bundle: .module, comment: "Spotlight keyword for distance"),
+            String(localized: "duration", bundle: .module, comment: "Spotlight keyword for duration"),
+            String(localized: "time", bundle: .module, comment: "Spotlight keyword for time"),
+            String(localized: "average speed", bundle: .module, comment: "Spotlight keyword for average speed"),
+            String(localized: "avg speed", bundle: .module, comment: "Spotlight keyword for abbreviated average speed"),
+            String(localized: "max speed", bundle: .module, comment: "Spotlight keyword for maximum speed"),
+            String(localized: "energy", bundle: .module, comment: "Spotlight keyword for energy"),
+            "kWh",
+            String(localized: "efficiency", bundle: .module, comment: "Spotlight keyword for efficiency"),
             FleetKitLog.vin(vin), startAddress, endAddress, tag
         ].compactMap { $0 }
         return attributes

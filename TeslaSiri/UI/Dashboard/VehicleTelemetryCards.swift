@@ -21,7 +21,7 @@ struct VehicleTelemetryCards: View {
 
     var body: some View {
         if let activeDrive {
-            VehicleLiveDriveCard(drive: activeDrive)
+            VehicleLiveDriveCard(drive: activeDrive, units: units)
         }
 
         if let snapshot = vehicle.latest {
@@ -65,7 +65,7 @@ struct VehicleTelemetryCards: View {
             }
 
             if let tires = snapshot.tires, tires.hasAnyReading {
-                VehicleTiresCard(tires: tires)
+                VehicleTiresCard(tires: tires, units: units)
             }
 
             VehicleDetailsCard(vehicle: vehicle, snapshot: snapshot, units: units)
@@ -77,6 +77,17 @@ struct VehicleTelemetryCards: View {
 
 struct VehicleLiveDriveCard: View {
     let drive: FleetActiveDriveSession
+    var units: String? = nil
+
+    private var speedNumber: String {
+        guard let mph = drive.latestRoutePoint?.speed ?? drive.latest?.speed else { return "--" }
+        let value = prefersMetricUnits(units) ? mph * 1.609_344 : mph
+        return formattedNumber(value, fractionLength: 0)
+    }
+
+    private var speedUnit: String {
+        prefersMetricUnits(units) ? UnitSpeed.kilometersPerHour.symbol : UnitSpeed.milesPerHour.symbol
+    }
 
     var body: some View {
         DashboardCard("Driving", systemImage: "location.north.fill", tint: AppTheme.chargeGreen) {
@@ -88,13 +99,13 @@ struct VehicleLiveDriveCard: View {
         } content: {
             HStack(alignment: .lastTextBaseline) {
                 MetricValueText(
-                    value: formattedNumber(drive.latestRoutePoint?.speed ?? drive.latest?.speed, fractionLength: 0),
-                    unit: "mph"
+                    value: speedNumber,
+                    unit: speedUnit
                 )
                 Spacer(minLength: 12)
                 HStack(spacing: 18) {
                     if let distance = drive.distanceMiles {
-                        miniStat(formattedNumber(distance, fractionLength: 1, suffix: " mi"), caption: "Distance")
+                        miniStat(formattedDistance(miles: distance, units: units, fractionLength: 1), caption: "Distance")
                     }
                     if let durationMS = drive.durationMS, durationMS > 0 {
                         miniStat(formattedDuration(milliseconds: durationMS), caption: "Duration")
@@ -105,7 +116,7 @@ struct VehicleLiveDriveCard: View {
         .appEntityIdentifier(driveEntityIdentifier)
     }
 
-    private func miniStat(_ value: String, caption: String) -> some View {
+    private func miniStat(_ value: String, caption: LocalizedStringKey) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(value)
                 .font(.subheadline.weight(.semibold))
@@ -158,7 +169,7 @@ struct VehicleBatteryCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 10) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(formattedNumber(snapshot.batteryLevel, fractionLength: 0, suffix: "%"))
+                        Text(formattedPercent(snapshot.batteryLevel))
                             .font(.system(.title3, design: .rounded, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(isCharging ? AppTheme.chargeGreen : .primary)
@@ -170,7 +181,7 @@ struct VehicleBatteryCard: View {
                             .monospacedDigit()
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Battery \(formattedNumber(snapshot.batteryLevel, fractionLength: 0, suffix: "%")), \(formattedRange) range")
+                    .accessibilityLabel("Battery \(formattedPercent(snapshot.batteryLevel)), \(formattedRange) range")
 
                     Spacer(minLength: 8)
 
@@ -201,7 +212,7 @@ struct VehicleBatteryCard: View {
                         DashboardCardLinkLabel(
                             title: "Charging History",
                             systemImage: "clock.arrow.circlepath",
-                            detail: "\(sessions.count)"
+                            detail: sessions.count.formatted()
                         )
                     }
                     .buttonStyle(.plain)
@@ -219,17 +230,22 @@ struct VehicleBatteryCard: View {
                     Button {
                         onCommand(.setChargeLimit(percent: percent))
                     } label: {
+                        let percentText = FleetKitFormatting.percent(percent)
                         if currentLimit == percent {
-                            Label("\(percent)%", systemImage: "checkmark")
+                            Label(percentText, systemImage: "checkmark")
                         } else {
-                            Text("\(percent)%")
+                            Text(percentText)
                         }
                     }
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text(currentLimit.map { "Limit \($0)%" } ?? "Set Limit")
-                        .monospacedDigit()
+                    if let currentLimit {
+                        Text("Limit \(FleetKitFormatting.percent(currentLimit))")
+                            .monospacedDigit()
+                    } else {
+                        Text("Set Limit")
+                    }
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2.weight(.semibold))
                 }
@@ -242,9 +258,12 @@ struct VehicleBatteryCard: View {
             .tint(.primary)
             .disabled(isRunningControl || isBusy(.setChargeLimit(percent: currentLimit ?? 80)))
             .accessibilityLabel("Charge limit")
-            .accessibilityValue(currentLimit.map { "\($0)%" } ?? "Unset")
+            .accessibilityValue(
+                currentLimit.map { FleetKitFormatting.percent($0) }
+                    ?? String(localized: "Unset", comment: "Accessibility value when charge limit is not set")
+            )
         } else if let currentLimit {
-            Text("Limit \(currentLimit)%")
+            Text("Limit \(FleetKitFormatting.percent(currentLimit))")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -266,11 +285,20 @@ struct VehicleBatteryCard: View {
                             Image(systemName: isCharging ? "stop.fill" : "bolt.fill")
                                 .font(.caption.weight(.semibold))
                         }
-                        Text(isCharging ? "Stop Charging" : "Start Charging")
-                            .font(.caption.weight(.semibold))
+                        Group {
+                            if isCharging {
+                                Text("Stop Charging")
+                            } else {
+                                Text("Start Charging")
+                            }
+                        }
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     }
                     .foregroundStyle(isCharging ? AppTheme.alertAmber : AppTheme.chargeGreen)
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 9)
                     .background(
                         (isCharging ? AppTheme.alertAmber : AppTheme.chargeGreen).opacity(0.13),
@@ -293,11 +321,20 @@ struct VehicleBatteryCard: View {
                             Image(systemName: "bolt.circle")
                                 .font(.caption.weight(.semibold))
                         }
-                        Text(isPortOpen ? "Close Port" : "Open Charge Port")
-                            .font(.caption.weight(.semibold))
+                        Group {
+                            if isPortOpen {
+                                Text("Close Port")
+                            } else {
+                                Text("Open Charge Port")
+                            }
+                        }
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     }
                     .foregroundStyle(isPortOpen ? AnyShapeStyle(AppTheme.climateBlue) : AnyShapeStyle(.primary))
                     .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 9)
                     .background(
                         isPortOpen ? AppTheme.climateBlue.opacity(0.13) : AppTheme.insetSurface,
@@ -319,22 +356,21 @@ struct VehicleBatteryCard: View {
     private var chargingDetails: some View {
         HStack(spacing: 8) {
             if let power = snapshot.chargerPowerKW, power > 0 {
-                detail(formattedNumber(power, fractionLength: 1, suffix: " kW"), caption: "Power")
+                detail(formattedPowerKW(power), caption: "Power")
             }
             if let rate = snapshot.chargeRateMPH, rate > 0 {
-                let converted = units == "metric" ? rate * 1.609_344 : rate
-                detail(
-                    formattedNumber(converted, fractionLength: 0, suffix: units == "metric" ? " km/h" : " mi/h"),
-                    caption: "Rate"
-                )
+                detail(formattedSpeed(mph: rate, units: units), caption: "Rate")
             }
             if let remaining = snapshot.timeToFullCharge, remaining > 0 {
-                detail(formattedNumber(remaining, fractionLength: 1, suffix: " hr"), caption: "To limit")
+                let duration = Duration.seconds(Int((remaining * 3_600).rounded())).formatted(
+                    .units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2)
+                )
+                detail(duration, caption: "To limit")
             }
         }
     }
 
-    private func detail(_ value: String, caption: String) -> some View {
+    private func detail(_ value: String, caption: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(caption)
                 .font(.caption2.weight(.medium))
@@ -356,7 +392,9 @@ struct VehicleBatteryCard: View {
         if let state = snapshot.chargingState, !state.isEmpty {
             return humanizedStatus(state)
         }
-        return isPortOpen ? "Port Open" : "Unplugged"
+        return isPortOpen
+            ? String(localized: "Port Open", comment: "Charging status badge when the charge port door is open")
+            : String(localized: "Unplugged", comment: "Charging status badge when the vehicle is not plugged in")
     }
 
     private var batterySymbol: String {
@@ -372,9 +410,7 @@ struct VehicleBatteryCard: View {
     }
 
     private var formattedRange: String {
-        guard let range = snapshot.batteryRange else { return "--" }
-        let value = units == "metric" ? range * 1.609_344 : range
-        return formattedNumber(value, fractionLength: 0, suffix: units == "metric" ? " km" : " mi")
+        formattedDistance(miles: snapshot.batteryRange, units: units)
     }
 }
 
@@ -405,20 +441,27 @@ private struct BatteryLevelBar: View {
                     .frame(width: max(height, width * clampedLevel))
                     .animation(.smooth(duration: 0.35), value: clampedLevel)
 
-                // Subtle quarter-scale ticks for precision automotive gauge feel.
+                // Subtle quarter-scale ticks positioned via leading spacers so RTL mirrors cleanly.
                 ForEach([0.25, 0.5, 0.75], id: \.self) { tick in
-                    Rectangle()
-                        .fill(.background.opacity(0.28))
-                        .frame(width: 1, height: height - 4)
-                        .offset(x: width * tick)
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: width * tick)
+                        Rectangle()
+                            .fill(.background.opacity(0.28))
+                            .frame(width: 1, height: height - 4)
+                        Spacer(minLength: 0)
+                    }
                 }
 
                 if let limit {
                     let clampedLimit = max(0, min(limit, 1))
-                    Capsule()
-                        .fill(.primary.opacity(0.8))
-                        .frame(width: 2.5, height: height + 6)
-                        .offset(x: min(max(width * clampedLimit - 1.25, 0), width - 2.5))
+                    let leading = min(max(width * clampedLimit - 1.25, 0), width - 2.5)
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: leading)
+                        Capsule()
+                            .fill(.primary.opacity(0.8))
+                            .frame(width: 2.5, height: height + 6)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
         }
@@ -430,11 +473,12 @@ private struct BatteryLevelBar: View {
     }
 
     private var accessibilityValue: String {
-        var value = formattedNumber(clampedLevel * 100, fractionLength: 0, suffix: "%")
+        let levelText = FleetKitFormatting.percent(clampedLevel * 100)
         if let limit {
-            value += ", charge limit \(formattedNumber(limit * 100, fractionLength: 0, suffix: "%"))"
+            let limitText = FleetKitFormatting.percent(limit * 100)
+            return String(localized: "\(levelText), charge limit \(limitText)", comment: "VoiceOver value for battery gauge with charge limit")
         }
-        return value
+        return levelText
     }
 }
 
@@ -461,22 +505,36 @@ private struct ChargeHistoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.startedAtDate.formatted(date: .abbreviated, time: .shortened))
                     .font(.subheadline.weight(.medium))
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if hasSubtitle {
+                    HStack(spacing: 4) {
+                        if let start = session.batteryLevelStart, let end = session.batteryLevelEnd {
+                            Text(formattedPercent(start))
+                            Image(systemName: "arrow.forward")
+                                .font(.caption2)
+                            Text(formattedPercent(end))
+                        }
+                        if !extraSubtitleParts.isEmpty {
+                            if session.batteryLevelStart != nil, session.batteryLevelEnd != nil {
+                                Text("·")
+                            }
+                            Text(extraSubtitleParts.joined(separator: " · "))
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
                 }
             }
 
             Spacer()
 
             if let energy = session.energyAddedKWH {
-                Text("+\(formattedNumber(energy, fractionLength: 1, suffix: " kWh"))")
+                Text("+\(formattedEnergyKWH(energy))")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.chargeGreen)
                     .monospacedDigit()
             } else {
-                Text(session.status.map(humanizedStatus) ?? "Charge")
+                Text(session.status.map(humanizedStatus) ?? String(localized: "Charge", comment: "Fallback label for a charging session row"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -488,18 +546,23 @@ private struct ChargeHistoryRow: View {
         .appEntityIdentifier(EntityIdentifier(for: ChargeSessionEntity.self, identifier: session.sessionID))
     }
 
-    private var subtitle: String? {
+    private var hasSubtitle: Bool {
+        (session.batteryLevelStart != nil && session.batteryLevelEnd != nil) || !extraSubtitleParts.isEmpty
+    }
+
+    private var extraSubtitleParts: [String] {
         var parts: [String] = []
-        if let start = session.batteryLevelStart, let end = session.batteryLevelEnd {
-            parts.append("\(Int(start.rounded()))% → \(Int(end.rounded()))%")
-        }
         if let power = session.avgPowerKW, power > 0 {
-            parts.append(formattedNumber(power, fractionLength: 1, suffix: " kW avg"))
+            let powerText = formattedPowerKW(power)
+            parts.append(String(localized: "\(powerText) avg", comment: "Average charging power in charging history row"))
         }
         if let cost = session.cost, cost > 0 {
-            parts.append(session.currency.map { cost.formatted(.currency(code: $0)) } ?? "Cost \(cost.formatted())")
+            parts.append(
+                session.currency.map { cost.formatted(.currency(code: $0)) }
+                    ?? String(localized: "Cost \(cost.formatted())", comment: "Charging session cost when currency code is missing")
+            )
         }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts
     }
 }
 
@@ -515,7 +578,7 @@ struct VehicleClimateCard: View {
     var onCommand: ((VehicleControlCommand) -> Void)? = nil
 
     private var isOn: Bool { snapshot.climateOn == true }
-    private var isMetric: Bool { units == "metric" }
+    private var isMetric: Bool { prefersMetricUnits(units) }
 
     var body: some View {
         DashboardCard("Climate", systemImage: isOn ? "fan.fill" : "fan", tint: isOn ? AppTheme.climateBlue : .secondary) {
@@ -569,7 +632,7 @@ struct VehicleClimateCard: View {
                     .monospacedDigit()
                     .foregroundStyle(AppTheme.climateBlue)
                     .contentTransition(.numericText())
-                    .accessibilityLabel("Target temperature \(formattedNumber(targetDisplay, fractionLength: 0, suffix: isMetric ? "°C" : "°F"))")
+                    .accessibilityLabel("Target temperature \(formattedTemperature(targetDisplay, inFahrenheit: !isMetric))")
 
                 Spacer(minLength: 0)
 
@@ -603,10 +666,12 @@ struct VehicleClimateCard: View {
                     Text("Start Climate")
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .foregroundStyle(AppTheme.climateBlue)
                 .frame(maxWidth: .infinity)
-                .frame(height: 30)
+                .frame(minHeight: 30)
+                .padding(.horizontal, 8)
                 .background(AppTheme.climateBlue.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
@@ -633,12 +698,17 @@ struct VehicleClimateCard: View {
     }
 
     private var statusText: String {
-        guard let on = snapshot.climateOn else { return "Unavailable" }
-        guard on else { return "Off" }
-        if let target = snapshot.targetTemperature {
-            return "Set to \(formattedNumber(target, fractionLength: 0, suffix: "°"))"
+        guard let on = snapshot.climateOn else {
+            return String(localized: "Unavailable", comment: "Climate status when telemetry is unavailable")
         }
-        return "On"
+        guard on else {
+            return String(localized: "Off", comment: "Climate status when climate control is off")
+        }
+        if let target = snapshot.targetTemperature {
+            let temp = formattedNumber(target, fractionLength: 0, suffix: "°")
+            return String(localized: "Set to \(temp)", comment: "Climate status when active with a target temperature")
+        }
+        return String(localized: "On", comment: "Climate status when climate control is on")
     }
 }
 
@@ -656,11 +726,21 @@ struct VehicleSecurityCard: View {
     var body: some View {
         DashboardCard("Security", systemImage: "lock.shield", tint: isLocked ? .secondary : AppTheme.alertAmber) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(snapshot.locked.map { $0 ? "Locked" : "Unlocked" } ?? "--")
-                    .font(.system(.title, design: .rounded, weight: .semibold))
-                    .foregroundStyle(isLocked ? AnyShapeStyle(.primary) : AnyShapeStyle(AppTheme.alertAmber))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                Group {
+                    if let locked = snapshot.locked {
+                        if locked {
+                            Text("Locked")
+                        } else {
+                            Text("Unlocked")
+                        }
+                    } else {
+                        Text("--")
+                    }
+                }
+                .font(.system(.title, design: .rounded, weight: .semibold))
+                .foregroundStyle(isLocked ? AnyShapeStyle(.primary) : AnyShapeStyle(AppTheme.alertAmber))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
                 let summary = closureSummary
                 Label(summary.text, systemImage: summary.symbol)
@@ -673,7 +753,10 @@ struct VehicleSecurityCard: View {
                 if controlsEnabled, snapshot.sentryMode != nil {
                     sentryToggleButton
                 } else if let sentry = snapshot.sentryMode {
-                    Label(sentry ? "Sentry on" : "Sentry off", systemImage: sentry ? "eye.fill" : "eye.slash")
+                    Label(
+                        sentry ? LocalizedStringKey("Sentry on") : LocalizedStringKey("Sentry off"),
+                        systemImage: sentry ? "eye.fill" : "eye.slash"
+                    )
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(sentry ? AnyShapeStyle(AppTheme.accent) : AnyShapeStyle(.secondary))
                         .labelStyle(CompactLabelStyle())
@@ -694,13 +777,21 @@ struct VehicleSecurityCard: View {
                     Image(systemName: isSentryOn ? "eye.fill" : "eye.slash")
                         .font(.caption2.weight(.semibold))
                 }
-                Text(isSentryOn ? "Sentry On" : "Sentry Off")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
+                Group {
+                    if isSentryOn {
+                        Text("Sentry On")
+                    } else {
+                        Text("Sentry Off")
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             }
             .foregroundStyle(isSentryOn ? AnyShapeStyle(AppTheme.accent) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity)
-            .frame(height: 30)
+            .frame(minHeight: 30)
+            .padding(.horizontal, 8)
             .background(
                 isSentryOn ? AppTheme.accent.opacity(0.14) : AppTheme.insetSurface,
                 in: Capsule()
@@ -708,8 +799,8 @@ struct VehicleSecurityCard: View {
         }
         .buttonStyle(.plain)
         .disabled(isRunningControl || isBusy(command))
-        .accessibilityLabel(isSentryOn ? "Turn off Sentry Mode" : "Turn on Sentry Mode")
-        .accessibilityValue(isSentryOn ? "On" : "Off")
+        .accessibilityLabel(isSentryOn ? Text("Turn off Sentry Mode") : Text("Turn on Sentry Mode"))
+        .accessibilityValue(isSentryOn ? Text("On") : Text("Off"))
     }
 
     private func isBusy(_ command: VehicleControlCommand) -> Bool {
@@ -720,20 +811,33 @@ struct VehicleSecurityCard: View {
     private var closureSummary: (text: String, symbol: String, hasOpenItem: Bool) {
         let c = snapshot.closures
         let groups: [(String, [Bool?])] = [
-            ("Door", [c?.frontDriverDoorOpen, c?.frontPassengerDoorOpen, c?.rearDriverDoorOpen, c?.rearPassengerDoorOpen]),
-            ("Frunk", [c?.frontTrunkOpen]),
-            ("Trunk", [c?.rearTrunkOpen]),
-            ("Window", [c?.frontDriverWindowOpen, c?.frontPassengerWindowOpen, c?.rearDriverWindowOpen, c?.rearPassengerWindowOpen]),
-            ("Port", [snapshot.chargePortDoorOpen])
+            (String(localized: "Door", comment: "Closure item name for vehicle doors"), [c?.frontDriverDoorOpen, c?.frontPassengerDoorOpen, c?.rearDriverDoorOpen, c?.rearPassengerDoorOpen]),
+            (String(localized: "Frunk", comment: "Closure item name for front trunk"), [c?.frontTrunkOpen]),
+            (String(localized: "Trunk", comment: "Closure item name for rear trunk"), [c?.rearTrunkOpen]),
+            (String(localized: "Window", comment: "Closure item name for vehicle windows"), [c?.frontDriverWindowOpen, c?.frontPassengerWindowOpen, c?.rearDriverWindowOpen, c?.rearPassengerWindowOpen]),
+            (String(localized: "Port", comment: "Closure item name for charge port"), [snapshot.chargePortDoorOpen])
         ]
         let openItems = groups.filter { $0.1.contains(true) }.map(\.0)
         if !openItems.isEmpty {
-            return ("\(openItems.formatted(.list(type: .and))) open", "exclamationmark.triangle.fill", true)
+            let list = openItems.formatted(.list(type: .and))
+            return (
+                String(localized: "\(list) open", comment: "Security card summary listing open doors, trunks, windows, or charge port"),
+                "exclamationmark.triangle.fill",
+                true
+            )
         }
         if groups.contains(where: { $0.1.contains(nil) }) {
-            return ("Closure status incomplete", "questionmark.circle", false)
+            return (
+                String(localized: "Closure status incomplete", comment: "Security card summary when some door/window sensors are unknown"),
+                "questionmark.circle",
+                false
+            )
         }
-        return ("All closed", "checkmark.circle", false)
+        return (
+            String(localized: "All closed", comment: "Security card summary when all doors, trunks, windows, and charge port are closed"),
+            "checkmark.circle",
+            false
+        )
     }
 }
 
@@ -850,8 +954,10 @@ private struct TrailingIconLabelStyle: LabelStyle {
 
 struct VehicleTiresCard: View {
     let tires: FleetTirePressures
+    var units: String? = nil
 
     private static let lowThresholdPSI = 38.0
+    private var isMetric: Bool { prefersMetricUnits(units) }
 
     private var hasLowTire: Bool {
         [tires.frontLeftPSI, tires.frontRightPSI, tires.rearLeftPSI, tires.rearRightPSI]
@@ -873,10 +979,19 @@ struct VehicleTiresCard: View {
                     .foregroundStyle(.secondary)
             }
         } content: {
+            // Pin physical left/right vehicle diagram to LTR so left tires stay on the car's left side in RTL.
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 34) {
-                    tireReading(tires.frontLeftPSI, position: "Front left", alignment: .leading)
-                    tireReading(tires.rearLeftPSI, position: "Rear left", alignment: .leading)
+                    tireReading(
+                        tires.frontLeftPSI,
+                        position: String(localized: "Front left", comment: "Front left tire position label"),
+                        alignment: .leading
+                    )
+                    tireReading(
+                        tires.rearLeftPSI,
+                        position: String(localized: "Rear left", comment: "Rear left tire position label"),
+                        alignment: .leading
+                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -890,11 +1005,20 @@ struct VehicleTiresCard: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .trailing, spacing: 34) {
-                    tireReading(tires.frontRightPSI, position: "Front right", alignment: .trailing)
-                    tireReading(tires.rearRightPSI, position: "Rear right", alignment: .trailing)
+                    tireReading(
+                        tires.frontRightPSI,
+                        position: String(localized: "Front right", comment: "Front right tire position label"),
+                        alignment: .trailing
+                    )
+                    tireReading(
+                        tires.rearRightPSI,
+                        position: String(localized: "Rear right", comment: "Rear right tire position label"),
+                        alignment: .trailing
+                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .environment(\.layoutDirection, .leftToRight)
             .padding(.vertical, 4)
         }
     }
@@ -904,23 +1028,41 @@ struct VehicleTiresCard: View {
         return psi < Self.lowThresholdPSI
     }
 
+    private func formattedPressureValue(_ psi: Double?) -> String {
+        guard let psi else { return "--" }
+        if isMetric {
+            let bar = Measurement(value: psi, unit: UnitPressure.poundsForcePerSquareInch).converted(to: .bars).value
+            return formattedNumber(bar, fractionLength: 2)
+        }
+        return formattedNumber(psi, fractionLength: 1)
+    }
+
+    private var pressureUnitSymbol: String {
+        isMetric ? UnitPressure.bars.symbol : UnitPressure.poundsForcePerSquareInch.symbol
+    }
+
     private func tireReading(_ psi: Double?, position: String, alignment: HorizontalAlignment) -> some View {
         let low = isLow(psi)
+        let pressureText = formattedTirePressure(psi: psi, units: units)
         return VStack(alignment: alignment, spacing: 2) {
             MetricValueText(
-                value: formattedNumber(psi, fractionLength: 1),
-                unit: "psi",
+                value: formattedPressureValue(psi),
+                unit: pressureUnitSymbol,
                 font: .system(.title2, design: .rounded, weight: .semibold),
                 unitFont: .caption.weight(.semibold)
             )
             .foregroundStyle(low ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.primary))
-            Text(low ? "\(position) · Low" : position)
+            Text(low ? String(localized: "\(position) · Low", comment: "Tire position label with low pressure indicator") : position)
                 .font(.caption)
                 .foregroundStyle(low ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.secondary))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(position) tire")
-        .accessibilityValue(formattedNumber(psi, fractionLength: 1, suffix: low ? " psi, low" : " psi"))
+        .accessibilityLabel(Text("\(position) tire"))
+        .accessibilityValue(
+            low
+                ? String(localized: "\(pressureText), low", comment: "VoiceOver value for a tire with low pressure")
+                : pressureText
+        )
     }
 }
 
@@ -1022,11 +1164,10 @@ struct VehicleDetailsCard: View {
         ].compactMap { $0 }
     }
 
-    private var detailRows: [(label: String, value: String)] {
-        var rows: [(label: String, value: String)] = []
+    private var detailRows: [(label: LocalizedStringKey, value: String)] {
+        var rows: [(label: LocalizedStringKey, value: String)] = []
         if let odometer = snapshot.odometer {
-            let value = units == "metric" ? odometer * 1.609_344 : odometer
-            rows.append(("Odometer", formattedNumber(value, fractionLength: 0, suffix: units == "metric" ? " km" : " mi")))
+            rows.append(("Odometer", formattedDistance(miles: odometer, units: units)))
         }
         if !vehicle.vin.isEmpty {
             rows.append(("VIN", vehicle.vin))

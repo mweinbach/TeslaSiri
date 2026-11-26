@@ -22,7 +22,7 @@ public struct DriveRouteSnippetIntent: SnippetIntent {
 
     public init() {
         self.drives = []
-        self.vehicleName = "My Car"
+        self.vehicleName = String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle")
         self.sessionKey = "default"
     }
 
@@ -85,7 +85,7 @@ public struct VehicleStatusSnippetIntent: SnippetIntent {
     public init() {
         self.status = VehicleStatusEntity(
             snapshot: FleetSnapshotInfo(vin: ""),
-            vehicleName: "My Car"
+            vehicleName: String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle")
         )
         self.topics = VehicleInfoTopic.allCases
     }
@@ -144,7 +144,7 @@ public struct ChargeSessionSnippetIntent: SnippetIntent {
 
     public init() {
         self.sessions = []
-        self.vehicleName = "My Car"
+        self.vehicleName = String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle")
         self.sessionKey = "charge-default"
     }
 
@@ -263,7 +263,7 @@ extension FleetIntentService {
             receipt.targetCelsius = targetCelsius
             receipt.targetSetAt = now
             receipt.deliveryState = deliveryState
-            receipt.summary = "Cabin target updated."
+            receipt.summary = String(localized: "Cabin target updated.", bundle: .module, comment: "Status message after changing cabin target temperature")
         } else {
             let running = action == "auto_conditioning_start"
             receipt.running = running
@@ -272,10 +272,12 @@ extension FleetIntentService {
             receipt.startedAt = (running && deliveryState == .confirmed) ? now : nil
             if deliveryState == .wakingVehicle {
                 receipt.summary = running
-                    ? "Waking car to start climate."
-                    : "Waking car to turn off climate."
+                    ? String(localized: "Waking car to start climate.", bundle: .module, comment: "Status message while waking the car to turn on climate")
+                    : String(localized: "Waking car to turn off climate.", bundle: .module, comment: "Status message while waking the car to turn off climate")
             } else {
-                receipt.summary = running ? "Climate is on." : "Climate is off."
+                receipt.summary = running
+                    ? String(localized: "Climate is on.", bundle: .module, comment: "Status message when cabin climate is running")
+                    : String(localized: "Climate is off.", bundle: .module, comment: "Status message when cabin climate is off")
             }
         }
         receipt.save(vin: vin, group: appGroupIdentifier)
@@ -303,8 +305,8 @@ public struct ClimateControlSnippetIntent: SnippetIntent {
     var sessionScope: String?
 
     public init() {
-        self.vehicle = VehicleEntity(id: "", name: "My Car")
-        self.appliedSummary = "Climate updated"
+        self.vehicle = VehicleEntity(id: "", name: String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle"))
+        self.appliedSummary = String(localized: "Climate updated", bundle: .module, comment: "Default climate card status message")
     }
 
     public init(vehicle: VehicleEntity, appliedSummary: String) {
@@ -365,7 +367,7 @@ public struct ClimateControlSnippetIntent: SnippetIntent {
         let service = FleetIntentService.make()
         let scope = service.sessionScopeID
         guard let scope, sessionScope == scope else {
-            throw log.failure(FleetKitError.api("The account or command mode changed. Ask for the car again."))
+            throw log.failure(FleetKitError.api(String(localized: "The account or command mode changed. Ask for the car again.", bundle: .module, comment: "Error when interactive Siri climate card session scope no longer matches active account")))
         }
         let snapshot = await service.cachedClimateSnapshot(vin: vehicle.id)
         guard scope == service.sessionScopeID else { throw log.failure(FleetKitError.sessionExpired) }
@@ -476,7 +478,7 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
     var sessionScope: String?
 
     public init() {
-        self.vehicle = VehicleEntity(id: "", name: "My Car")
+        self.vehicle = VehicleEntity(id: "", name: String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle"))
         self.turnOff = false
     }
 
@@ -498,11 +500,11 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
     public func perform() async throws -> some IntentResult {
         let service = FleetIntentService.make()
         guard !vehicle.id.isEmpty, let scope = service.sessionScopeID, sessionScope == scope else {
-            throw FleetKitError.api("The account or command mode changed. Ask for the car again.")
+            throw FleetKitError.api(String(localized: "The account or command mode changed. Ask for the car again.", bundle: .module, comment: "Error when interactive Siri climate card session scope no longer matches active account"))
         }
         let resolved = try await service.resolvedVehicle(vehicle.id)
         guard resolved.vin == vehicle.id, scope == service.sessionScopeID else {
-            throw FleetKitError.api("This car is no longer available.")
+            throw FleetKitError.api(String(localized: "This car is no longer available.", bundle: .module, comment: "Error when interactive Siri climate card targets a vehicle no longer on the account"))
         }
         let observation = await service.cachedClimateSnapshot(vin: resolved.vin)
         let previous = ClimateCommandReceipt.latest(vin: resolved.vin, scope: scope, group: service.appGroupIdentifier)
@@ -517,20 +519,20 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
 
         if turnOffRequested {
             deliveryState = try await performSandboxAwareBackgroundTask(
-                description: "Turning off climate in \(resolved.name)"
+                description: String(localized: "Turning off climate in \(resolved.name)", bundle: .module, comment: "Background task description while turning off cabin climate")
             ) {
                 try await service.runControl(
                     action: "auto_conditioning_stop",
                     vin: resolved.vin,
-                    humanName: "stopping climate",
+                    humanName: String(localized: "stopping climate", bundle: .module, comment: "Action phrase for stopping climate in error messages"),
                     allowAsyncWake: true
                 )
             }
             startedAt = nil
             target = nil
             summary = deliveryState == .wakingVehicle
-                ? "Waking \(resolved.name) to turn off climate."
-                : "Climate is off."
+                ? String(localized: "Waking \(resolved.name) to turn off climate.", bundle: .module, comment: "Status message while waking named car to turn off climate")
+                : String(localized: "Climate is off.", bundle: .module, comment: "Status message when cabin climate is off")
         } else if let targetF {
             let runningAnchor: Date?
             if let cardInteractionID, previous?.interactionID == cardInteractionID,
@@ -544,13 +546,13 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
                 for: Measurement(value: targetF, unit: .fahrenheit)
             )
             try await performSandboxAwareBackgroundTask(
-                description: "Updating cabin temperature in \(resolved.name)"
+                description: String(localized: "Updating cabin temperature in \(resolved.name)", bundle: .module, comment: "Background task description while updating cabin target temperature")
             ) {
                 if shouldStartClimate {
                     try await service.runControl(
                         action: "auto_conditioning_start",
                         vin: resolved.vin,
-                        humanName: "starting climate"
+                        humanName: String(localized: "starting climate", bundle: .module, comment: "Action phrase for starting climate in error messages")
                     )
                 }
                 guard scope == service.sessionScopeID else { throw FleetKitError.sessionExpired }
@@ -558,29 +560,29 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
                     action: "set_temps",
                     vin: resolved.vin,
                     params: ["driver_temp": .double(celsius), "passenger_temp": .double(celsius)],
-                    humanName: "setting the cabin temperature"
+                    humanName: String(localized: "setting the cabin temperature", bundle: .module, comment: "Action phrase for setting cabin temperature in error messages")
                 )
             }
             startedAt = shouldStartClimate ? .now : runningAnchor
             target = celsius
             deliveryState = .confirmed
-            summary = "Cabin target updated."
+            summary = String(localized: "Cabin target updated.", bundle: .module, comment: "Status message after changing cabin target temperature")
         } else {
             deliveryState = try await performSandboxAwareBackgroundTask(
-                description: "Starting climate in \(resolved.name)"
+                description: String(localized: "Starting climate in \(resolved.name)", bundle: .module, comment: "Background task description while starting cabin climate")
             ) {
                 try await service.runControl(
                     action: "auto_conditioning_start",
                     vin: resolved.vin,
-                    humanName: "starting climate",
+                    humanName: String(localized: "starting climate", bundle: .module, comment: "Action phrase for starting climate in error messages"),
                     allowAsyncWake: true
                 )
             }
             startedAt = deliveryState == .confirmed ? .now : nil
             target = nil
             summary = deliveryState == .wakingVehicle
-                ? "Waking \(resolved.name) to start climate."
-                : "Climate is on."
+                ? String(localized: "Waking \(resolved.name) to start climate.", bundle: .module, comment: "Status message while waking named car to start climate")
+                : String(localized: "Climate is on.", bundle: .module, comment: "Status message when cabin climate is running")
         }
         guard scope == service.sessionScopeID else { throw FleetKitError.sessionExpired }
         ClimateCommandReceipt(

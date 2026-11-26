@@ -69,7 +69,7 @@ struct DriveStreetView: View {
         .lookAroundViewer(isPresented: $isShowingViewer, initialScene: frame?.scene)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Street view at the car's position")
-        .accessibilityHint(frame == nil ? "" : "Opens Look Around")
+        .accessibilityHint(frame == nil ? Text("") : Text("Opens Look Around"))
         .accessibilityAddTraits(frame == nil ? [] : .isButton)
     }
 

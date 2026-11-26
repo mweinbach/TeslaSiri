@@ -13,10 +13,10 @@ enum AppTab: Hashable, Identifiable, CaseIterable {
 
     var title: String {
         switch self {
-        case .dashboard: "Vehicle"
-        case .drives: "Drives"
-        case .diagnostics: "Diagnostics"
-        case .settings: "Settings"
+        case .dashboard: String(localized: "Vehicle", comment: "Main tab title for the vehicle dashboard")
+        case .drives: String(localized: "Drives", comment: "Main tab title for recent drives and routes")
+        case .diagnostics: String(localized: "Diagnostics", comment: "Main tab title for diagnostics and demo mode")
+        case .settings: String(localized: "Settings", comment: "Main tab title for provider and app settings")
         }
     }
 
@@ -131,7 +131,7 @@ struct AppRootView: View {
         .alert("Connection Failed", isPresented: authErrorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(authErrorMessage ?? "Unknown error")
+            Text(authErrorMessage ?? String(localized: "Unknown error", comment: "Fallback message in connection error alert"))
         }
         .task {
             refreshSandboxSnapshot()

@@ -124,12 +124,24 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
             let sensitive = steps.filter(\.needsConfirmation).map(\.label)
             if !sensitive.isEmpty {
                 let description = sensitive.formatted(.list(type: .and))
-                try await confirmWithSafetyGate(dialog: IntentDialog("Confirm these changes to \(resolved.name): \(description)?"))
+                try await confirmWithSafetyGate(
+                    dialog: IntentDialog(
+                        LocalizedStringResource(
+                            "Confirm these changes to \(resolved.name): \(description)?",
+                            bundle: FleetKitLocalization.bundleDescription,
+                            comment: "Confirmation prompt listing sensitive vehicle control changes."
+                        )
+                    )
+                )
             }
 
             let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
             let outcome = try await performSandboxAwareBackgroundTask(
-                description: "Controlling \(resolved.name)"
+                description: String(
+                    localized: "Controlling \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while running one or more vehicle control commands."
+                )
             ) {
                 try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
             }
@@ -144,12 +156,12 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
                     summary: summary
                 )
                 _ = log.failure(failure.error)
-                return .result(value: result, dialog: IntentDialog("\(summary)"))
+                return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
             }
             let summary = outcome.deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "apply: \(detail)",
-                confirmed: "\(resolved.name) accepted: \(detail)."
+                wakingAction: String(localized: "apply: \(detail)", bundle: .module, comment: "Infinitive action phrase in wake-up message listing requested car controls."),
+                confirmed: String(localized: "\(resolved.name) accepted: \(detail).", bundle: .module, comment: "Siri confirmation listing vehicle controls accepted by the car.")
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -159,7 +171,7 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
                 summary: summary
             )
             log.success("completed \(outcome.accepted.count) requested car controls (\(outcome.deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -227,7 +239,7 @@ extension CabinClimateSettings {
     func controlSteps(climateOn: Bool?, startWhenEmpty: Bool) -> [CarControlStep] {
         Self.makeControlSteps(
             climateOn: climateOn,
-            target: roundedTargetCelsius.map { ($0, String(format: "%.1f°C", $0)) },
+            target: roundedTargetCelsius.map { ($0, FleetKitFormatting.temperature($0, inFahrenheit: false, fractionLength: 1)) },
             maxDefrost: enableMaxDefrost,
             driverSeatHeat: driverSeatHeatLevel,
             passengerSeatHeat: passengerSeatHeatLevel,
@@ -254,31 +266,62 @@ extension CabinClimateSettings {
             steps.append(.init("set_temps", target.label, ["driver_temp": .double(target.celsius), "passenger_temp": .double(target.celsius)]))
         }
         if let defrost = maxDefrost {
-            steps.append(.init("remote_defrost", defrost ? "max defrost on" : "max defrost off", ["on": .bool(defrost)]))
+            let label = defrost
+                ? String(localized: "max defrost on", bundle: .module, comment: "Short step label for turning max defrost on.")
+                : String(localized: "max defrost off", bundle: .module, comment: "Short step label for turning max defrost off.")
+            steps.append(.init("remote_defrost", label, ["on": .bool(defrost)]))
         }
-        for (seat, name, requested) in [("front_left", "driver seat", driverSeatHeat), ("front_right", "passenger seat", passengerSeatHeat)] {
+        let seatEntries: [(String, String, Int?)] = [
+            ("front_left", String(localized: "driver seat", bundle: .module, comment: "Spoken name for the driver's seat."), driverSeatHeat),
+            ("front_right", String(localized: "passenger seat", bundle: .module, comment: "Spoken name for the front passenger seat."), passengerSeatHeat)
+        ]
+        for (seat, name, requested) in seatEntries {
             if let requested {
                 let level = min(max(requested, 0), 3)
-                steps.append(.init("set_seat_heat", level > 0 ? "\(name) heat \(level)" : "\(name) heat off", ["seat": .string(seat), "level": .int(level)]))
+                let label = level > 0
+                    ? String(localized: "\(name) heat \(level)", bundle: .module, comment: "Short step label for setting a seat heater level.")
+                    : String(localized: "\(name) heat off", bundle: .module, comment: "Short step label for turning a seat heater off.")
+                steps.append(.init("set_seat_heat", label, ["seat": .string(seat), "level": .int(level)]))
             }
         }
         if let on = steeringWheelHeat {
-            steps.append(.init("steering_wheel_heater", on ? "steering wheel heat on" : "steering wheel heat off", ["on": .bool(on)]))
+            let label = on
+                ? String(localized: "steering wheel heat on", bundle: .module, comment: "Short step label for turning steering wheel heat on.")
+                : String(localized: "steering wheel heat off", bundle: .module, comment: "Short step label for turning steering wheel heat off.")
+            steps.append(.init("steering_wheel_heater", label, ["on": .bool(on)]))
         }
         if let on = dogMode {
-            steps.append(.init("set_pet_mode", on ? "Dog Mode on" : "Dog Mode off", ["on": .bool(on)], confirm: !on))
+            let label = on
+                ? String(localized: "Dog Mode on", bundle: .module, comment: "Short step label for turning Dog Mode on.")
+                : String(localized: "Dog Mode off", bundle: .module, comment: "Short step label for turning Dog Mode off.")
+            steps.append(.init("set_pet_mode", label, ["on": .bool(on)], confirm: !on))
         }
         if let on = bioweaponDefense {
-            steps.append(.init("set_bioweapon_mode", on ? "Bioweapon Defense on" : "Bioweapon Defense off", ["on": .bool(on), "manual_override": .bool(false)]))
+            let label = on
+                ? String(localized: "Bioweapon Defense on", bundle: .module, comment: "Short step label for turning Bioweapon Defense Mode on.")
+                : String(localized: "Bioweapon Defense off", bundle: .module, comment: "Short step label for turning Bioweapon Defense Mode off.")
+            steps.append(.init("set_bioweapon_mode", label, ["on": .bool(on), "manual_override": .bool(false)]))
         }
 
         let seatHeatRequested = (driverSeatHeat ?? 0) > 0 || (passengerSeatHeat ?? 0) > 0
         let requiresHVAC = target != nil || seatHeatRequested || steeringWheelHeat == true
         if climateOn == true || requiresHVAC || (startWhenEmpty && steps.isEmpty) {
             let isImplicit = climateOn != true && !steps.isEmpty
-            steps.insert(.init("auto_conditioning_start", "climate on", isImplicitHVACStart: isImplicit), at: 0)
+            steps.insert(
+                .init(
+                    "auto_conditioning_start",
+                    String(localized: "climate on", bundle: .module, comment: "Short step label for turning cabin climate on."),
+                    isImplicitHVACStart: isImplicit
+                ),
+                at: 0
+            )
         } else if climateOn == false {
-            steps.append(.init("auto_conditioning_stop", "climate off"))
+            steps.append(
+                .init(
+                    "auto_conditioning_stop",
+                    String(localized: "climate off", bundle: .module, comment: "Short step label for turning cabin climate off.")
+                )
+            )
         }
         return steps
     }
@@ -295,30 +338,56 @@ private extension CarControlSettings {
         } else if (59.0...82.4).contains(value) {
             unit = .fahrenheit
         } else {
-            throw FleetKitError.api("Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).")
+            throw FleetKitError.api(
+                String(
+                    localized: "Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).",
+                    bundle: .module,
+                    comment: "Validation error when cabin temperature is out of range."
+                )
+            )
         }
 
         switch unit {
         case .celsius:
             guard (15.0...28.0).contains(value) else {
-                throw FleetKitError.api("Choose a cabin temperature between 15 and 28°C (59 to 82.4°F).")
+                throw FleetKitError.api(
+                    String(
+                        localized: "Choose a cabin temperature between 15 and 28°C (59 to 82.4°F).",
+                        bundle: .module,
+                        comment: "Validation error when Celsius cabin temperature is out of range."
+                    )
+                )
             }
             let target = SetCabinTemperatureIntent.targetCelsius(for: Measurement(value: value, unit: .celsius))
-            return (target, String(format: "%.1f°C", target))
+            return (target, FleetKitFormatting.temperature(target, inFahrenheit: false, fractionLength: 1))
         case .fahrenheit:
             guard (59.0...82.4).contains(value) else {
-                throw FleetKitError.api("Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).")
+                throw FleetKitError.api(
+                    String(
+                        localized: "Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).",
+                        bundle: .module,
+                        comment: "Validation error when Fahrenheit cabin temperature is out of range."
+                    )
+                )
             }
             let target = SetCabinTemperatureIntent.targetCelsius(for: Measurement(value: value, unit: .fahrenheit))
-            let display = value.formatted(.number.precision(.fractionLength(0...1)))
-            return (target, "\(display)°F")
+            let formatted = Measurement(value: value, unit: UnitTemperature.fahrenheit).formatted(
+                .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1)))
+            )
+            return (target, formatted)
         }
     }
 
     func steps(for vehicle: FleetVehicleInfo) throws -> [CarControlStep] {
         let resolvedTarget = try resolvedTargetTemperature()
         for level in [driverSeatHeat, passengerSeatHeat].compactMap({ $0 }) where !(0...3).contains(level) {
-            throw FleetKitError.api("Choose a seat heater level between 0 and 3.")
+            throw FleetKitError.api(
+                String(
+                    localized: "Choose a seat heater level between 0 and 3.",
+                    bundle: .module,
+                    comment: "Validation error when seat heater level is outside 0 to 3."
+                )
+            )
         }
         var steps = CabinClimateSettings.makeControlSteps(
             climateOn: climateOn,
@@ -334,46 +403,138 @@ private extension CarControlSettings {
         if climateOn == false {
             let activatesClimate = steps.contains { $0.action == "auto_conditioning_start" }
                 || maxDefrost == true || dogMode == true || bioweaponDefense == true
-            if activatesClimate { throw FleetKitError.api("Turning off climate conflicts with the requested cabin settings.") }
+            if activatesClimate {
+                throw FleetKitError.api(
+                    String(
+                        localized: "Turning off climate conflicts with the requested cabin settings.",
+                        bundle: .module,
+                        comment: "Validation error when turning off climate conflicts with another requested cabin setting."
+                    )
+                )
+            }
         }
         if charging == true && chargePort == .close {
-            throw FleetKitError.api("Starting charging conflicts with closing the charge port.")
+            throw FleetKitError.api(
+                String(
+                    localized: "Starting charging conflicts with closing the charge port.",
+                    bundle: .module,
+                    comment: "Validation error when both starting charging and closing the charge port are requested."
+                )
+            )
         }
-        if charging == false { steps.append(.init("charge_stop", "stop charging", confirm: true)) }
+        if charging == false {
+            steps.append(.init("charge_stop", String(localized: "stop charging", bundle: .module, comment: "Short step label for stopping charging."), confirm: true))
+        }
         if let chargePort {
             let open = chargePort == .open
-            steps.append(.init(open ? "charge_port_door_open" : "charge_port_door_close", open ? "open charge port" : "close charge port", confirm: open))
+            let label = open
+                ? String(localized: "open charge port", bundle: .module, comment: "Short step label for opening the charge port.")
+                : String(localized: "close charge port", bundle: .module, comment: "Short step label for closing the charge port.")
+            steps.append(.init(open ? "charge_port_door_open" : "charge_port_door_close", label, confirm: open))
         }
         if let percent = chargeLimitPercent {
-            guard (50...100).contains(percent) else { throw FleetKitError.api("Choose a charge limit between 50 and 100 percent.") }
-            steps.append(.init("set_charge_limit", "charge limit \(percent)%", ["percent": .int(percent)], confirm: true))
+            guard (50...100).contains(percent) else {
+                throw FleetKitError.api(
+                    String(
+                        localized: "Choose a charge limit between 50 and 100 percent.",
+                        bundle: .module,
+                        comment: "Validation error when charge limit is outside 50 to 100 percent."
+                    )
+                )
+            }
+            let percentText = FleetKitFormatting.percent(percent)
+            steps.append(.init(
+                "set_charge_limit",
+                String(localized: "charge limit \(percentText)", bundle: .module, comment: "Short step label for setting battery charge limit."),
+                ["percent": .int(percent)],
+                confirm: true
+            ))
         }
         if let amps = chargingAmps {
-            guard (5...48).contains(amps) else { throw FleetKitError.api("Choose a charging current between 5 and 48 amps.") }
-            steps.append(.init("set_charging_amps", "charging current \(amps) amps", ["amps": .int(amps)]))
+            guard (5...48).contains(amps) else {
+                throw FleetKitError.api(
+                    String(
+                        localized: "Choose a charging current between 5 and 48 amps.",
+                        bundle: .module,
+                        comment: "Validation error when charging current is outside 5 to 48 amps."
+                    )
+                )
+            }
+            steps.append(.init(
+                "set_charging_amps",
+                String(localized: "charging current \(amps) amps", bundle: .module, comment: "Short step label for setting charging current in amps."),
+                ["amps": .int(amps)]
+            ))
         }
-        if charging == true { steps.append(.init("charge_start", "start charging")) }
-        if locked == false { steps.append(.init("door_unlock", "unlock doors", confirm: true)) }
+        if charging == true {
+            steps.append(.init("charge_start", String(localized: "start charging", bundle: .module, comment: "Short step label for starting charging.")))
+        }
+        if locked == false {
+            steps.append(.init("door_unlock", String(localized: "unlock doors", bundle: .module, comment: "Short step label for unlocking doors."), confirm: true))
+        }
         if let windows {
-            steps.append(.init("window_control", "\(windows.rawValue) windows", ["command": .string(windows.rawValue)], confirm: windows == .close))
+            let label = windows == .vent
+                ? String(localized: "vent windows", bundle: .module, comment: "Short step label for venting windows.")
+                : String(localized: "close windows", bundle: .module, comment: "Short step label for closing windows.")
+            steps.append(.init("window_control", label, ["command": .string(windows.rawValue)], confirm: windows == .close))
         }
         if let openTrunk {
-            guard vehicle.canActuateTrunks != false else { throw FleetKitError.unsupportedAction("actuating the trunk") }
-            steps.append(.init("actuate_trunk", "actuate \(openTrunk.spokenName)", ["which_trunk": .string(openTrunk.rawValue)], confirm: true))
+            guard vehicle.canActuateTrunks != false else {
+                throw FleetKitError.unsupportedAction(
+                    String(localized: "actuating the trunk", bundle: .module, comment: "Action name used in unsupported-action errors for trunk actuation.")
+                )
+            }
+            let label = openTrunk == .rear
+                ? String(localized: "open trunk", bundle: .module, comment: "Short step label for opening the rear trunk.")
+                : String(localized: "open frunk", bundle: .module, comment: "Short step label for opening the front trunk (frunk).")
+            steps.append(.init("actuate_trunk", label, ["which_trunk": .string(openTrunk.rawValue)], confirm: true))
         }
-        if locked == true { steps.append(.init("door_lock", "lock doors")) }
+        if locked == true {
+            steps.append(.init("door_lock", String(localized: "lock doors", bundle: .module, comment: "Short step label for locking doors.")))
+        }
         if let sentryOn {
-            steps.append(.init("set_sentry_mode", sentryOn ? "Sentry Mode on" : "Sentry Mode off", ["on": .bool(sentryOn)], confirm: !sentryOn))
+            let label = sentryOn
+                ? String(localized: "Sentry Mode on", bundle: .module, comment: "Short step label for enabling Sentry Mode.")
+                : String(localized: "Sentry Mode off", bundle: .module, comment: "Short step label for disabling Sentry Mode.")
+            steps.append(.init("set_sentry_mode", label, ["on": .bool(sentryOn)], confirm: !sentryOn))
         }
         if let destination {
-            guard vehicle.canAcceptNavigationRequests != false else { throw FleetKitError.unsupportedAction("sending a destination") }
+            guard vehicle.canAcceptNavigationRequests != false else {
+                throw FleetKitError.unsupportedAction(
+                    String(localized: "sending a destination", bundle: .module, comment: "Action name used in unsupported-action errors for sending navigation destinations.")
+                )
+            }
             let address = destination.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !address.isEmpty else { throw FleetKitError.api("Give a destination to send to the car.") }
-            steps.append(.init("navigation_request", "send destination \(address)", ["value": .string(address), "locale": .string(Locale.current.identifier(.bcp47))]))
+            guard !address.isEmpty else {
+                throw FleetKitError.api(
+                    String(
+                        localized: "Give a destination to send to the car.",
+                        bundle: .module,
+                        comment: "Validation error when destination is blank."
+                    )
+                )
+            }
+            steps.append(.init(
+                "navigation_request",
+                String(localized: "send destination \(address)", bundle: .module, comment: "Short step label for sending a navigation destination."),
+                ["value": .string(address), "locale": .string(Locale.current.identifier(.bcp47))]
+            ))
         }
-        if flashLights == true { steps.append(.init("flash_lights", "flash lights")) }
-        if honkHorn == true { steps.append(.init("honk_horn", "honk horn")) }
-        guard !steps.isEmpty else { throw FleetKitError.api("Tell me which car controls to change.") }
+        if flashLights == true {
+            steps.append(.init("flash_lights", String(localized: "flash lights", bundle: .module, comment: "Short step label for flashing headlights.")))
+        }
+        if honkHorn == true {
+            steps.append(.init("honk_horn", String(localized: "honk horn", bundle: .module, comment: "Short step label for honking the horn.")))
+        }
+        guard !steps.isEmpty else {
+            throw FleetKitError.api(
+                String(
+                    localized: "Tell me which car controls to change.",
+                    bundle: .module,
+                    comment: "Validation error when no car controls were specified."
+                )
+            )
+        }
         return steps
     }
 }

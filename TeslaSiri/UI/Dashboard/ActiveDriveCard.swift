@@ -4,11 +4,12 @@ import SwiftUI
 
 struct ActiveDriveCard: View {
     let drive: FleetActiveDriveSession
+    var units: String? = nil
 
     var body: some View {
         CardContainer(title: "Live drive", systemImage: "location.north.fill") {
             VStack(alignment: .leading, spacing: 16) {
-                ActiveDriveHeadline(drive: drive)
+                ActiveDriveHeadline(drive: drive, units: units)
 
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 88), spacing: 10)],
@@ -16,7 +17,7 @@ struct ActiveDriveCard: View {
                 ) {
                     DriveSummaryTile(
                         title: "Distance",
-                        value: formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi"),
+                        value: formattedDistance(miles: drive.distanceMiles, units: units, fractionLength: 1),
                         systemImage: "point.topleft.down.to.point.bottomright.curvepath"
                     )
                     DriveSummaryTile(
@@ -26,7 +27,7 @@ struct ActiveDriveCard: View {
                     )
                     DriveSummaryTile(
                         title: "Start battery",
-                        value: formattedNumber(drive.startBattery, suffix: "%"),
+                        value: formattedPercent(drive.startBattery),
                         systemImage: "battery.75"
                     )
                 }
@@ -53,28 +54,19 @@ struct ActiveDriveCard: View {
 
 private struct ActiveDriveHeadline: View {
     let drive: FleetActiveDriveSession
+    let units: String?
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 14) {
-            HStack(alignment: .lastTextBaseline, spacing: 5) {
-                Text(formattedNumber(
-                    drive.latestRoutePoint?.speed ?? drive.latest?.speed,
-                    fractionLength: 0
-                ))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
+            Text(formattedSpeed(mph: drive.latestRoutePoint?.speed ?? drive.latest?.speed, units: units))
+                .font(.system(size: 36, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .contentTransition(.numericText())
-
-                Text("mph")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
 
             Spacer()
 
             StatusBadge(
-                drive.status.map(humanizedStatus) ?? "Driving",
+                drive.status.map(humanizedStatus) ?? String(localized: "Driving", comment: "Default status badge for an active drive"),
                 systemImage: "location.fill",
                 tint: .green
             )
@@ -83,7 +75,7 @@ private struct ActiveDriveHeadline: View {
 }
 
 private struct DriveSummaryTile: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let systemImage: String
 

@@ -13,20 +13,45 @@ public enum FleetKitError: Swift.Error, LocalizedError, CustomLocalizedStringRes
     }
 
     public var localizedStringResource: LocalizedStringResource {
+        let bundle = FleetKitLocalization.bundleDescription
         switch self {
         case .notSignedIn:
-            return "Open Wattie and add an access token for your vehicle provider."
+            return LocalizedStringResource(
+                "Open Wattie and add an access token for your vehicle provider.",
+                bundle: bundle,
+                comment: "Error shown when no vehicle provider access token is configured."
+            )
         case .sessionExpired:
-            return "Your vehicle provider access token is invalid or revoked. Open Wattie to replace it."
+            return LocalizedStringResource(
+                "Your vehicle provider access token is invalid or revoked. Open Wattie to replace it.",
+                bundle: bundle,
+                comment: "Error shown when the saved vehicle provider access token is rejected with HTTP 401."
+            )
         case .api(let message):
             if let message {
-                return "\(message)"
+                return LocalizedStringResource(
+                    "\(message)",
+                    bundle: bundle,
+                    comment: "Error wrapper passing through an already-localized or provider-returned error message."
+                )
             }
-            return "Your vehicle provider returned an error."
+            return LocalizedStringResource(
+                "Your vehicle provider returned an error.",
+                bundle: bundle,
+                comment: "Generic error shown when the vehicle provider fails without a detailed message."
+            )
         case .badResponse:
-            return "Your vehicle provider returned an unexpected response."
+            return LocalizedStringResource(
+                "Your vehicle provider returned an unexpected response.",
+                bundle: bundle,
+                comment: "Error shown when the vehicle provider returns malformed or non-HTTP data."
+            )
         case .unsupportedAction(let action):
-            return "Your vehicle doesn't support \(action) right now."
+            return LocalizedStringResource(
+                "Your vehicle doesn't support \(action) right now.",
+                bundle: bundle,
+                comment: "Error shown when a requested vehicle command is not enabled or supported; placeholder is the localized action description."
+            )
         }
     }
 }
@@ -331,7 +356,9 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func batteryHealth(vin: String) async throws -> FleetBatteryHealthInfo {
-        if try teslascope != nil { throw FleetKitError.api("Teslascope does not report battery pack health.") }
+        if try teslascope != nil {
+            throw FleetKitError.api(String(localized: "Teslascope does not report battery pack health.", bundle: .module, comment: "Error when requesting battery health from Teslascope"))
+        }
         async let battery: TessieObject = get("/\(encoded(vin))/battery")
         var healthObject: TessieObject?
         var healthError: Error?
@@ -569,7 +596,9 @@ public struct FleetIntentClient: Sendable {
     }
 
     public func cancelSoftwareUpdate(vin: String) async throws {
-        if try teslascope != nil { throw FleetKitError.api("Teslascope does not support canceling software updates.") }
+        if try teslascope != nil {
+            throw FleetKitError.api(String(localized: "Teslascope does not support canceling software updates.", bundle: .module, comment: "Error when canceling a software update on Teslascope"))
+        }
         try await postCommand("/\(encoded(vin))/command/cancel_software_update")
     }
 
@@ -595,7 +624,7 @@ public struct FleetIntentClient: Sendable {
         let data = try await execute(request)
         guard let response = try? JSONDecoder().decode(TessieCommandResponse.self, from: data), response.result else {
             FleetKitLog.client.error("POST \(Self.logPath(path), privacy: .public) command was not accepted")
-            throw FleetKitError.api("Tessie did not accept the vehicle command.")
+            throw FleetKitError.api(String(localized: "Tessie did not accept the vehicle command.", bundle: .module, comment: "Error when Tessie rejects a vehicle command"))
         }
     }
 
@@ -624,7 +653,7 @@ public struct FleetIntentClient: Sendable {
                 throw FleetKitError.sessionExpired
             }
             guard (200..<300).contains(http.statusCode) else {
-                throw FleetKitError.api(Self.errorMessage(from: data) ?? "Tessie request failed with HTTP \(http.statusCode).")
+                throw FleetKitError.api(Self.errorMessage(from: data) ?? String(localized: "Tessie request failed with HTTP \(http.statusCode).", bundle: .module, comment: "Fallback HTTP error message from Tessie"))
             }
             return data
         } catch let error as FleetKitError {

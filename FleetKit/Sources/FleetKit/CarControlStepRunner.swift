@@ -42,11 +42,21 @@ struct CarControlRunOutcome: Sendable {
     /// or `nil` when every step was accepted.
     func partialFailureSummary(vehicleName: String) -> String? {
         guard let failure else { return nil }
-        var summary = "\(vehicleName) accepted: \(acceptedDetail). I couldn't confirm \(failure.step.label): \(failure.error.localizedDescription)."
-        if !notSent.isEmpty {
-            summary += " Not sent: \(notSent.map(\.label).joined(separator: ", "))."
+        let acceptedList = accepted.map(\.label).joined(separator: ", ")
+        let errorMessage = failure.error.localizedDescription
+        if notSent.isEmpty {
+            return String(
+                localized: "\(vehicleName) accepted: \(acceptedList). I couldn't confirm \(failure.step.label): \(errorMessage).",
+                bundle: .module,
+                comment: "Siri summary when a multi-step vehicle command partially succeeded and had no remaining skipped steps. Placeholders: vehicle name, accepted steps, failed step, error description."
+            )
         }
-        return summary
+        let notSentList = notSent.map(\.label).joined(separator: ", ")
+        return String(
+            localized: "\(vehicleName) accepted: \(acceptedList). I couldn't confirm \(failure.step.label): \(errorMessage). Not sent: \(notSentList).",
+            bundle: .module,
+            comment: "Siri summary when a multi-step vehicle command partially succeeded and skipped remaining steps. Placeholders: vehicle name, accepted steps, failed step, error description, skipped steps."
+        )
     }
 }
 

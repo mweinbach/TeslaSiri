@@ -18,10 +18,10 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
 
     var phrase: String {
         switch self {
-        case .warmUp: "Warm up my car"
-        case .coolDown: "Cool down my car"
-        case .lock: "Lock my car"
-        case .checkStatus: "Check my car"
+        case .warmUp: String(localized: "Warm up my car", comment: "Siri voice shortcut phrase to heat the car cabin")
+        case .coolDown: String(localized: "Cool down my car", comment: "Siri voice shortcut phrase to cool the car cabin")
+        case .lock: String(localized: "Lock my car", comment: "Siri voice shortcut phrase to lock the car")
+        case .checkStatus: String(localized: "Check my car", comment: "Siri voice shortcut phrase to check car status")
         }
     }
 
@@ -43,8 +43,20 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
         activity.persistentIdentifier = NSUserActivityPersistentIdentifier(rawValue)
 
         let attributes = CSSearchableItemAttributeSet(contentType: .item)
-        attributes.contentDescription = "\(phrase) without needing to say the app name."
-        attributes.keywords = [phrase, "my car", "car", "climate", "warm up", "cool down", "lock"]
+        attributes.contentDescription = String(
+            localized: "\(phrase) without needing to say the app name.",
+            comment: "Spotlight description for a personal Siri voice shortcut phrase"
+        )
+        attributes.keywords = [
+            phrase,
+            String(localized: "my car", comment: "Spotlight search keyword for vehicle voice shortcuts"),
+            String(localized: "car", comment: "Spotlight search keyword for vehicle voice shortcuts"),
+            String(localized: "climate", comment: "Spotlight search keyword for climate voice shortcuts"),
+            String(localized: "warm up", comment: "Spotlight search keyword for warming up the car"),
+            String(localized: "cool down", comment: "Spotlight search keyword for cooling down the car"),
+            String(localized: "lock", comment: "Spotlight search keyword for locking the car"),
+            "my car", "car", "climate", "warm up", "cool down", "lock"
+        ]
         activity.contentAttributeSet = attributes
 
         if let vehicle, !vehicle.vin.isEmpty {
@@ -62,7 +74,7 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
     @MainActor
     func perform(vinOverride: String? = nil) async throws -> (vin: String?, summary: String) {
         let targetEntity: VehicleEntity? = vinOverride.flatMap { vin in
-            vin.isEmpty ? nil : VehicleEntity(id: vin, name: "Car")
+            vin.isEmpty ? nil : VehicleEntity(id: vin, name: String(localized: "Car", comment: "Fallback vehicle name when performing a voice shortcut"))
         }
 
         switch self {
@@ -70,12 +82,18 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
             let intent = StartClimateIntent()
             intent.vehicle = targetEntity
             let result = try await intent.perform()
-            return (result.value?.vin, result.value?.summary ?? "Climate is starting in your car.")
+            return (
+                result.value?.vin,
+                result.value?.summary ?? String(localized: "Climate is starting in your car.", comment: "Fallback confirmation after starting climate from a voice shortcut")
+            )
         case .lock:
             let intent = LockVehicleIntent()
             intent.vehicle = targetEntity
             let result = try await intent.perform()
-            return (result.value?.vin, result.value?.summary ?? "Locked your car.")
+            return (
+                result.value?.vin,
+                result.value?.summary ?? String(localized: "Locked your car.", comment: "Fallback confirmation after locking the car from a voice shortcut")
+            )
         case .checkStatus:
             let intent = GetVehicleStatusIntent()
             intent.vehicle = targetEntity
@@ -83,7 +101,7 @@ enum CarSiriVoicePhrase: String, CaseIterable, Identifiable {
             if let status = result.value {
                 return (status.vin, "\(status.vehicleName): \(status.statusSummary)")
             }
-            return (nil, "Refreshed your car's status.")
+            return (nil, String(localized: "Refreshed your car's status.", comment: "Fallback confirmation after checking vehicle status from a voice shortcut"))
         }
     }
 }

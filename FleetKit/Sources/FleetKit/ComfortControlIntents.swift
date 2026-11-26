@@ -34,12 +34,18 @@ public enum SeatPosition: String, AppEnum, Sendable {
 
     var spokenName: String {
         switch self {
-        case .driver: "driver seat"
-        case .passenger: "passenger seat"
-        case .frontSeats: "front seats"
-        case .rearLeft: "rear left seat"
-        case .rearCenter: "rear middle seat"
-        case .rearRight: "rear right seat"
+        case .driver:
+            String(localized: "driver seat", bundle: .module, comment: "Spoken name for the driver's seat.")
+        case .passenger:
+            String(localized: "passenger seat", bundle: .module, comment: "Spoken name for the front passenger seat.")
+        case .frontSeats:
+            String(localized: "front seats", bundle: .module, comment: "Spoken name for both front seats.")
+        case .rearLeft:
+            String(localized: "rear left seat", bundle: .module, comment: "Spoken name for the rear left seat.")
+        case .rearCenter:
+            String(localized: "rear middle seat", bundle: .module, comment: "Spoken name for the rear center seat.")
+        case .rearRight:
+            String(localized: "rear right seat", bundle: .module, comment: "Spoken name for the rear right seat.")
         }
     }
 }
@@ -60,7 +66,7 @@ public enum SeatClimateMode: String, AppEnum, Sendable {
 public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Set Seat Climate"
     public static let description = IntentDescription(
-        "Heats any physical seat (front or rear) or cools the ventilated front seats on supported Tesla cars, from 0 (off) to 3 (high). Starts climate automatically when turning seat climate on. Use for seat cooling, rear-row seat heaters, or a standalone seat adjustment; when combining front seat heat with other vehicle controls, use the Control Car tool instead.",
+        "Heats any seat or cools ventilated front seats on supported Teslas from 0 (off) to 3 (high), starting climate automatically. Use for seat cooling, rear seat heat, or standalone seat changes; use Control Car when combining front seat heat with other controls.",
         searchKeywords: ["Tesla", "seat warmer", "heated seat", "seat heat", "cooled seat", "ventilated seat", "seat cooling", "rear seat heat", "butt warmer"]
     )
     public static let isDiscoverable = true
@@ -116,7 +122,20 @@ public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableInt
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$seat)) { vehicle, seat in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Heat the \(seat.spokenName) in", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Heat the \(seat.spokenName) in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for heating a seat in a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Heat the \(seat.spokenName) in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for heating a seat in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -129,55 +148,97 @@ public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableInt
             let targetSeat = seat
             let targetMode = mode
             if targetMode == .cool, ![SeatPosition.driver, .passenger, .frontSeats].contains(targetSeat) {
-                throw FleetKitError.api("Only the front seats can be cooled. Try the driver or passenger seat.")
+                throw FleetKitError.api(
+                    String(
+                        localized: "Only the front seats can be cooled. Try the driver or passenger seat.",
+                        bundle: .module,
+                        comment: "Error message when attempting to cool rear seats."
+                    )
+                )
             }
             let action = targetMode == .heat ? "set_seat_heat" : "set_seat_cool"
-            let humanName = targetMode == .heat ? "the seat heater" : "seat cooling"
+            let humanName = targetMode == .heat
+                ? String(localized: "the seat heater", bundle: .module, comment: "Feature name in unsupported-action errors for seat heating.")
+                : String(localized: "seat cooling", bundle: .module, comment: "Feature name in unsupported-action errors for seat cooling.")
 
             let available = try await service.controlActions(for: resolved)
             guard available.supports(action) else {
                 throw FleetKitError.unsupportedAction(humanName)
             }
-            let verb = targetMode == .heat ? "heat" : "cooling"
+            let verb = targetMode == .heat
+                ? String(localized: "heat", bundle: .module, comment: "Short noun for seat heating in status labels.")
+                : String(localized: "cooling", bundle: .module, comment: "Short noun for seat cooling in status labels.")
             var steps: [CarControlStep] = []
             if clamped > 0 {
                 // Seat heat and cooling only run while HVAC is on.
-                steps.append(.init("auto_conditioning_start", "climate on", isImplicitHVACStart: true))
+                steps.append(.init(
+                    "auto_conditioning_start",
+                    String(localized: "climate on", bundle: .module, comment: "Short step label for turning cabin climate on."),
+                    isImplicitHVACStart: true
+                ))
             }
             for tessieSeat in targetSeat.tessieSeats {
-                let seatName = switch tessieSeat {
-                case "front_left": "driver seat"
-                case "front_right": "passenger seat"
-                default: tessieSeat.replacingOccurrences(of: "_", with: " ") + " seat"
+                let seatName: String = switch tessieSeat {
+                case "front_left":
+                    String(localized: "driver seat", bundle: .module, comment: "Spoken name for the driver's seat.")
+                case "front_right":
+                    String(localized: "passenger seat", bundle: .module, comment: "Spoken name for the front passenger seat.")
+                case "rear_left":
+                    String(localized: "rear left seat", bundle: .module, comment: "Spoken name for the rear left seat.")
+                case "rear_center":
+                    String(localized: "rear middle seat", bundle: .module, comment: "Spoken name for the rear center seat.")
+                case "rear_right":
+                    String(localized: "rear right seat", bundle: .module, comment: "Spoken name for the rear right seat.")
+                default:
+                    tessieSeat.replacingOccurrences(of: "_", with: " ")
                 }
+                let stepLabel = clamped > 0
+                    ? String(localized: "\(seatName) \(verb) \(clamped)", bundle: .module, comment: "Short step label for setting a seat heater or cooler to a numeric level.")
+                    : String(localized: "\(seatName) \(verb) off", bundle: .module, comment: "Short step label for turning a seat heater or cooler off.")
                 steps.append(.init(
                     action,
-                    clamped > 0 ? "\(seatName) \(verb) \(clamped)" : "\(seatName) \(verb) off",
+                    stepLabel,
                     ["seat": .string(tessieSeat), "level": .int(clamped)]
                 ))
             }
             let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
 
             let outcome = try await performSandboxAwareBackgroundTask(
-                description: "Setting seat climate in \(resolved.name)"
+                description: String(
+                    localized: "Setting seat climate in \(resolved.name)",
+                    bundle: .module,
+                    comment: "Progress label while adjusting seat heating or cooling."
+                )
             ) {
                 try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
             }
 
+            let confirmedSummary = if clamped == 0 {
+                targetMode == .heat
+                    ? String(localized: "Turned off \(targetSeat.spokenName) heat in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off seat heating.")
+                    : String(localized: "Turned off \(targetSeat.spokenName) cooling in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off seat cooling.")
+            } else {
+                targetMode == .heat
+                    ? String(localized: "Set \(targetSeat.spokenName) heat to \(clamped) in \(resolved.name).", bundle: .module, comment: "Siri confirmation after setting seat heating level.")
+                    : String(localized: "Set \(targetSeat.spokenName) cooling to \(clamped) in \(resolved.name).", bundle: .module, comment: "Siri confirmation after setting seat cooling level.")
+            }
+            let wakingAction = targetMode == .heat
+                ? String(localized: "turn off \(targetSeat.spokenName) heat", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off seat heat.")
+                : String(localized: "turn off \(targetSeat.spokenName) cooling", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off seat cooling.")
             let summary = outcome.partialFailureSummary(vehicleName: resolved.name)
                 ?? outcome.deliveryState.summary(
                     vehicleName: resolved.name,
-                    wakingAction: "turn off \(targetSeat.spokenName) \(verb)",
-                    confirmed: clamped == 0
-                        ? "Turned off \(targetSeat.spokenName) \(verb) in \(resolved.name)."
-                        : "Set \(targetSeat.spokenName) \(verb) to \(clamped) in \(resolved.name)."
+                    wakingAction: wakingAction,
+                    confirmed: confirmedSummary
                 )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: action,
                 succeeded: outcome.failure == nil,
                 deliveryState: outcome.deliveryState,
-                appliedValue: outcome.failure == nil ? "\(targetSeat.spokenName) \(clamped)" : outcome.acceptedDetail,
+                appliedValue: outcome.failure == nil
+                    ? String(localized: "\(targetSeat.spokenName) \(clamped)", bundle: .module, comment: "Applied value summarizing seat name and climate level.")
+                    : outcome.acceptedDetail,
                 summary: summary
             )
             if let failure = outcome.failure {
@@ -185,7 +246,7 @@ public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableInt
             } else {
                 log.success("\(action) \(targetSeat.rawValue)=\(clamped) on \(resolved.name) (\(outcome.deliveryState.rawValue))")
             }
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -226,8 +287,33 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$on)) { vehicle, on in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Turn steering wheel heater \(on ? "on" : "off") in \(target)"))
+            let title: LocalizedStringResource = switch (vehicle, on) {
+            case let (vehicle?, true):
+                LocalizedStringResource(
+                    "Turn steering wheel heater on in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on the steering wheel heater in a specific vehicle."
+                )
+            case let (vehicle?, false):
+                LocalizedStringResource(
+                    "Turn steering wheel heater off in \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off the steering wheel heater in a specific vehicle."
+                )
+            case (nil, true):
+                LocalizedStringResource(
+                    "Turn steering wheel heater on in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning on the steering wheel heater in the user's selected car."
+                )
+            case (nil, false):
+                LocalizedStringResource(
+                    "Turn steering wheel heater off in my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for turning off the steering wheel heater in the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -238,8 +324,9 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let enable = on
             let available = try await service.controlActions(for: resolved)
+            let featureName = String(localized: "the steering wheel heater", bundle: .module, comment: "Feature name for the heated steering wheel in error messages.")
             guard available.supports("steering_wheel_heater") else {
-                throw FleetKitError.unsupportedAction("the steering wheel heater")
+                throw FleetKitError.unsupportedAction(featureName)
             }
             let shouldStartClimate: Bool
             if enable {
@@ -249,24 +336,31 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
             }
             let deliveryState = try await performSandboxAwareBackgroundTask(
                 description: enable
-                    ? "Turning on steering wheel heater in \(resolved.name)"
-                    : "Turning off steering wheel heater in \(resolved.name)"
+                    ? String(localized: "Turning on steering wheel heater in \(resolved.name)", bundle: .module, comment: "Progress label while turning on the steering wheel heater.")
+                    : String(localized: "Turning off steering wheel heater in \(resolved.name)", bundle: .module, comment: "Progress label while turning off the steering wheel heater.")
             ) {
                 if shouldStartClimate {
-                    try await service.runControl(action: "auto_conditioning_start", vin: resolved.vin, humanName: "starting climate")
+                    try await service.runControl(
+                        action: "auto_conditioning_start",
+                        vin: resolved.vin,
+                        humanName: String(localized: "starting climate", bundle: .module, comment: "Action name used in vehicle command error messages for starting climate.")
+                    )
                 }
                 return try await service.runControl(
                     action: "steering_wheel_heater",
                     vin: resolved.vin,
                     params: ["on": .bool(enable)],
-                    humanName: "the steering wheel heater",
+                    humanName: featureName,
                     allowAsyncWake: !enable
                 )
             }
+            let confirmedSummary = enable
+                ? String(localized: "The steering wheel heater is on in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning on the steering wheel heater.")
+                : String(localized: "The steering wheel heater is off in \(resolved.name).", bundle: .module, comment: "Siri confirmation after turning off the steering wheel heater.")
             let summary = deliveryState.summary(
                 vehicleName: resolved.name,
-                wakingAction: "turn off the steering wheel heater",
-                confirmed: "The steering wheel heater is \(enable ? "on" : "off") in \(resolved.name)."
+                wakingAction: String(localized: "turn off the steering wheel heater", bundle: .module, comment: "Infinitive action phrase in wake-up message for turning off the steering wheel heater."),
+                confirmed: confirmedSummary
             )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
@@ -276,7 +370,7 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
                 summary: summary
             )
             log.success("steering wheel heater \(enable ? "on" : "off") on \(resolved.name) (\(deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }
@@ -322,7 +416,20 @@ public struct SetChargingAmpsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Set charging amps for", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Set charging amps for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting charging amps on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Set charging amps for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for setting charging amps on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -336,17 +443,21 @@ public struct SetChargingAmpsIntent: AppIntent, PredictableIntent {
                 action: "set_charging_amps",
                 vin: resolved.vin,
                 params: ["amps": .int(clamped)],
-                humanName: "setting charging amps"
+                humanName: String(localized: "setting charging amps", bundle: .module, comment: "Action name used in vehicle command error messages for setting charging amps.")
             )
-            let summary = "\(resolved.name) will charge at up to \(clamped) amps."
+            let summary = String(
+                localized: "\(resolved.name) will charge at up to \(clamped) amps.",
+                bundle: .module,
+                comment: "Siri confirmation after setting charging current in amps."
+            )
             let result = VehicleCommandResultEntity(
                 vehicle: resolved,
                 action: "set_charging_amps",
-                appliedValue: "\(clamped) A",
+                appliedValue: FleetKitFormatting.amps(clamped),
                 summary: summary
             )
             log.success("set charging amps \(clamped) on \(resolved.name)")
-            return .result(value: result, dialog: IntentDialog("\(summary)"))
+            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
         } catch {
             throw log.failure(error)
         }

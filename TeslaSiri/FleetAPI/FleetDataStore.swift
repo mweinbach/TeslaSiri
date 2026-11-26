@@ -99,10 +99,11 @@ final class FleetDataStore {
     }
     private(set) var vehicleControlMessage: String?
     private(set) var vehicleControlMessageIsError = false
+    @ObservationIgnored private var showingTransientCommandSent = false
     @ObservationIgnored private var controlMessageClearTask: Task<Void, Never>?
 
     private(set) var isMutatingSoftware = false
-    private(set) var softwareActionMessage = "Not run"
+    private(set) var softwareActionMessage: String? = nil
 
     private(set) var isExportingRawData = false
     private(set) var rawDataExportMessage = "Not run"
@@ -404,7 +405,7 @@ final class FleetDataStore {
         setVehicleControlMessage(nil)
 
         isMutatingSoftware = false
-        softwareActionMessage = "Not run"
+        softwareActionMessage = nil
 
         isExportingRawData = false
         rawDataExportMessage = "Not run"
@@ -449,7 +450,7 @@ final class FleetDataStore {
         let climateScope = climateService?.sessionScopeID
         activeControlAction = command.action
         isRunningControl = true
-        setVehicleControlMessage("Sending command…")
+        setVehicleControlMessage(String(localized: "Sending command…", comment: "Status banner while a vehicle command is in flight"))
         defer {
             if generation == sessionGeneration {
                 activeControlAction = nil
@@ -469,11 +470,21 @@ final class FleetDataStore {
             lastRequestID = page.requestID ?? lastRequestID
             switch mode {
             case .live:
-                setVehicleControlMessage("Command sent", autoClearAfter: (command == .honk || command == .flashLights) ? 3.5 : nil)
+                setVehicleControlMessage(
+                    String(localized: "Command sent", comment: "Status banner confirming a vehicle command was accepted"),
+                    autoClearAfter: (command == .honk || command == .flashLights) ? 3.5 : nil,
+                    isTransientCommandSent: true
+                )
             case .dryRun:
-                setVehicleControlMessage("Simulated (Dry-Run) — car untouched", autoClearAfter: 4)
+                setVehicleControlMessage(
+                    String(localized: "Simulated (Dry-Run) — car untouched", comment: "Status banner after simulating a command in dry-run mode"),
+                    autoClearAfter: 4
+                )
             case .demoVehicle:
-                setVehicleControlMessage("Simulated on demo car", autoClearAfter: 3.5)
+                setVehicleControlMessage(
+                    String(localized: "Simulated on demo car", comment: "Status banner after running a command on the demo car"),
+                    autoClearAfter: 3.5
+                )
             }
             if command != .honk, command != .flashLights {
                 reconcileAcknowledgedControl(command, for: vin, expected: expected)
@@ -493,11 +504,17 @@ final class FleetDataStore {
         setVehicleControlMessage(summary, autoClearAfter: 5)
     }
 
-    private func setVehicleControlMessage(_ message: String?, isError: Bool = false, autoClearAfter seconds: TimeInterval? = nil) {
+    private func setVehicleControlMessage(
+        _ message: String?,
+        isError: Bool = false,
+        autoClearAfter seconds: TimeInterval? = nil,
+        isTransientCommandSent: Bool = false
+    ) {
         controlMessageClearTask?.cancel()
         controlMessageClearTask = nil
         vehicleControlMessage = message
         vehicleControlMessageIsError = message != nil && isError
+        showingTransientCommandSent = message != nil && isTransientCommandSent
         guard let message, let seconds else { return }
         let generation = sessionGeneration
         controlMessageClearTask = Task { [weak self] in
@@ -506,6 +523,7 @@ final class FleetDataStore {
                   self.vehicleControlMessage == message else { return }
             self.vehicleControlMessage = nil
             self.vehicleControlMessageIsError = false
+            self.showingTransientCommandSent = false
         }
     }
 
@@ -517,7 +535,11 @@ final class FleetDataStore {
         if let expected, command.observedState(in: selectedVehicle?.latest) != expected {
             pendingControlsByVIN[vin, default: [:]][command] = PendingControl(expectedState: expected, startedAt: acknowledgedAt)
         } else {
-            setVehicleControlMessage("Command sent", autoClearAfter: 3.5)
+            setVehicleControlMessage(
+                String(localized: "Command sent", comment: "Status banner confirming a vehicle command was accepted"),
+                autoClearAfter: 3.5,
+                isTransientCommandSent: true
+            )
         }
 
         Task {
@@ -531,16 +553,23 @@ final class FleetDataStore {
                 guard generation == sessionGeneration, selectedVehicle?.vin == vin else { return }
                 if pendingControlsByVIN[vin]?[command]?.startedAt != acknowledgedAt {
                     FleetWidgetStore.reload()
-                    if lastCommandStartedAt == acknowledgedAt, vehicleControlMessage == "Command sent" {
-                        setVehicleControlMessage("Updated", autoClearAfter: 2.5)
+                    if lastCommandStartedAt == acknowledgedAt, showingTransientCommandSent {
+                        setVehicleControlMessage(
+                            String(localized: "Updated", comment: "Status banner confirming the vehicle reported the updated state"),
+                            autoClearAfter: 2.5
+                        )
                     }
                     return
                 }
             }
             guard generation == sessionGeneration, pendingControlsByVIN[vin]?[command]?.startedAt == acknowledgedAt else { return }
             pendingControlsByVIN[vin]?[command] = nil
-            if selectedVehicle?.vin == vin, lastCommandStartedAt == acknowledgedAt, vehicleControlMessage == "Command sent" {
-                setVehicleControlMessage("Command sent — waiting for car to report state", isError: false, autoClearAfter: 6)
+            if selectedVehicle?.vin == vin, lastCommandStartedAt == acknowledgedAt, showingTransientCommandSent {
+                setVehicleControlMessage(
+                    String(localized: "Command sent — waiting for car to report state", comment: "Status banner when a command succeeded but telemetry has not yet reflected the new state"),
+                    isError: false,
+                    autoClearAfter: 6
+                )
             }
         }
     }
@@ -595,8 +624,10 @@ final class FleetDataStore {
     @discardableResult
     func installSelectedVehicleSoftwareUpdate(offsetSec: Int = 0) async -> Bool {
         await performSoftwareMutation(
-            progressMessage: "Scheduling software update.",
-            successMessage: offsetSec == 0 ? "Requested software install." : "Scheduled software install."
+            progressMessage: String(localized: "Scheduling software update.", comment: "Status message while scheduling a vehicle software update"),
+            successMessage: offsetSec == 0
+                ? String(localized: "Requested software install.", comment: "Status message confirming an immediate vehicle software install request")
+                : String(localized: "Scheduled software install.", comment: "Status message confirming a delayed vehicle software install request")
         ) { vin in
             try await apiClient.installSoftwareUpdate(vin: vin, offsetSec: offsetSec)
         }
@@ -605,8 +636,8 @@ final class FleetDataStore {
     @discardableResult
     func cancelSelectedVehicleSoftwareUpdate() async -> Bool {
         await performSoftwareMutation(
-            progressMessage: "Canceling software update.",
-            successMessage: "Canceled software update."
+            progressMessage: String(localized: "Canceling software update.", comment: "Status message while canceling a scheduled vehicle software update"),
+            successMessage: String(localized: "Canceled software update.", comment: "Status message confirming a scheduled vehicle software update was canceled")
         ) { vin in
             try await apiClient.cancelSoftwareUpdate(vin: vin)
         }

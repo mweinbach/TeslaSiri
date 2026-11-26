@@ -40,8 +40,20 @@ public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$count)) { vehicle, count in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: "Show \(count) recent drives for \(target)"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Show \(count) recent drives for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing recent drives for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Show \(count) recent drives for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing recent drives for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -54,11 +66,11 @@ public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
             let drives = try await service.drives(vin: resolved.vin, limit: clampedCount).map(DriveEntity.init(info:))
             log.success("returned \(drives.count) drive(s) for \(resolved.name)")
             let dialogText = drives.isEmpty
-                ? "No recent drives were found for \(resolved.name)."
-                : "Found \(drives.count) recent drive\(drives.count == 1 ? "" : "s") for \(resolved.name)."
+                ? String(localized: "No recent drives were found for \(resolved.name).", bundle: .module, comment: "Siri answer when a vehicle has no recent drives.")
+                : String(localized: "Found \(drives.count) recent drives for \(resolved.name).", bundle: .module, comment: "Siri answer reporting how many recent drives were found.")
             return .result(
                 value: drives,
-                dialog: IntentDialog("\(dialogText)"),
+                dialog: IntentDialog(stringLiteral: dialogText),
                 snippetIntent: DriveRouteSnippetIntent(
                     drives: drives,
                     vehicleName: resolved.name,
@@ -102,7 +114,20 @@ public struct GetLastDriveIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Show", vehicle: vehicle, suffix: "last drive"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Show \(vehicle.name) last drive",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing the last drive for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Show my car last drive",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing the last drive for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -113,14 +138,20 @@ public struct GetLastDriveIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             guard let last = try await service.drives(vin: resolved.vin, limit: 1).first else {
-                throw FleetKitError.api("No recent drives were found.")
+                throw FleetKitError.api(
+                    String(
+                        localized: "No recent drives were found.",
+                        bundle: .module,
+                        comment: "Error message when no completed drives exist."
+                    )
+                )
             }
             let entity = DriveEntity(info: last)
             log.success("last drive for \(resolved.name): \(entity.distanceText)")
             let spoken = entity.spokenSummary(vehicleName: resolved.name)
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 snippetIntent: DriveRouteSnippetIntent(
                     drives: [entity],
                     vehicleName: resolved.name,
@@ -166,7 +197,20 @@ public struct GetSoftwareStatusIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check software on", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check software on \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking software updates on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check software on my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking software updates on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -181,7 +225,7 @@ public struct GetSoftwareStatusIntent: AppIntent, PredictableIntent {
             log.success("\(resolved.name): \(entity.headline)")
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(entity.spokenStatus)"),
+                dialog: IntentDialog(stringLiteral: entity.spokenStatus),
                 view: SoftwareSnippetView(software: entity)
             )
         } catch {

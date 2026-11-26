@@ -3,20 +3,35 @@ import SwiftUI
 /// At-a-glance showroom card used across the app: quiet symbol + title header,
 /// optional trailing status/action accessory, and free-form content below.
 struct DashboardCard<Content: View, Accessory: View>: View {
-    let title: String
+    let title: Text
     let systemImage: String
     var tint: Color = .secondary
     @ViewBuilder let accessory: Accessory
     @ViewBuilder let content: Content
 
     init(
-        _ title: String,
+        _ title: LocalizedStringKey,
         systemImage: String,
         tint: Color = .secondary,
         @ViewBuilder accessory: () -> Accessory,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = Text(title)
+        self.systemImage = systemImage
+        self.tint = tint
+        self.accessory = accessory()
+        self.content = content()
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(
+        _ title: S,
+        systemImage: String,
+        tint: Color = .secondary,
+        @ViewBuilder accessory: () -> Accessory,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = Text(title)
         self.systemImage = systemImage
         self.tint = tint
         self.accessory = accessory()
@@ -26,7 +41,7 @@ struct DashboardCard<Content: View, Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 8) {
-                DashboardCardHeader(title: title, systemImage: systemImage, tint: tint)
+                DashboardCardHeader(titleText: title, systemImage: systemImage, tint: tint)
                 Spacer(minLength: 8)
                 accessory
             }
@@ -41,7 +56,17 @@ struct DashboardCard<Content: View, Accessory: View>: View {
 
 extension DashboardCard where Accessory == EmptyView {
     init(
-        _ title: String,
+        _ title: LocalizedStringKey,
+        systemImage: String,
+        tint: Color = .secondary,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(title, systemImage: systemImage, tint: tint, accessory: { EmptyView() }, content: content)
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(
+        _ title: S,
         systemImage: String,
         tint: Color = .secondary,
         @ViewBuilder content: () -> Content
@@ -52,9 +77,28 @@ extension DashboardCard where Accessory == EmptyView {
 
 /// Quiet automotive-styled symbol + title header shared by dashboard and detail cards.
 struct DashboardCardHeader: View {
-    let title: String
+    let titleText: Text
     let systemImage: String
     var tint: Color = .secondary
+
+    init(titleText: Text, systemImage: String, tint: Color = .secondary) {
+        self.titleText = titleText
+        self.systemImage = systemImage
+        self.tint = tint
+    }
+
+    init(title: LocalizedStringKey, systemImage: String, tint: Color = .secondary) {
+        self.titleText = Text(title)
+        self.systemImage = systemImage
+        self.tint = tint
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(title: S, systemImage: String, tint: Color = .secondary) {
+        self.titleText = Text(title)
+        self.systemImage = systemImage
+        self.tint = tint
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -62,7 +106,7 @@ struct DashboardCardHeader: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
-            Text(title)
+            titleText
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
@@ -97,9 +141,22 @@ struct MetricValueText: View {
 
 /// Plain-styled navigation row with a trailing chevron, for links inside dashboard cards.
 struct DashboardCardLinkLabel: View {
-    let title: String
+    let titleText: Text
     let systemImage: String
     var detail: String? = nil
+
+    init(title: LocalizedStringKey, systemImage: String, detail: String? = nil) {
+        self.titleText = Text(title)
+        self.systemImage = systemImage
+        self.detail = detail
+    }
+
+    @_disfavoredOverload
+    init<S: StringProtocol>(title: S, systemImage: String, detail: String? = nil) {
+        self.titleText = Text(title)
+        self.systemImage = systemImage
+        self.detail = detail
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -108,7 +165,7 @@ struct DashboardCardLinkLabel: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
                 .accessibilityHidden(true)
-            Text(title)
+            titleText
                 .foregroundStyle(.primary)
             Spacer(minLength: 8)
             if let detail {

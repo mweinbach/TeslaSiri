@@ -46,21 +46,24 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
 
     public var displayRepresentation: DisplayRepresentation {
         let subtitle = [model, color].compactMap { $0 }.joined(separator: " · ")
+        let bundle = FleetKitLocalization.bundleDescription
         var entitySynonyms: [LocalizedStringResource] = [
-            "my car",
-            "the car",
-            "car",
-            "my vehicle",
-            "my Tesla",
-            "Tesla"
+            LocalizedStringResource("my car", bundle: bundle, comment: "Synonym for the user's vehicle"),
+            LocalizedStringResource("the car", bundle: bundle, comment: "Synonym for the user's vehicle"),
+            LocalizedStringResource("car", bundle: bundle, comment: "Synonym for a vehicle"),
+            LocalizedStringResource("my vehicle", bundle: bundle, comment: "Synonym for the user's vehicle"),
+            LocalizedStringResource("my Tesla", bundle: bundle, comment: "Synonym for the user's Tesla"),
+            LocalizedStringResource("Tesla", bundle: bundle, comment: "Brand synonym for a Tesla vehicle")
         ]
         if let model, !model.isEmpty {
             entitySynonyms.append(LocalizedStringResource(stringLiteral: model))
-            entitySynonyms.append(LocalizedStringResource(stringLiteral: "my \(model)"))
+            entitySynonyms.append(
+                LocalizedStringResource("my \(model)", bundle: bundle, comment: "Possessive vehicle model synonym, e.g. 'my Model Y'")
+            )
         }
         return DisplayRepresentation(
-            title: "\(name)",
-            subtitle: subtitle.isEmpty ? "Tesla" : "\(subtitle)",
+            title: LocalizedStringResource(stringLiteral: name),
+            subtitle: subtitle.isEmpty ? "Tesla" : LocalizedStringResource(stringLiteral: subtitle),
             synonyms: entitySynonyms
         )
     }
@@ -68,21 +71,57 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
         let modelText = model ?? "Tesla"
-        let description = "My car (\(modelText) named \(name)). Ask Siri for its battery, range, tire pressure, mileage, climate, drives, charging history, or software updates, or to lock, unlock, warm up my car, cool down my car, precondition, defrost, or send it a destination."
+        let description = String(
+            localized: "My car (\(modelText) named \(name)). Ask Siri for its battery, range, tire pressure, mileage, climate, drives, charging history, or software updates, or to lock, unlock, warm up my car, cool down my car, precondition, defrost, or send it a destination.",
+            bundle: .module,
+            comment: "Spotlight searchable description for a vehicle entity"
+        )
         attributes.title = name
         attributes.displayName = name
-        attributes.alternateNames = ["My Car", "The Car", "My Vehicle", "My Tesla", "Tesla", model].compactMap { $0 }
-        attributes.kind = model ?? "Tesla Vehicle"
+        attributes.alternateNames = [
+            String(localized: "My Car", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
+            String(localized: "The Car", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
+            String(localized: "My Vehicle", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
+            String(localized: "My Tesla", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
+            "Tesla",
+            model
+        ].compactMap { $0 }
+        attributes.kind = model ?? String(localized: "Tesla Vehicle", bundle: .module, comment: "Fallback Spotlight kind for a Tesla vehicle")
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
-            "car", "my car", "the car", "vehicle", "my vehicle", "electric car", "EV", "Tesla",
+            String(localized: "car", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            String(localized: "my car", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            String(localized: "the car", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            String(localized: "vehicle", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            String(localized: "my vehicle", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            String(localized: "electric car", bundle: .module, comment: "Spotlight keyword for vehicle"),
+            "EV", "Tesla",
             name, model, color,
-            "warm up", "warm up my car", "cool down", "cool down my car", "precondition", "defrost",
-            "heat", "AC", "air conditioning", "climate",
-            "battery", "range", "mileage", "odometer", "tire pressure",
-            "drive", "charging", "software", "release notes", "lock", "lock my car", "unlock", "unlock my car",
-            "navigation"
+            String(localized: "warm up", bundle: .module, comment: "Spotlight keyword for climate warming"),
+            String(localized: "warm up my car", bundle: .module, comment: "Spotlight keyword for climate warming"),
+            String(localized: "cool down", bundle: .module, comment: "Spotlight keyword for climate cooling"),
+            String(localized: "cool down my car", bundle: .module, comment: "Spotlight keyword for climate cooling"),
+            String(localized: "precondition", bundle: .module, comment: "Spotlight keyword for cabin preconditioning"),
+            String(localized: "defrost", bundle: .module, comment: "Spotlight keyword for defrosting"),
+            String(localized: "heat", bundle: .module, comment: "Spotlight keyword for heating"),
+            String(localized: "AC", bundle: .module, comment: "Spotlight keyword for air conditioning"),
+            String(localized: "air conditioning", bundle: .module, comment: "Spotlight keyword for air conditioning"),
+            String(localized: "climate", bundle: .module, comment: "Spotlight keyword for climate"),
+            String(localized: "battery", bundle: .module, comment: "Spotlight keyword for battery"),
+            String(localized: "range", bundle: .module, comment: "Spotlight keyword for driving range"),
+            String(localized: "mileage", bundle: .module, comment: "Spotlight keyword for odometer mileage"),
+            String(localized: "odometer", bundle: .module, comment: "Spotlight keyword for odometer"),
+            String(localized: "tire pressure", bundle: .module, comment: "Spotlight keyword for tire pressure"),
+            String(localized: "drive", bundle: .module, comment: "Spotlight keyword for drive"),
+            String(localized: "charging", bundle: .module, comment: "Spotlight keyword for charging"),
+            String(localized: "software", bundle: .module, comment: "Spotlight keyword for software"),
+            String(localized: "release notes", bundle: .module, comment: "Spotlight keyword for release notes"),
+            String(localized: "lock", bundle: .module, comment: "Spotlight keyword for locking"),
+            String(localized: "lock my car", bundle: .module, comment: "Spotlight keyword for locking"),
+            String(localized: "unlock", bundle: .module, comment: "Spotlight keyword for unlocking"),
+            String(localized: "unlock my car", bundle: .module, comment: "Spotlight keyword for unlocking"),
+            String(localized: "navigation", bundle: .module, comment: "Spotlight keyword for navigation")
         ].compactMap { $0 }
         return attributes
     }
@@ -147,7 +186,13 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
         "vehicle", "my vehicle", "the vehicle",
         "ev", "my ev", "electric car", "electric vehicle",
         "auto", "automobile", "suv", "sedan", "truck",
-        "tesla", "my tesla", "the tesla"
+        "tesla", "my tesla", "the tesla",
+        "coche", "mi coche", "el coche", "nuestro coche",
+        "carro", "mi carro", "el carro", "nuestro carro",
+        "vehículo", "vehiculo", "mi vehículo", "mi vehiculo", "el vehículo", "el vehiculo",
+        "coche eléctrico", "coche electrico", "carro eléctrico", "carro electrico",
+        "auto eléctrico", "auto electrico", "vehículo eléctrico", "vehiculo electrico",
+        "mi auto", "el auto", "camioneta", "mi camioneta", "el tesla"
     ]
 
     public init() {}
@@ -188,7 +233,8 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
             return directMatches
         }
 
-        if trimmed.contains("car") || trimmed.contains("vehicle") || trimmed.contains("tesla") {
+        let genericSubstrings = ["car", "vehicle", "tesla", "coche", "carro", "vehículo", "vehiculo", "auto", "camioneta"]
+        if genericSubstrings.contains(where: { trimmed.contains($0) }) {
             return all
         }
         return []

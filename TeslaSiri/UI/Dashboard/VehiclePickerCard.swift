@@ -36,7 +36,7 @@ struct VehiclePickerCard: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityValue(selectedVIN == vehicle.vin ? "Selected" : "")
+                            .accessibilityValue(selectedVIN == vehicle.vin ? Text("Selected") : Text(""))
                         }
                     }
                     .padding(.vertical, 2)
@@ -77,7 +77,7 @@ private struct VehicleChip: View {
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
-                    Text(formattedNumber(batteryLevel, suffix: "%"))
+                    Text(formattedPercent(batteryLevel))
                         .monospacedDigit()
 
                     if isCharging {

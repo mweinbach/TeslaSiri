@@ -47,7 +47,20 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Inspect", vehicle: vehicle, suffix: "latest drive"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Inspect \(vehicle.name) latest drive",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for inspecting the latest drive of a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Inspect my car latest drive",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for inspecting the latest drive of the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -62,7 +75,13 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
             if let providedDrive = drive {
                 let vehicles = try await service.vehicles()
                 guard let matchingVehicle = vehicles.first(where: { $0.vin == providedDrive.vin }) else {
-                    throw FleetKitError.api("That drive does not belong to an active vehicle on your account.")
+                    throw FleetKitError.api(
+                        String(
+                            localized: "That drive does not belong to an active vehicle on your account.",
+                            bundle: .module,
+                            comment: "Error message when a referenced drive belongs to an inactive or unknown vehicle."
+                        )
+                    )
                 }
                 vehicleName = matchingVehicle.name
                 summary = providedDrive
@@ -70,7 +89,13 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
                 let resolved = try await service.resolvedVehicle(vehicle?.id)
                 vehicleName = resolved.name
                 guard let latest = try await service.drives(vin: resolved.vin, limit: 1).first else {
-                    throw FleetKitError.api("No completed drives were found for \(resolved.name).")
+                    throw FleetKitError.api(
+                        String(
+                            localized: "No completed drives were found for \(resolved.name).",
+                            bundle: .module,
+                            comment: "Error message when a vehicle has no completed drives."
+                        )
+                    )
                 }
                 summary = DriveEntity(info: latest)
             }
@@ -80,7 +105,7 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
             log.success("inspected drive \(targetEntity.id) for \(vehicleName)")
             return .result(
                 value: targetEntity,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 snippetIntent: DriveRouteSnippetIntent(
                     drives: [targetEntity],
                     vehicleName: vehicleName,
@@ -133,10 +158,20 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$period)) { vehicle, period in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(
-                title: LocalizedStringResource(stringLiteral: "Show \(period.displayTitle.lowercased()) driving stats for \(target)")
-            )
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Show \(period.displayTitle) driving stats for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing driving stats over a period for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Show \(period.displayTitle) driving stats for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing driving stats over a period for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -152,7 +187,13 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
             if period == .sinceLastCharge {
                 let fetched = try await service.consumptionSinceCharge(vin: resolved.vin)
                 guard let lastCharge = fetched.lastChargeDate else {
-                    throw FleetKitError.api("No completed charge was found to start this period.")
+                    throw FleetKitError.api(
+                        String(
+                            localized: "No completed charge was found to start this period.",
+                            bundle: .module,
+                            comment: "Error message when 'since last charge' stats are requested with no prior charge."
+                        )
+                    )
                 }
                 consumption = fetched
                 effectiveStart = lastCharge
@@ -184,7 +225,7 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
             log.success("driving stats (\(period.rawValue)) for \(resolved.name): \(stats.driveCount) drives")
             return .result(
                 value: stats,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 view: DrivingStatsSnippetView(stats: stats)
             )
         } catch {
@@ -233,10 +274,20 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle, \.$period)) { vehicle, period in
-            let target = vehicle?.name ?? FleetIntentMetadata.myCar
-            return DisplayRepresentation(
-                title: LocalizedStringResource(stringLiteral: "Show \(period.displayTitle.lowercased()) charging stats for \(target)")
-            )
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Show \(period.displayTitle) charging stats for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing charging stats over a period for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Show \(period.displayTitle) charging stats for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing charging stats over a period for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -268,7 +319,7 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
             log.success("charging stats (\(period.rawValue)) for \(resolved.name): \(stats.sessionCount) sessions")
             return .result(
                 value: stats,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 view: ChargingStatsSnippetView(stats: stats)
             )
         } catch {
@@ -352,7 +403,20 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Show recent charges for", vehicle: vehicle))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Show recent charges for \(vehicle.name)",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing recent charging sessions for a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Show recent charges for my car",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for showing recent charging sessions for the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -384,25 +448,33 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
 
             let dialogText: String
             if results.isEmpty {
-                dialogText = "No matching charging sessions were found for \(resolved.name)."
+                dialogText = String(
+                    localized: "No matching charging sessions were found for \(resolved.name).",
+                    bundle: .module,
+                    comment: "Siri answer when a charging history search returns no sessions."
+                )
             } else if results.count == 1, let only = results.first {
                 dialogText = only.spokenSummary(vehicleName: resolved.name)
             } else if let latest = results.first {
                 let totalKWH = results.compactMap(\.energyAddedKWH).reduce(0, +)
+                let energyText = FleetKitFormatting.energyKWH(totalKWH, fractionLength: 1)
+                let latestSummary = latest.spokenSummary(vehicleName: resolved.name)
                 dialogText = String(
-                    format: "Found %d charging sessions for %@ adding %.1f kWh total. Most recent: %@",
-                    results.count,
-                    resolved.name,
-                    totalKWH,
-                    latest.spokenSummary(vehicleName: resolved.name)
+                    localized: "Found \(results.count) charging sessions for \(resolved.name) adding \(energyText) total. Most recent: \(latestSummary)",
+                    bundle: .module,
+                    comment: "Siri answer summarizing multiple charging sessions, total energy added, and most recent session."
                 )
             } else {
-                dialogText = "Found \(results.count) charging sessions for \(resolved.name)."
+                dialogText = String(
+                    localized: "Found \(results.count) charging sessions for \(resolved.name).",
+                    bundle: .module,
+                    comment: "Fallback Siri answer reporting charging session count."
+                )
             }
 
             return .result(
                 value: results,
-                dialog: IntentDialog("\(dialogText)"),
+                dialog: IntentDialog(stringLiteral: dialogText),
                 snippetIntent: ChargeSessionSnippetIntent(
                     sessions: results,
                     vehicleName: resolved.name,
@@ -448,7 +520,20 @@ public struct GetBatteryHealthIntent: AppIntent, PredictableIntent {
 
     public static var predictionConfiguration: some IntentPredictionConfiguration {
         IntentPrediction(parameters: (\.$vehicle)) { vehicle in
-            DisplayRepresentation(title: VehicleEntity.predictionTitle(verb: "Check", vehicle: vehicle, suffix: "battery health"))
+            let title: LocalizedStringResource = if let vehicle {
+                LocalizedStringResource(
+                    "Check \(vehicle.name) battery health",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking battery health on a specific vehicle."
+                )
+            } else {
+                LocalizedStringResource(
+                    "Check my car battery health",
+                    bundle: FleetKitLocalization.bundleDescription,
+                    comment: "Siri prediction title for checking battery health on the user's selected car."
+                )
+            }
+            return DisplayRepresentation(title: title)
         }
     }
 
@@ -465,7 +550,7 @@ public struct GetBatteryHealthIntent: AppIntent, PredictableIntent {
             log.success("battery health for \(resolved.name): \(entity.healthPercent.map { String(format: "%.1f%%", $0) } ?? "n/a")")
             return .result(
                 value: entity,
-                dialog: IntentDialog("\(spoken)"),
+                dialog: IntentDialog(stringLiteral: spoken),
                 view: BatteryHealthSnippetView(battery: entity)
             )
         } catch {

@@ -197,7 +197,7 @@ final class VehicleStage {
     private func loadModel(_ spec: VehicleModelSpec) async {
         defer { loadTask = nil }
         guard let library = VehicleLibraryProvider.shared else {
-            phase = .failed("The vehicle library isn't bundled with this build.")
+            phase = .failed(String(localized: "The vehicle library isn't bundled with this build.", comment: "Error shown when 3D vehicle models are missing from the app bundle"))
             return
         }
         Self.log.info("Loading \(spec.modelID, privacy: .public)/\(spec.bodyStyle, privacy: .public)")

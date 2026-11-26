@@ -43,7 +43,14 @@ struct DrivesView: View {
         let results = query.isEmpty ? nil : index?.search(query, at: place)
         let visiblePlaces = results?.places ?? index?.frequentPlaces ?? []
         let visibleDrives = results?.drives ?? place.flatMap { index?.drives(at: $0) } ?? recentDrives
-        let title = place.map { "Drives to and from \($0.displayName)" } ?? (query.isEmpty ? "Recent drives" : "Matching drives")
+        let isFiltered = place != nil || !query.isEmpty
+        let title: String = if let place {
+            String(localized: "Drives to and from \(place.displayName)", comment: "Section header for drives filtered to a specific destination or origin")
+        } else if query.isEmpty {
+            String(localized: "Recent drives", comment: "Section header for recent drives")
+        } else {
+            String(localized: "Matching drives", comment: "Section header for drives matching the search query")
+        }
         let targetID = selectedSessionID ?? requestedSessionID
         let selected = visibleDrives.first { $0.sessionID == targetID } ?? visibleDrives.first
         let selection = selectedSessionBinding(fallback: visibleDrives.first?.sessionID)
@@ -54,6 +61,7 @@ struct DrivesView: View {
             store: store,
             drives: visibleDrives,
             drivesTitle: title,
+            isFiltered: isFiltered,
             places: visiblePlaces,
             isIndexingPlaces: index?.isIndexing ?? false,
             selectedPlaceID: $selectedPlaceID,
@@ -92,7 +100,7 @@ struct DrivesView: View {
             }
             .keyboardShortcut(.defaultAction)
         } message: { place in
-            Text("Leave the nickname blank to use “\(place.name)”.")
+            Text("Leave the nickname blank to use “\(place.defaultName)”.")
         }
         .alert("Couldn’t Save Nickname", item: $nicknameSaveError) { _ in
             Button("OK", role: .cancel) {}
@@ -285,6 +293,7 @@ private struct DrivesPostureContainer: View {
     let store: FleetDataStore
     let drives: [FleetDriveSession]
     let drivesTitle: String
+    let isFiltered: Bool
     let places: [DrivePlace]
     let isIndexingPlaces: Bool
     @Binding var selectedPlaceID: String?
@@ -298,6 +307,8 @@ private struct DrivesPostureContainer: View {
 
     @Environment(\.duoPosture) private var duoPosture
 
+    private var units: String? { store.user?.units }
+
     var body: some View {
         if drives.isEmpty {
             ScrollView {
@@ -309,13 +320,21 @@ private struct DrivesPostureContainer: View {
                         LoadingCard(title: "Drives", message: "Loading drives…")
                     } else {
                         CardContainer(title: "Drives", systemImage: "map.fill") {
-                            ContentUnavailableView(
-                                drivesTitle == "Recent drives" ? "No drives" : "No matching drives",
-                                systemImage: "map",
-                                description: Text(drivesTitle == "Recent drives"
-                                    ? "Recent drive sessions were not returned for this vehicle."
-                                    : "Try another place or search.")
-                            )
+                            Group {
+                                if isFiltered {
+                                    ContentUnavailableView(
+                                        "No matching drives",
+                                        systemImage: "map",
+                                        description: Text("Try another place or search.")
+                                    )
+                                } else {
+                                    ContentUnavailableView(
+                                        "No drives",
+                                        systemImage: "map",
+                                        description: Text("Recent drive sessions were not returned for this vehicle.")
+                                    )
+                                }
+                            }
                             .frame(maxWidth: .infinity)
                         }
                     }
@@ -336,6 +355,7 @@ private struct DrivesPostureContainer: View {
                 DriveMapCard(
                     drive: selectedDrive,
                     route: route,
+                    units: units,
                     fillsPane: true,
                     compactHeight: duoPosture.compactMapHeight,
                     selectedPointIndex: $selectedPointIndex,
@@ -355,12 +375,14 @@ private struct DrivesPostureContainer: View {
                             drives: drives,
                             endpointAddresses: endpointAddresses,
                             selectedSessionID: $selectedSessionID,
-                            title: drivesTitle
+                            title: drivesTitle,
+                            units: units
                         )
 
                         DrivePlaybackSection(
                             drive: selectedDrive,
                             route: route,
+                            units: units,
                             selectedPointIndex: $selectedPointIndex,
                             onLoadRoute: {
                                 await store.refreshRoute(for: selectedDrive)
@@ -370,7 +392,8 @@ private struct DrivesPostureContainer: View {
                         DriveSessionSummary(
                             drive: selectedDrive,
                             endpointAddresses: endpointAddresses[selectedDrive.sessionID],
-                            hasRoute: !route.isEmpty
+                            hasRoute: !route.isEmpty,
+                            units: units
                         )
                     }
                     .padding(.horizontal, 18)
@@ -393,7 +416,8 @@ private struct DrivesPostureContainer: View {
                         drives: drives,
                         endpointAddresses: endpointAddresses,
                         selectedSessionID: $selectedSessionID,
-                        title: drivesTitle
+                        title: drivesTitle,
+                        units: units
                     )
 
                     if let selectedDrive {
@@ -402,6 +426,7 @@ private struct DrivesPostureContainer: View {
                         DriveMapCard(
                             drive: selectedDrive,
                             route: route,
+                            units: units,
                             fillsPane: false,
                             compactHeight: duoPosture.compactMapHeight,
                             selectedPointIndex: $selectedPointIndex,
@@ -413,6 +438,7 @@ private struct DrivesPostureContainer: View {
                         DrivePlaybackSection(
                             drive: selectedDrive,
                             route: route,
+                            units: units,
                             selectedPointIndex: $selectedPointIndex,
                             onLoadRoute: {
                                 await store.refreshRoute(for: selectedDrive)
@@ -422,7 +448,8 @@ private struct DrivesPostureContainer: View {
                         DriveSessionSummary(
                             drive: selectedDrive,
                             endpointAddresses: endpointAddresses[selectedDrive.sessionID],
-                            hasRoute: !route.isEmpty
+                            hasRoute: !route.isEmpty,
+                            units: units
                         )
                     }
                 }
@@ -453,6 +480,7 @@ extension DrivesPostureContainer {
 private struct DrivePlaybackSection: View {
     let drive: FleetDriveSession
     let route: [FleetRoutePoint]
+    let units: String?
     @Binding var selectedPointIndex: Int
     let onLoadRoute: () async -> Void
 
@@ -478,7 +506,8 @@ private struct DrivePlaybackSection: View {
                     DriveReplayStage(
                         route: route,
                         selectedPointIndex: $selectedPointIndex,
-                        driveSessionID: drive.sessionID
+                        driveSessionID: drive.sessionID,
+                        units: units
                     )
 
                     DriveRoutePositionScrubber(
@@ -492,7 +521,8 @@ private struct DrivePlaybackSection: View {
                             point: selectedPoint,
                             index: selectedPointIndex,
                             count: route.count,
-                            driveSessionID: drive.sessionID
+                            driveSessionID: drive.sessionID,
+                            units: units
                         )
                     }
                 }
@@ -505,6 +535,7 @@ private struct DrivePlaybackSection: View {
 private struct DriveMapCard: View {
     let drive: FleetDriveSession
     let route: [FleetRoutePoint]
+    let units: String?
     let fillsPane: Bool
     let compactHeight: CGFloat
     @Binding var selectedPointIndex: Int
@@ -553,10 +584,10 @@ private struct DriveMapCard: View {
     }
 
     private var routeBadgeText: String {
-        let distance = formattedNumber(drive.distanceMiles, fractionLength: 1, suffix: " mi")
+        let distance = formattedDistance(miles: drive.distanceMiles, units: units, fractionLength: 1)
         if let durationMS = drive.durationMS, durationMS > 0 {
             return "\(distance) · \(formattedDuration(milliseconds: durationMS))"
         }
-        return "\(distance) route"
+        return String(localized: "\(distance) route", comment: "Map badge showing route distance when drive duration is unavailable")
     }
 }

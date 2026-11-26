@@ -52,7 +52,7 @@ struct DashboardView: View {
             isShowingConfirmation = false
         }
         .vehicleCommandConfirmation(
-            vehicleName: store.selectedVehicle?.name ?? "Vehicle",
+            vehicleName: store.selectedVehicle?.name ?? String(localized: "Vehicle", comment: "Fallback vehicle name in command confirmation alert"),
             pendingCommand: $pendingCommand,
             isPresented: $isShowingConfirmation,
             onConfirm: performCommand
@@ -60,14 +60,14 @@ struct DashboardView: View {
     }
 
     private var navigationTitle: String {
-        store.selectedVehicle?.name ?? "Vehicle"
+        store.selectedVehicle?.name ?? String(localized: "Vehicle", comment: "Fallback navigation title when no vehicle is selected")
     }
 
     private var navigationSubtitle: String {
         if store.isWakingVehicle {
-            return "Waking vehicle…"
+            return String(localized: "Waking vehicle…", comment: "Navigation subtitle while waking the car")
         }
-        return store.selectedVehicle?.latest?.heroStatusLine ?? ""
+        return store.selectedVehicle?.latest?.heroStatusLine(units: store.user?.units) ?? ""
     }
 
     @ToolbarContentBuilder
@@ -128,7 +128,7 @@ struct DashboardView: View {
                 Label("Refresh Vehicle", systemImage: "arrow.clockwise")
             }
         }
-        .accessibilityLabel(store.isWakingVehicle ? "Waking Vehicle" : "Refresh Vehicle")
+        .accessibilityLabel(store.isWakingVehicle ? Text("Waking Vehicle") : Text("Refresh Vehicle"))
         .disabled(!canRefreshFleet || store.isRefreshing)
     }
 
@@ -391,11 +391,17 @@ private struct SandboxModeBanner: View {
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
 
-            Text(mode == .dryRun ? "Dry-Run Mode · Commands simulated" : "Demo Car · Simulated Model Y")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+            Group {
+                if mode == .dryRun {
+                    Text("Dry-Run Mode · Commands simulated")
+                } else {
+                    Text("Demo Car · Simulated Model Y")
+                }
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
 
             Spacer(minLength: 6)
 
@@ -555,7 +561,7 @@ private struct DashboardStandaloneStateScroll: View {
 
 
 struct LoadingStateView: View {
-    let message: String
+    let message: LocalizedStringKey
 
     var body: some View {
         CardContainer {
@@ -589,9 +595,9 @@ struct ErrorStateView: View {
 }
 
 struct EmptyStateView: View {
-    let title: String
+    let title: LocalizedStringKey
     let systemImage: String
-    let description: String
+    let description: LocalizedStringKey
 
     var body: some View {
         CardContainer {
@@ -606,8 +612,8 @@ struct EmptyStateView: View {
 }
 
 struct LoadingCard: View {
-    let title: String
-    let message: String
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
 
     var body: some View {
         CardContainer(title: title) {

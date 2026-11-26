@@ -102,8 +102,12 @@ final class BatteryReminderManager {
 
     private func postLowBatteryNotification(vin: String, vehicleName: String, battery: Int) async {
         let content = UNMutableNotificationContent()
-        content.title = "Low Battery"
-        content.body = "\(vehicleName) is at \(battery)%. You should charge your car."
+        content.title = String(localized: "Low Battery", comment: "Local notification title when the vehicle battery is low")
+        let levelText = FleetKitFormatting.percent(Double(battery))
+        content.body = String(
+            localized: "\(vehicleName) is at \(levelText). You should charge your car.",
+            comment: "Local notification body reminding the user to charge their vehicle"
+        )
         content.sound = .default
         content.appEntityIdentifiers = [
             EntityIdentifier(for: VehicleEntity.self, identifier: vin),

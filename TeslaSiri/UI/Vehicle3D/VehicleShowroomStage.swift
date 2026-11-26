@@ -114,18 +114,39 @@ struct VehicleShowroomStage: View {
     }
 
     private func accessibilityDescription(for state: VehicleStageState) -> String {
-        var parts = ["\(vehicle.name), 3D view"]
+        var parts = [String(localized: "\(vehicle.name), 3D view", comment: "VoiceOver description for the 3D vehicle stage")]
         switch state.mode {
-        case .parked: parts.append("parked")
-        case .charging: parts.append(state.isCharging ? "charging" : "plugged in")
-        case .driving: parts.append("driving at \(Int(state.speedMPH.rounded())) miles per hour")
+        case .parked:
+            parts.append(String(localized: "parked", comment: "VoiceOver vehicle state: parked"))
+        case .charging:
+            parts.append(
+                state.isCharging
+                    ? String(localized: "charging", comment: "VoiceOver vehicle state: actively charging")
+                    : String(localized: "plugged in", comment: "VoiceOver vehicle state: plugged in")
+            )
+        case .driving:
+            parts.append(
+                String(
+                    localized: "driving at \(formattedSpeed(mph: state.speedMPH, units: units, fractionLength: 0))",
+                    comment: "VoiceOver vehicle state while driving with current speed"
+                )
+            )
         }
-        if let locked = state.isLocked { parts.append(locked ? "locked" : "unlocked") }
+        if let locked = state.isLocked {
+            parts.append(
+                locked
+                    ? String(localized: "locked", comment: "VoiceOver vehicle state: locked")
+                    : String(localized: "unlocked", comment: "VoiceOver vehicle state: unlocked")
+            )
+        }
         let open = VehicleOpening.allCases.filter { state.openings.contains($0) }
         if !open.isEmpty {
-            parts.append("open: " + open.map(\.spokenName).joined(separator: ", "))
+            let list = open.map(\.spokenName).formatted(.list(type: .and))
+            parts.append(String(localized: "open: \(list)", comment: "VoiceOver list of open vehicle doors, windows, or trunks"))
         }
-        if state.isSentryOn { parts.append("Sentry Mode on") }
+        if state.isSentryOn {
+            parts.append(String(localized: "Sentry Mode on", comment: "VoiceOver vehicle state: Sentry Mode enabled"))
+        }
         return parts.joined(separator: ", ")
     }
 }
@@ -159,30 +180,66 @@ struct VehicleHotspotLabel: View {
                 ? snapshot.closures?.frontTrunkOpen == true
                 : snapshot.closures?.rearTrunkOpen == true
             VStack(spacing: 1) {
-                Text(isOpen ? (hotspot == .frunk ? "Open" : "Close") : "Open")
+                Text(actionStatusLabel(isOpen: isOpen))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(isOpen ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.secondary))
-                Text(hotspot == .frunk ? "Frunk" : "Trunk")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(isOpen ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.primary.opacity(0.88)))
+                Group {
+                    if hotspot == .frunk {
+                        Text("Frunk")
+                    } else {
+                        Text("Trunk")
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isOpen ? AnyShapeStyle(AppTheme.alertAmber) : AnyShapeStyle(.primary.opacity(0.88)))
             }
             .lineLimit(1)
         }
     }
 
+    private func actionStatusLabel(isOpen: Bool) -> String {
+        if isOpen {
+            if hotspot == .frunk {
+                return String(
+                    localized: "callout.state.open",
+                    defaultValue: "Open",
+                    comment: "Status adjective on 3D car callout indicating the front trunk is open"
+                )
+            }
+            return String(
+                localized: "callout.action.close",
+                defaultValue: "Close",
+                comment: "Imperative verb on 3D car callout button to close the rear trunk"
+            )
+        }
+        return String(
+            localized: "callout.action.open",
+            defaultValue: "Open",
+            comment: "Imperative verb on 3D car callout button to open a trunk"
+        )
+    }
+
     private var accessibilityTitle: String {
         switch hotspot {
         case .lock:
-            snapshot.locked == false ? "Lock vehicle" : "Unlock vehicle"
+            snapshot.locked == false
+                ? String(localized: "Lock vehicle", comment: "VoiceOver action on 3D car lock callout")
+                : String(localized: "Unlock vehicle", comment: "VoiceOver action on 3D car lock callout")
         case .frunk:
-            snapshot.closures?.frontTrunkOpen == true ? "Front trunk open" : "Open front trunk"
+            snapshot.closures?.frontTrunkOpen == true
+                ? String(localized: "Front trunk open", comment: "VoiceOver label when the front trunk is open")
+                : String(localized: "Open front trunk", comment: "VoiceOver action to open the front trunk")
         case .trunk:
-            snapshot.closures?.rearTrunkOpen == true ? "Close rear trunk" : "Open rear trunk"
+            snapshot.closures?.rearTrunkOpen == true
+                ? String(localized: "Close rear trunk", comment: "VoiceOver action to close the rear trunk")
+                : String(localized: "Open rear trunk", comment: "VoiceOver action to open the rear trunk")
         case .chargePort:
             if snapshot.isActivelyCharging, let level = snapshot.batteryLevel {
-                "Charging, \(formattedNumber(level, fractionLength: 0, suffix: "%"))"
+                String(localized: "Charging, \(formattedPercent(level))", comment: "VoiceOver label on 3D charge port badge while charging")
             } else {
-                snapshot.chargePortDoorOpen == true ? "Close charge port" : "Open charge port"
+                snapshot.chargePortDoorOpen == true
+                    ? String(localized: "Close charge port", comment: "VoiceOver action to close the charge port")
+                    : String(localized: "Open charge port", comment: "VoiceOver action to open the charge port")
             }
         }
     }
@@ -205,7 +262,7 @@ struct VehicleChargeBadge: View {
 
             if isCharging {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(formattedNumber(snapshot.batteryLevel, fractionLength: 0, suffix: "%"))
+                    Text(formattedPercent(snapshot.batteryLevel))
                         .font(.caption.weight(.bold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
@@ -279,7 +336,7 @@ struct VehicleDrivingReadout: View {
     let units: String?
     var isSelfDriving = false
 
-    private var isMetric: Bool { units == "metric" }
+    private var isMetric: Bool { prefersMetricUnits(units) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -290,8 +347,14 @@ struct VehicleDrivingReadout: View {
                         .foregroundStyle(letter == gear?.uppercased() ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                 }
             }
+            .environment(\.layoutDirection, .leftToRight)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Gear \(gear ?? "unknown")")
+            .accessibilityLabel(
+                String(
+                    localized: "Gear \(gear ?? String(localized: "unknown", comment: "VoiceOver fallback when vehicle gear is unknown"))",
+                    comment: "VoiceOver label for the vehicle gear indicator"
+                )
+            )
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(formattedNumber(isMetric ? speedMPH * 1.609_344 : speedMPH, fractionLength: 0))
@@ -299,7 +362,7 @@ struct VehicleDrivingReadout: View {
                     .monospacedDigit()
                     // Speed changes several times a second; a rolling-digit transition would
                     // overlap itself and smear, so the number just updates like a speedometer.
-                Text(isMetric ? "km/h" : "mph")
+                Text(isMetric ? UnitSpeed.kilometersPerHour.symbol : UnitSpeed.milesPerHour.symbol)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -345,17 +408,17 @@ struct HeadingCurvatureTracker: Equatable {
 extension VehicleOpening {
     var spokenName: String {
         switch self {
-        case .frunk: "front trunk"
-        case .trunk: "rear trunk"
-        case .chargePort: "charge port"
-        case .leftFrontDoor: "left front door"
-        case .rightFrontDoor: "right front door"
-        case .leftRearDoor: "left rear door"
-        case .rightRearDoor: "right rear door"
-        case .leftFrontWindow: "left front window"
-        case .rightFrontWindow: "right front window"
-        case .leftRearWindow: "left rear window"
-        case .rightRearWindow: "right rear window"
+        case .frunk: String(localized: "front trunk", comment: "Vehicle opening name for VoiceOver")
+        case .trunk: String(localized: "rear trunk", comment: "Vehicle opening name for VoiceOver")
+        case .chargePort: String(localized: "charge port", comment: "Vehicle opening name for VoiceOver")
+        case .leftFrontDoor: String(localized: "left front door", comment: "Vehicle opening name for VoiceOver")
+        case .rightFrontDoor: String(localized: "right front door", comment: "Vehicle opening name for VoiceOver")
+        case .leftRearDoor: String(localized: "left rear door", comment: "Vehicle opening name for VoiceOver")
+        case .rightRearDoor: String(localized: "right rear door", comment: "Vehicle opening name for VoiceOver")
+        case .leftFrontWindow: String(localized: "left front window", comment: "Vehicle opening name for VoiceOver")
+        case .rightFrontWindow: String(localized: "right front window", comment: "Vehicle opening name for VoiceOver")
+        case .leftRearWindow: String(localized: "left rear window", comment: "Vehicle opening name for VoiceOver")
+        case .rightRearWindow: String(localized: "right rear window", comment: "Vehicle opening name for VoiceOver")
         }
     }
 }

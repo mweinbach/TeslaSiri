@@ -1,0 +1,181 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Check my battery health in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to check Tesla battery health and degradation.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Check my battery health in ${applicationName}",
+              "Check ${vehicle} battery health in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Comprobar la salud de la batería de mi coche en ${applicationName}",
+              "Revisar la salud de la batería de mi auto en ${applicationName}",
+              "Comprobar la salud de la batería de ${vehicle} en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Check my car in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to check overall Tesla vehicle status.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Check my car in ${applicationName}",
+              "How's my car in ${applicationName}",
+              "Check ${vehicle} in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Comprobar mi coche en ${applicationName}",
+              "Cómo está mi coche en ${applicationName}",
+              "Cómo está mi auto en ${applicationName}",
+              "Comprobar ${vehicle} en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Check my car software in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to check for pending Tesla software updates.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Check my car software in ${applicationName}",
+              "Does ${vehicle} have an update in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Comprobar el software de mi coche en ${applicationName}",
+              "Revisar el software de mi auto en ${applicationName}",
+              "Tiene ${vehicle} una actualización en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Read my car release notes in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to read Tesla software release notes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Read my car release notes in ${applicationName}",
+              "Read ${vehicle} release notes in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Leer las notas de la versión de mi coche en ${applicationName}",
+              "Leer las novedades de mi auto en ${applicationName}",
+              "Leer las notas de la versión de ${vehicle} en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Show my last charge in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to view the most recent charging session.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Show my last charge in ${applicationName}",
+              "Show ${vehicle} last charge in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mostrar mi última carga en ${applicationName}",
+              "Ver la última carga de ${vehicle} en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Show my last drive in ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to view the most recent drive.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Show my last drive in ${applicationName}",
+              "Show ${vehicle} last drive in ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Mostrar mi último viaje en ${applicationName}",
+              "Ver el último trayecto de ${vehicle} en ${applicationName}"
+            ]
+          }
+        }
+      }
+    },
+    "Update my car with ${applicationName}" : {
+      "comment" : "Siri App Shortcut phrases to install a pending Tesla software update.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "Update my car with ${applicationName}",
+              "Update ${vehicle} with ${applicationName}"
+            ]
+          }
+        },
+        "es" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Actualizar mi coche con ${applicationName}",
+              "Actualizar mi auto con ${applicationName}",
+              "Actualizar ${vehicle} con ${applicationName}"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

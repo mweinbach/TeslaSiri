@@ -19,8 +19,10 @@ public enum SiriMapVisualStyle: String, Codable, Sendable {
 
     public var badgeLabel: String {
         switch self {
-        case .standard: "Satellite"
-        case .hybrid: "Standard"
+        case .standard:
+            String(localized: "Satellite", bundle: .module, comment: "Button badge on Siri map card to switch to satellite imagery.")
+        case .hybrid:
+            String(localized: "Standard", bundle: .module, comment: "Button badge on Siri map card to switch back to standard map style.")
         }
     }
 

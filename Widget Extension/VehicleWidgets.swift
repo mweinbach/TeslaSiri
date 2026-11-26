@@ -59,15 +59,15 @@ struct VehicleWidgetProvider: AppIntentTimelineProvider {
             let snapshot = try await FleetWidgetStore.shared.load(vin: configuration.vehicle?.id)
             return VehicleWidgetEntry(date: .now, snapshot: snapshot)
         } catch FleetKitError.notSignedIn {
-            return VehicleWidgetEntry(date: .now, message: "Open Wattie to sign in")
+            return VehicleWidgetEntry(date: .now, message: String(localized: "Open Wattie to sign in", comment: "Widget status message when user is signed out"))
         } catch FleetKitError.sessionExpired {
             FleetWidgetStore.shared.clear(reload: false)
-            return VehicleWidgetEntry(date: .now, message: "Open Wattie to reconnect")
+            return VehicleWidgetEntry(date: .now, message: String(localized: "Open Wattie to reconnect", comment: "Widget status message when the user's session has expired"))
         } catch {
             return VehicleWidgetEntry(
                 date: .now,
                 snapshot: FleetWidgetStore.shared.cached(vin: configuration.vehicle?.id),
-                message: "Saved data · Unable to refresh"
+                message: String(localized: "Saved data · Unable to refresh", comment: "Widget footer message when displaying cached data after a refresh failure")
             )
         }
     }
@@ -131,9 +131,15 @@ private struct VehicleWidgetContent: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Wattie", systemImage: topic.systemImage)
                         .font(.headline)
-                    Text(entry.message ?? "Open Wattie to set up your car")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Group {
+                        if let message = entry.message {
+                            Text(message)
+                        } else {
+                            Text("Open Wattie to set up your car")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }

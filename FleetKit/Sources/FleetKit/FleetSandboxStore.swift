@@ -12,20 +12,23 @@ public enum FleetSandboxMode: String, Codable, CaseIterable, Identifiable, Senda
 
     public var shortTitle: String {
         switch self {
-        case .live: "Live"
-        case .dryRun: "Dry-Run"
-        case .demoVehicle: "Demo Car"
+        case .live:
+            String(localized: "Live", bundle: .module, comment: "Sandbox mode: connected to live vehicle provider")
+        case .dryRun:
+            String(localized: "Dry-Run", bundle: .module, comment: "Sandbox mode: read live vehicle data but intercept write commands")
+        case .demoVehicle:
+            String(localized: "Demo Car", bundle: .module, comment: "Sandbox mode: simulated demo Tesla vehicle")
         }
     }
 
     public var explanation: String {
         switch self {
         case .live:
-            "Reads and controls your real Tesla through your selected provider."
+            String(localized: "Reads and controls your real Tesla through your selected provider.", bundle: .module, comment: "Explanation of Live mode")
         case .dryRun:
-            "Reads your real car's live status, but intercepts and logs every Siri and app command without touching your car."
+            String(localized: "Reads your real car's live status, but intercepts and logs every Siri and app command without touching your car.", bundle: .module, comment: "Explanation of Dry-Run mode")
         case .demoVehicle:
-            "Simulates a Model Y for both the app and Siri—no provider sign-in needed. Commands update the demo car locally."
+            String(localized: "Simulates a Model Y for both the app and Siri—no provider sign-in needed. Commands update the demo car locally.", bundle: .module, comment: "Explanation of Demo Car mode")
         }
     }
 
@@ -46,23 +49,27 @@ public enum FleetDemoPreset: String, Codable, CaseIterable, Identifiable, Sendab
 
     public var title: String {
         switch self {
-        case .mildCommute: "Mild Morning"
-        case .freezingMorning: "Freezing Morning"
-        case .hotCabin: "Hot Summer Cabin"
-        case .roadTripPrep: "Trip Prep (Low Battery)"
+        case .mildCommute:
+            String(localized: "Mild Morning", bundle: .module, comment: "Demo car preset title: mild morning commute")
+        case .freezingMorning:
+            String(localized: "Freezing Morning", bundle: .module, comment: "Demo car preset title: freezing winter morning")
+        case .hotCabin:
+            String(localized: "Hot Summer Cabin", bundle: .module, comment: "Demo car preset title: hot summer cabin")
+        case .roadTripPrep:
+            String(localized: "Trip Prep (Low Battery)", bundle: .module, comment: "Demo car preset title: road trip preparation with low battery")
         }
     }
 
     public var subtitle: String {
         switch self {
         case .mildCommute:
-            "66°F inside · 58°F outside · 78% battery · Update ready"
+            String(localized: "66°F inside · 58°F outside · 78% battery · Update ready", bundle: .module, comment: "Demo car preset subtitle for Mild Morning")
         case .freezingMorning:
-            "26°F inside · 22°F outside · Plugged in · Low FR tire (36.5 PSI)"
+            String(localized: "26°F inside · 22°F outside · Plugged in · Low FR tire (36.5 PSI)", bundle: .module, comment: "Demo car preset subtitle for Freezing Morning")
         case .hotCabin:
-            "104°F inside · 93°F outside · Unlocked · Driver window vented"
+            String(localized: "104°F inside · 93°F outside · Unlocked · Driver window vented", bundle: .module, comment: "Demo car preset subtitle for Hot Summer Cabin")
         case .roadTripPrep:
-            "42% battery (132 mi) · Plugged in at 80% limit · 70°F inside"
+            String(localized: "42% battery (132 mi) · Plugged in at 80% limit · 70°F inside", bundle: .module, comment: "Demo car preset subtitle for Trip Prep")
         }
     }
 
@@ -109,31 +116,31 @@ public struct FleetSimulatedCommandEntry: Codable, Equatable, Identifiable, Send
 
     public var humanizedAction: String {
         switch action {
-        case "door_lock": "Lock Doors"
-        case "door_unlock": "Unlock Doors"
-        case "auto_conditioning_start": "Start Climate"
-        case "auto_conditioning_stop": "Stop Climate"
-        case "set_temps": "Set Cabin Temperature"
-        case "remote_defrost": "Set Max Defrost"
-        case "set_seat_heat": "Set Seat Heater"
-        case "set_seat_cool": "Set Seat Cooling"
-        case "steering_wheel_heater": "Set Steering Wheel Heater"
-        case "set_pet_mode": "Set Dog Mode"
-        case "set_bioweapon_mode": "Set Bioweapon Defense"
-        case "window_control": "Window Control"
-        case "actuate_trunk": "Actuate Trunk / Frunk"
-        case "charge_port_door_open": "Open Charge Port"
-        case "charge_port_door_close": "Close Charge Port"
-        case "charge_start": "Start Charging"
-        case "charge_stop": "Stop Charging"
-        case "set_charge_limit": "Set Charge Limit"
-        case "set_charging_amps": "Set Charging Amps"
-        case "set_sentry_mode": "Set Sentry Mode"
-        case "flash_lights": "Flash Lights"
-        case "honk_horn": "Honk Horn"
-        case "navigation_request": "Send Navigation Destination"
-        case "software_install": "Install Software Update"
-        case "software_cancel": "Cancel Software Update"
+        case "door_lock": String(localized: "Lock Doors", bundle: .module, comment: "Simulated command log label")
+        case "door_unlock": String(localized: "Unlock Doors", bundle: .module, comment: "Simulated command log label")
+        case "auto_conditioning_start": String(localized: "Start Climate", bundle: .module, comment: "Simulated command log label")
+        case "auto_conditioning_stop": String(localized: "Stop Climate", bundle: .module, comment: "Simulated command log label")
+        case "set_temps": String(localized: "Set Cabin Temperature", bundle: .module, comment: "Simulated command log label")
+        case "remote_defrost": String(localized: "Set Max Defrost", bundle: .module, comment: "Simulated command log label")
+        case "set_seat_heat": String(localized: "Set Seat Heater", bundle: .module, comment: "Simulated command log label")
+        case "set_seat_cool": String(localized: "Set Seat Cooling", bundle: .module, comment: "Simulated command log label")
+        case "steering_wheel_heater": String(localized: "Set Steering Wheel Heater", bundle: .module, comment: "Simulated command log label")
+        case "set_pet_mode": String(localized: "Set Dog Mode", bundle: .module, comment: "Simulated command log label")
+        case "set_bioweapon_mode": String(localized: "Set Bioweapon Defense", bundle: .module, comment: "Simulated command log label")
+        case "window_control": String(localized: "Window Control", bundle: .module, comment: "Simulated command log label")
+        case "actuate_trunk": String(localized: "Actuate Trunk / Frunk", bundle: .module, comment: "Simulated command log label")
+        case "charge_port_door_open": String(localized: "Open Charge Port", bundle: .module, comment: "Simulated command log label")
+        case "charge_port_door_close": String(localized: "Close Charge Port", bundle: .module, comment: "Simulated command log label")
+        case "charge_start": String(localized: "Start Charging", bundle: .module, comment: "Simulated command log label")
+        case "charge_stop": String(localized: "Stop Charging", bundle: .module, comment: "Simulated command log label")
+        case "set_charge_limit": String(localized: "Set Charge Limit", bundle: .module, comment: "Simulated command log label")
+        case "set_charging_amps": String(localized: "Set Charging Amps", bundle: .module, comment: "Simulated command log label")
+        case "set_sentry_mode": String(localized: "Set Sentry Mode", bundle: .module, comment: "Simulated command log label")
+        case "flash_lights": String(localized: "Flash Lights", bundle: .module, comment: "Simulated command log label")
+        case "honk_horn": String(localized: "Honk Horn", bundle: .module, comment: "Simulated command log label")
+        case "navigation_request": String(localized: "Send Navigation Destination", bundle: .module, comment: "Simulated command log label")
+        case "software_install": String(localized: "Install Software Update", bundle: .module, comment: "Simulated command log label")
+        case "software_cancel": String(localized: "Cancel Software Update", bundle: .module, comment: "Simulated command log label")
         default: action
         }
     }

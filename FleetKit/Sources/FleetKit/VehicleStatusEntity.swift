@@ -200,36 +200,70 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         id.hasPrefix("status:") ? String(id.dropFirst("status:".count)) : id
     }
 
+    public var usesMetric: Bool {
+        if temperatureUnit == "°C" { return true }
+        if temperatureUnit == "°F" { return false }
+        return FleetKitFormatting.prefersMetric()
+    }
+
+    public static func localizedChargingState(_ state: String) -> String {
+        switch state.lowercased() {
+        case "charging":
+            String(localized: "Charging", bundle: .module, comment: "Vehicle charging state: actively charging.")
+        case "starting":
+            String(localized: "Starting", bundle: .module, comment: "Vehicle charging state: starting to charge.")
+        case "complete":
+            String(localized: "Complete", bundle: .module, comment: "Vehicle charging state: charging complete.")
+        case "stopped":
+            String(localized: "Stopped", bundle: .module, comment: "Vehicle charging state: plugged in but stopped.")
+        case "nopower":
+            String(localized: "No Power", bundle: .module, comment: "Vehicle charging state: plugged in with no power.")
+        case "disconnected":
+            String(localized: "Disconnected", bundle: .module, comment: "Vehicle charging state: unplugged.")
+        default:
+            state.capitalized
+        }
+    }
+
     public var batteryDisplay: String {
-        batteryPercent.map { "\($0)%" } ?? "unknown battery"
+        batteryPercent.map { FleetKitFormatting.percent($0) }
+            ?? String(localized: "unknown battery", bundle: .module, comment: "Fallback text when battery percentage is unavailable.")
     }
 
     public var odometerDisplay: String? {
-        odometerMiles.map { "\(Int($0.rounded())) mi" }
+        odometerMiles.map { FleetKitFormatting.distance(miles: $0, usesMetric: usesMetric, fractionLength: 0) }
     }
 
     public var statusSummary: String {
         var parts: [String] = []
-        parts.append("Battery \(batteryDisplay)")
+        parts.append(String(localized: "Battery \(batteryDisplay)", bundle: .module, comment: "Summary segment showing battery percentage."))
         if let chargingState, !chargingState.isEmpty {
-            parts.append(chargingState.capitalized)
+            parts.append(Self.localizedChargingState(chargingState))
         }
         if let isLocked {
-            parts.append(isLocked ? "Locked" : "Unlocked")
+            parts.append(
+                isLocked
+                    ? String(localized: "Locked", bundle: .module, comment: "Summary segment indicating vehicle doors are locked.")
+                    : String(localized: "Unlocked", bundle: .module, comment: "Summary segment indicating vehicle doors are unlocked.")
+            )
         }
         if let odometerDisplay {
-            parts.append("Odometer \(odometerDisplay)")
+            parts.append(String(localized: "Odometer \(odometerDisplay)", bundle: .module, comment: "Summary segment showing vehicle odometer reading."))
         }
         if let tireSummary {
-            parts.append("Tires \(tireSummary)")
+            parts.append(String(localized: "Tires \(tireSummary)", bundle: .module, comment: "Summary segment showing tire pressures."))
         }
         return parts.joined(separator: " • ")
     }
 
     public var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
-            title: "\(vehicleName) Status",
-            subtitle: "\(statusSummary)",
+            title: LocalizedStringResource(
+                "\(vehicleName) Status",
+                bundle: FleetKitLocalization.bundleDescription,
+                comment: "Display title for a vehicle status entity."
+            ),
+            subtitle: LocalizedStringResource(stringLiteral: statusSummary),
             synonyms: ["my car status", "car status", "my car", "my Tesla status"]
         )
     }
@@ -237,19 +271,45 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
         var descriptionParts = [statusSummary]
-        if let chargeLimitPercent { descriptionParts.append("Charge limit \(chargeLimitPercent)%") }
-        if let speedMPH { descriptionParts.append("Speed \(Int(speedMPH.rounded())) mph") }
-        let unit = temperatureUnit ?? "°"
-        if let batteryRangeMiles { descriptionParts.append("Range \(Int(batteryRangeMiles.rounded())) mi") }
-        if let insideTemp { descriptionParts.append("Cabin \(Int(insideTemp.rounded()))\(unit)") }
-        if let outsideTemp { descriptionParts.append("Outside \(Int(outsideTemp.rounded()))\(unit)") }
-        if let locationAddress { descriptionParts.append("Near \(locationAddress)") }
-        if let updatedAt { descriptionParts.append("Updated \(updatedAt.formatted(date: .abbreviated, time: .shortened))") }
+        if let chargeLimitPercent {
+            let percentText = FleetKitFormatting.percent(chargeLimitPercent)
+            descriptionParts.append(String(localized: "Charge limit \(percentText)", bundle: .module, comment: "Spotlight description segment for charge limit."))
+        }
+        if let speedMPH {
+            let speedText = FleetKitFormatting.speed(mph: speedMPH, usesMetric: usesMetric, fractionLength: 0)
+            descriptionParts.append(String(localized: "Speed \(speedText)", bundle: .module, comment: "Spotlight description segment for vehicle speed."))
+        }
+        let inFahrenheit = temperatureUnit != "°C"
+        if let batteryRangeMiles {
+            let rangeText = FleetKitFormatting.distance(miles: batteryRangeMiles, usesMetric: usesMetric, fractionLength: 0)
+            descriptionParts.append(String(localized: "Range \(rangeText)", bundle: .module, comment: "Spotlight description segment for estimated driving range."))
+        }
+        if let insideTemp {
+            let tempText = FleetKitFormatting.temperature(insideTemp, inFahrenheit: inFahrenheit, fractionLength: 0)
+            descriptionParts.append(String(localized: "Cabin \(tempText)", bundle: .module, comment: "Spotlight description segment for cabin temperature."))
+        }
+        if let outsideTemp {
+            let tempText = FleetKitFormatting.temperature(outsideTemp, inFahrenheit: inFahrenheit, fractionLength: 0)
+            descriptionParts.append(String(localized: "Outside \(tempText)", bundle: .module, comment: "Spotlight description segment for exterior temperature."))
+        }
+        if let locationAddress {
+            descriptionParts.append(String(localized: "Near \(locationAddress)", bundle: .module, comment: "Spotlight description segment for nearby address."))
+        }
+        if let updatedAt {
+            let timestamp = updatedAt.formatted(date: .abbreviated, time: .shortened)
+            descriptionParts.append(String(localized: "Updated \(timestamp)", bundle: .module, comment: "Spotlight description segment for last update timestamp."))
+        }
         let description = descriptionParts.joined(separator: ". ")
-        attributes.title = "\(vehicleName) Status"
-        attributes.displayName = "\(vehicleName) vehicle status"
-        attributes.alternateNames = ["My Car", "My Car Status", "Car Climate", "\(vehicleName) Status"]
-        attributes.kind = "Tesla Vehicle Status"
+        let statusTitle = String(localized: "\(vehicleName) Status", bundle: .module, comment: "Spotlight item title for a vehicle's status.")
+        attributes.title = statusTitle
+        attributes.displayName = String(localized: "\(vehicleName) vehicle status", bundle: .module, comment: "Spotlight display name for a vehicle's status.")
+        attributes.alternateNames = [
+            String(localized: "My Car", bundle: .module, comment: "Spotlight alternate name for the user's car."),
+            String(localized: "My Car Status", bundle: .module, comment: "Spotlight alternate name for the user's car status."),
+            String(localized: "Car Climate", bundle: .module, comment: "Spotlight alternate name for car climate status."),
+            statusTitle
+        ]
+        attributes.kind = String(localized: "Tesla Vehicle Status", bundle: .module, comment: "Spotlight item kind for a Tesla vehicle status snapshot.")
         attributes.contentDescription = description
         attributes.textContent = description
         attributes.keywords = [
@@ -258,13 +318,14 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             "lock", "lock my car", "unlock", "unlock my car", "locked", "unlocked", "mileage", "odometer", "miles",
             "tire", "tires", "tire pressure", "PSI",
             "climate", "warm up", "warm up my car", "cool down", "cool down my car", "precondition", "defrost",
-            "heat", "AC", "cabin", "temperature", "location"
+            "heat", "AC", "cabin", "temperature", "location",
+            "coche", "mi coche", "carro", "vehículo", "vehiculo", "estado", "batería", "bateria", "autonomía", "autonomia", "carga", "clima", "ubicación", "ubicacion"
         ]
         if let latitude, let longitude {
             attributes.latitude = NSNumber(value: latitude)
             attributes.longitude = NSNumber(value: longitude)
             attributes.supportsNavigation = NSNumber(value: true)
-            attributes.namedLocation = "\(vehicleName) location"
+            attributes.namedLocation = String(localized: "\(vehicleName) location", bundle: .module, comment: "Spotlight location name for a vehicle.")
         }
         return attributes
     }
@@ -301,7 +362,10 @@ public struct VehicleStatusEntityQuery: EntityQuery, EntityStringQuery, IndexedE
             let namedMatches = vehicles.filter { $0.name.localizedStandardContains(trimmed) }
             if !namedMatches.isEmpty {
                 vehicles = namedMatches
-            } else if !["car", "vehicle", "tesla", "status", "climate", "cabin", "battery", "warm", "cool"].contains(where: { trimmed.contains($0) }) {
+            } else if ![
+                "car", "vehicle", "tesla", "status", "climate", "cabin", "battery", "warm", "cool",
+                "coche", "carro", "vehículo", "vehiculo", "estado", "clima", "cabina", "batería", "bateria", "calentar", "enfriar"
+            ].contains(where: { trimmed.contains($0) }) {
                 return []
             }
         }
@@ -336,14 +400,16 @@ extension VehicleStatusEntity: Transferable {
     public var transferSummary: String {
         var parts = ["\(vehicleName): \(statusSummary)"]
         if let batteryRangeMiles {
-            parts.append("Range \(Int(batteryRangeMiles.rounded())) mi")
+            let rangeText = FleetKitFormatting.distance(miles: batteryRangeMiles, usesMetric: usesMetric, fractionLength: 0)
+            parts.append(String(localized: "Range \(rangeText)", bundle: .module, comment: "Shared text segment showing estimated range."))
         }
-        let unit = temperatureUnit ?? "°"
+        let inFahrenheit = temperatureUnit != "°C"
         if let insideTemp {
-            parts.append("Cabin \(Int(insideTemp.rounded()))\(unit)")
+            let tempText = FleetKitFormatting.temperature(insideTemp, inFahrenheit: inFahrenheit, fractionLength: 0)
+            parts.append(String(localized: "Cabin \(tempText)", bundle: .module, comment: "Shared text segment showing cabin temperature."))
         }
         if let locationAddress, !locationAddress.isEmpty {
-            parts.append("Location: \(locationAddress)")
+            parts.append(String(localized: "Location: \(locationAddress)", bundle: .module, comment: "Shared text segment showing vehicle address."))
         }
         return parts.joined(separator: " • ")
     }

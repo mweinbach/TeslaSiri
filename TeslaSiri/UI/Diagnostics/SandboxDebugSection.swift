@@ -71,11 +71,11 @@ struct SandboxDebugSection: View {
     private var badgeText: String {
         switch mode {
         case .live:
-            "Live"
+            String(localized: "Live", comment: "Sandbox mode badge: connected to live vehicle")
         case .dryRun:
-            "Dry-Run"
+            String(localized: "Dry-Run", comment: "Sandbox mode badge: dry-run simulation")
         case .demoVehicle:
-            "Demo Car"
+            String(localized: "Demo Car", comment: "Sandbox mode badge: simulated demo vehicle")
         }
     }
 
@@ -103,7 +103,7 @@ struct SandboxDebugSection: View {
 
     private var demoScenarioControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DiagnosticGroupHeader("Demo car scenario")
+            DiagnosticGroupHeader(String(localized: "Demo car scenario", comment: "Section header for selecting a simulated demo vehicle scenario"))
 
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
@@ -134,7 +134,10 @@ struct SandboxDebugSection: View {
                 )
                 SandboxStateSummaryRow(
                     label: "Battery",
-                    value: "\(Int(demoState.batteryLevel.rounded()))% · \(Int(demoState.chargeLimitSOC.rounded()))% limit · \(demoState.chargingState)"
+                    value: String(
+                        localized: "\(formattedPercent(demoState.batteryLevel)) · \(formattedPercent(demoState.chargeLimitSOC)) limit · \(humanizedStatus(demoState.chargingState))",
+                        comment: "Demo car battery summary showing charge level, charge limit, and charging state"
+                    )
                 )
                 if let destination = demoState.lastNavigationDestination, !destination.isEmpty {
                     SandboxStateSummaryRow(
@@ -174,34 +177,44 @@ struct SandboxDebugSection: View {
     }
 
     private var demoClimateSummary: String {
+        let target = formattedTemperature(demoState.targetTempF, inFahrenheit: true)
+        let inside = formattedTemperature(demoState.insideTempF, inFahrenheit: true)
+        let outside = formattedTemperature(demoState.outsideTempF, inFahrenheit: true)
         var parts = [
-            demoState.hvacOn ? "On" : "Off",
-            "Target \(Int(demoState.targetTempF.rounded()))°F",
-            "In \(Int(demoState.insideTempF.rounded()))°F / Out \(Int(demoState.outsideTempF.rounded()))°F"
+            demoState.hvacOn
+                ? String(localized: "On", comment: "Climate status in demo car summary: on")
+                : String(localized: "Off", comment: "Climate status in demo car summary: off"),
+            String(localized: "Target \(target)", comment: "Demo car target cabin temperature"),
+            String(localized: "In \(inside) / Out \(outside)", comment: "Demo car inside and outside temperatures")
         ]
         if demoState.defrostOn {
-            parts.append("Defrost")
+            parts.append(String(localized: "Defrost", comment: "Demo car climate feature: max defrost"))
         }
         if demoState.steeringWheelHeaterOn {
-            parts.append("Wheel heat")
+            parts.append(String(localized: "Wheel heat", comment: "Demo car climate feature: heated steering wheel"))
         }
         if let driverHeat = demoState.seatHeaterLevels["Driver"], driverHeat > 0 {
-            parts.append("Driver seat \(driverHeat)")
+            parts.append(String(localized: "Driver seat \(driverHeat)", comment: "Demo car driver seat heater level"))
         }
         if demoState.petModeOn {
-            parts.append("Dog Mode")
+            parts.append(String(localized: "Dog Mode", comment: "Tesla Dog Mode climate feature"))
         }
         return parts.joined(separator: " · ")
     }
 
     private var demoSecuritySummary: String {
         var parts = [
-            demoState.locked ? "Locked" : "Unlocked",
-            demoState.sentryModeOn ? "Sentry On" : "Sentry Off"
+            demoState.locked
+                ? String(localized: "Locked", comment: "Demo car security summary: locked")
+                : String(localized: "Unlocked", comment: "Demo car security summary: unlocked"),
+            demoState.sentryModeOn
+                ? String(localized: "Sentry On", comment: "Demo car security summary: Sentry Mode enabled")
+                : String(localized: "Sentry Off", comment: "Demo car security summary: Sentry Mode disabled")
         ]
         let closures = demoState.openClosureNames
         if !closures.isEmpty {
-            parts.append("Open: \(closures.joined(separator: ", "))")
+            let list = closures.formatted(.list(type: .and))
+            parts.append(String(localized: "Open: \(list)", comment: "Demo car security summary list of open doors, windows, or trunks"))
         }
         return parts.joined(separator: " · ")
     }
@@ -209,7 +222,7 @@ struct SandboxDebugSection: View {
     private func verificationSection(_ runner: DemoSiriVerificationRunner) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
-                DiagnosticGroupHeader("Siri skills & tools check")
+                DiagnosticGroupHeader(String(localized: "Siri skills & tools check", comment: "Section header for running end-to-end Siri tool verification on the demo car"))
                 Spacer()
                 if runner.isRunning {
                     ProgressView()
@@ -231,7 +244,7 @@ struct SandboxDebugSection: View {
             } else {
                 HStack(spacing: 8) {
                     StatusBadge(
-                        "\(runner.passedCount)/\(runner.results.count) passed",
+                        String(localized: "\(runner.passedCount)/\(runner.results.count) passed", comment: "Siri verification badge showing passed checks out of total checks"),
                         systemImage: runner.failedCount == 0 ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
                         tint: runner.failedCount == 0 ? .green : .red
                     )
@@ -257,7 +270,7 @@ struct SandboxDebugSection: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 4)
-                            Text("\(step.durationMS)ms")
+                            Text(Duration.milliseconds(step.durationMS).formatted(.units(allowed: [.milliseconds], width: .narrow)))
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
@@ -272,7 +285,7 @@ struct SandboxDebugSection: View {
     private var simulatedCommandLogSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                DiagnosticGroupHeader("Intercepted commands (\(commandLog.count))")
+                DiagnosticGroupHeader(String(localized: "Intercepted commands (\(commandLog.count))", comment: "Section header for intercepted simulated commands with count"))
                 Spacer()
                 Button("Refresh", systemImage: "arrow.clockwise") {
                     onRefreshLog()
@@ -308,7 +321,7 @@ struct SandboxDebugSection: View {
 }
 
 private struct SandboxStateSummaryRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
 
     var body: some View {
@@ -338,13 +351,20 @@ private struct SandboxStateSummaryRow: View {
 private struct SimulatedCommandRow: View {
     let entry: FleetSimulatedCommandEntry
 
+    private var localizedSource: String {
+        if entry.source == "App" {
+            return String(localized: "App", comment: "Command log source badge for actions triggered from inside the app")
+        }
+        return entry.source
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(entry.humanizedAction)
                     .font(.subheadline.weight(.semibold))
                 Spacer(minLength: 6)
-                Text(entry.source)
+                Text(localizedSource)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(entry.source == "Siri" ? .blue : .secondary)
                     .padding(.horizontal, 6)

@@ -20,7 +20,9 @@ struct ProviderSettingsView: View {
                 Section("Sandbox") {
                     LabeledContent("Mode") {
                         StatusBadge(
-                            sandboxMode == .dryRun ? "Dry-Run" : "Demo Car",
+                            sandboxMode == .dryRun
+                                ? LocalizedStringKey("Dry-Run")
+                                : LocalizedStringKey("Demo Car"),
                             systemImage: sandboxMode == .dryRun ? "shield.lefthalf.filled" : "sparkles",
                             tint: sandboxMode == .dryRun ? AppTheme.alertAmber : AppTheme.accent
                         )
@@ -63,7 +65,7 @@ struct ProviderSettingsView: View {
                     }
 
                     if vehicleCount > 0 {
-                        LabeledContent("Linked Vehicles", value: "\(vehicleCount)")
+                        LabeledContent("Linked Vehicles", value: vehicleCount.formatted())
                             .monospacedDigit()
                     }
 

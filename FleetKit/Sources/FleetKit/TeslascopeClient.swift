@@ -41,7 +41,7 @@ public struct TeslascopeClient: Sendable {
         let entries = try await roster.load(requiring: vin, fetch: fetchRoster)
         try validateRequest()
         guard let entry = entries.first(where: { $0.vehicle.vin == vin }) else {
-            throw FleetKitError.api("This vehicle is unavailable on the selected Teslascope account.")
+            throw FleetKitError.api(String(localized: "This vehicle is unavailable on the selected Teslascope account.", bundle: .module, comment: "Error when a requested VIN is missing from the Teslascope account"))
         }
         return entry
     }
@@ -76,13 +76,13 @@ public struct TeslascopeClient: Sendable {
                     )
                 }
                 guard record.publicID == vehicle.publicID, var entry = record.entry else {
-                    throw FleetKitError.api("Teslascope did not return a matching vehicle VIN and public ID.")
+                    throw FleetKitError.api(String(localized: "Teslascope did not return a matching vehicle VIN and public ID.", bundle: .module, comment: "Error when Teslascope returns inconsistent vehicle identity fields"))
                 }
                 entry.vehicle.allowsVehicleCommands = account.vehicleCommands
                 entry.vehicle.allowsChargingCommands = account.chargingCommands
                 if let index = entries.firstIndex(where: { $0.publicID == entry.publicID || $0.vehicle.vin == entry.vehicle.vin }) {
                     guard entries[index].publicID == entry.publicID, entries[index].vehicle.vin == entry.vehicle.vin else {
-                        throw FleetKitError.api("Teslascope returned conflicting identifiers for a vehicle.")
+                        throw FleetKitError.api(String(localized: "Teslascope returned conflicting identifiers for a vehicle.", bundle: .module, comment: "Error when Teslascope returns conflicting vehicle VIN and public ID"))
                     }
                     // Vehicle URLs can't select which linked account executes a command.
                     if account.vehicleCommands == false { entries[index].vehicle.allowsVehicleCommands = false }
@@ -145,7 +145,7 @@ public struct TeslascopeClient: Sendable {
             throw FleetKitError.sessionExpired
         }
         guard (200..<300).contains(status) else {
-            throw FleetKitError.api(header?.message ?? "Teslascope returned HTTP \(status).")
+            throw FleetKitError.api(header?.message ?? String(localized: "Teslascope returned HTTP \(status).", bundle: .module, comment: "Fallback HTTP error message from Teslascope"))
         }
         return data
     }
