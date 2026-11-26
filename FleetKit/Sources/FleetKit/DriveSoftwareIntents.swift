@@ -2,13 +2,14 @@ import AppIntents
 import SwiftUI
 
 /// Returns a list of recent drives.
-/// Shortcuts only. Siri uses the Find Tesla Drives tool for drive lists.
+/// Shortcuts only. Siri uses the Find Drives tool for drive lists.
 public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Recent Drives"
     public static let description = IntentDescription(
-        "Lists the most recent completed drives for a Tesla vehicle, including start/end addresses, distance in miles, duration in minutes, average and max speed, and energy consumed in kWh. To filter drives by place, date, or distance, use Find Tesla Drives."
+        "Lists the most recent completed drives for a Tesla vehicle, including start/end addresses, distance in miles, duration in minutes, average and max speed, and energy consumed in kWh. To filter drives by place, date, or distance, use Find Drives."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -70,14 +71,15 @@ public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// Shows the most recent drive with a snippet. Shortcuts and App Shortcuts only;
-/// Siri uses the Get Tesla Drive Details tool, which defaults to the latest drive.
+/// Shows the most recent drive with a snippet. Shortcuts only;
+/// Siri uses the Get Drive Details tool, which defaults to the latest drive.
 public struct GetLastDriveIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Last Drive"
     public static let description = IntentDescription(
         "Fetches the single most recent completed drive for a Tesla vehicle, returning its distance, duration, route addresses, speed, energy used, and a rich visual summary."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -134,13 +136,14 @@ public struct GetLastDriveIntent: AppIntent, PredictableIntent {
 /// Shows the software update status with a snippet. Doubles as the
 /// "check install status" intent (reports download/install progress).
 @AppIntent(.tool)
-public struct GetSoftwareStatusIntent: AppIntent, PredictableIntent, SnippetIntent {
-    public static let title: LocalizedStringResource = "Check Tesla Software Update"
+public struct GetSoftwareStatusIntent: AppIntent, PredictableIntent {
+    public static let title: LocalizedStringResource = "Check Software Update"
     public static let description = IntentDescription(
-        "Checks whether the car's Tesla firmware has a software update (read-only): the installed version, any newer version, and whether it's downloading (with progress), ready to install, scheduled, or installing, plus how long the install takes. To hear what's new, use the Read Tesla Release Notes tool. To install, use the Install Tesla Software Update tool.",
-        searchKeywords: ["firmware", "update", "new version", "software version", "is there an update"]
+        "Checks whether the car's Tesla firmware has a software update (read-only): the installed version, any newer version, and whether it's downloading (with progress), ready to install, scheduled, or installing, plus how long the install takes. To hear what's new, use the Read Release Notes tool. To install, use the Install Software Update tool.",
+        searchKeywords: ["Tesla", "firmware", "update", "new version", "software version", "is there an update"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

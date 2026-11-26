@@ -139,7 +139,8 @@ Siri, Shortcuts, Spotlight, and background intent execution live in a **local Sw
 | Intent metadata helpers | `FleetKit/Sources/FleetKit/FleetIntentMetadata.swift` | Vehicle prediction titles, `SelectedVehicleOptionsProvider` |
 | App bridge | `TeslaSiri/AppIntents/` | Token mirroring, `AppShortcutsProvider`, `BGAppRefreshTask` battery check + notification entity grounding |
 | Extension host | `TeslaSiriAppIntents/` | `@main AppIntentsExtension` + `AppIntentsPackage` re-exporting `FleetKitPackage` |
-| Entitlements | `TeslaSiri/TeslaSiri.entitlements`, `TeslaSiriAppIntents/TeslaSiriAppIntents.entitlements` | Shared App Group + matching `keychain-access-groups` |
+| SiriKit Car Commands + Maps EV routing | `FleetKit/Sources/FleetKit/SiriCarCommands.swift`, `TeslaSiriCarIntents/`, `TeslaSiri/AppIntents/SiriCarCommandsSetup.swift` | `SiriCarCommandService` (car-name matching, lock/unlock, lock status, power level, honk/flash, Maps car list as plain values); the `TeslaSiriCarIntents` Intents extension maps them to `IN*` responses; the app registers car names and asks for Siri permission |
+| Entitlements | `TeslaSiri/TeslaSiri.entitlements`, `TeslaSiriAppIntents/TeslaSiriAppIntents.entitlements`, `TeslaSiriCarIntents/TeslaSiriCarIntents.entitlements` | Shared App Group + matching `keychain-access-groups`; the app also has `com.apple.developer.siri` |
 
 Both **TeslaSiri** and **TeslaSiriAppIntents** targets link the local `FleetKit` package in `project.xcproj` with `IPHONEOS_DEPLOYMENT_TARGET = 27.3`. New Swift files under `FleetKit/Sources/FleetKit/` are picked up by the package automatically; do not duplicate intent types under `TeslaSiri/`.
 
@@ -269,8 +270,19 @@ Control, analytics & workflow intent files in `FleetKit/Sources/FleetKit/`:
 ### Extension and entitlements
 
 - `TeslaSiriAppIntentsExtension` stays minimal: `@main` + `AppIntentsPackage` including `FleetKitPackage.self`.
-- App Group: `group.com.maxweinbach.TeslaSiri` on **both** targets.
-- Keychain group: `$(AppIdentifierPrefix)group.com.maxweinbach.TeslaSiri` on **both** targets.
+- App Group: `group.com.maxweinbach.TeslaSiri` on the app and every extension.
+- Keychain group: `$(AppIdentifierPrefix)group.com.maxweinbach.TeslaSiri` on the app and every extension.
+
+### SiriKit Car Commands and Maps EV routing
+
+- `TeslaSiriCarIntents` (bundle ID `com.maxweinbach.TeslaSiri.CarIntents`, `com.apple.intents-service`, embedded in PlugIns) handles Apple's built-in car requests: `INSetCarLockStatusIntent` ("Lock/unlock my car"), `INGetCarLockStatusIntent` ("Is my car locked?"), `INGetCarPowerLevelStatusIntent` ("How much charge does my car have?", also polled by Maps), `INActivateCarSignalIntent` ("Honk my horn", "Flash my lights"), and `INListCarsIntent` (Maps EV routing). Siri matches these without the app name. They are SiriKit, not App Intents, so they don't count toward the 18 Siri AI tools or the 10 App Shortcuts.
+- The extension is a thin `INExtension` (`CarIntentHandler.swift`). Logic lives in FleetKit's `SiriCarCommandService` so it is unit tested on macOS (`SiriCarCommandsTests`); car intents are unavailable on macOS, so keep `Intents` imports out of FleetKit.
+- Car names: Siri's `carName` is matched against the roster by VIN (`vocabularyIdentifier`, set during resolution), exact name, partial name, or model ("Model Y"). Generic names ("my car", "Tesla") use the selected car; duplicates ask for disambiguation. The app registers visible car names with `INVocabulary` `.carName` from `FleetTokenBridge.sync` and clears them on sign-out.
+- Lock, unlock, honk and flash use `runControl(…, allowAsyncWake: true)`: a sleeping car returns `.inProgress` instead of making Siri wait for the wake. Unlock is in `IntentsRestrictedWhileLocked`; Apple also requires an unlocked iPhone for both lock and unlock.
+- Missing or rejected credentials return `.failureRequiringAppLaunch`; other errors return `.failure`.
+- SiriKit needs Siri permission. `AppIntentDiscoveryCard` shows **Allow Siri Car Commands** while the status is not determined and a Settings link if denied. `NSSiriUsageDescription` is set on the app target.
+- Maps EV routing only plans charging stops with Apple's charging and consumption models (`chargingFormulaArguments` / `consumptionFormulaArguments`), which Apple provides to automaker partners. The extension reports the car list, charge, range and charging state but no formula arguments, battery capacity, connector power or live `startSendingUpdates` updates. Charging inlets come from the device region (NACS in North America, Japan, Korea, Taiwan; GB/T in China; CCS2/Type 2 elsewhere) because the roster doesn't report them.
+- SiriKit car commands only work on a device with a signed build; adding the Siri capability required `bitrig build --provision` to register it and the new extension ID with Apple.
 - Do not mirror refresh tokens or full token sets to the extension — access token only.
 
 ### Background work

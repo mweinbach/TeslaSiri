@@ -276,19 +276,15 @@ public struct DriveSnippetView: View {
                         }
                     }
 
-                    GeometryReader { geo in
-                        let startFrac = CGFloat(min(max(startSOC, 0), 100)) / 100.0
-                        let endFrac = CGFloat(min(max(endSOC, 0), 100)) / 100.0
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(.quaternary)
-                            Capsule()
-                                .fill(.orange.opacity(0.45))
-                                .frame(width: geo.size.width * max(startFrac, endFrac))
-                            Capsule()
-                                .fill(.green.gradient)
-                                .frame(width: geo.size.width * min(startFrac, endFrac))
-                        }
+                    let startFrac = Double(min(max(startSOC, 0), 100)) / 100.0
+                    let endFrac = Double(min(max(endSOC, 0), 100)) / 100.0
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(.quaternary)
+                        FractionalCapsuleBar(fraction: max(startFrac, endFrac), minimumWidth: 4)
+                            .fill(.orange.opacity(0.45))
+                        FractionalCapsuleBar(fraction: min(startFrac, endFrac), minimumWidth: 4)
+                            .fill(.green.gradient)
                     }
                     .frame(height: 6)
                 }

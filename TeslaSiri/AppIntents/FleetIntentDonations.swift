@@ -106,17 +106,13 @@ enum FleetIntentDonations {
     }
 
     static func syncCarSuggestions(for vehicle: FleetVehicle?) async {
-        let suggestions = CarSiriVoicePhrase.allCases.map { $0.makeShortcut(for: vehicle) }
-        INVoiceShortcutCenter.shared.setShortcutSuggestions(suggestions)
+        // Clear any legacy auto-suggested NSUserActivity shortcuts so they don't compete
+        // with iOS 27.3 Siri AI `@AppIntent(.tool)` routing. Users can still manually pin
+        // 1-tap voice phrases via `AppIntentDiscoveryCard`.
+        INVoiceShortcutCenter.shared.setShortcutSuggestions([])
 
         guard let vehicleEntity = VehicleEntity(vehicle: vehicle) else { return }
 
-        let revision = FleetSharedTokenStore.shared.sessionRevision
-        let climateIntent = StartClimateIntent()
-        climateIntent.vehicle = vehicleEntity
-        await donate(climateIntent, label: "car climate capability cue")
-
-        guard FleetSharedTokenStore.shared.sessionRevision == revision else { return }
         let statusIntent = GetVehicleStatusIntent()
         statusIntent.vehicle = vehicleEntity
         await donate(statusIntent, label: "car status capability cue")

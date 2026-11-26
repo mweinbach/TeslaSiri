@@ -7,12 +7,13 @@ import SwiftUI
 /// speed, Autopilot miles, and temperature breakdown.
 @AppIntent(.tool)
 public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Drive Details"
+    public static let title: LocalizedStringResource = "Get Drive Details"
     public static let description = IntentDescription(
-        "Gets everything recorded about one past drive: where it started and ended, when, how long and how far, battery at the start and end, energy used, efficiency, average and top speed, Autopilot miles, and temperatures. Leave the drive empty for the most recent drive, such as \"how was my last drive?\".",
-        searchKeywords: ["last drive", "trip details", "how far did I drive", "efficiency", "Wh/mi"]
+        "Gets everything recorded about one past Tesla drive: where it started and ended, when, how long and how far, battery at the start and end, energy used, efficiency, average and top speed, Autopilot miles, and temperatures. Leave the drive empty for the most recent drive, such as \"how was my last drive?\".",
+        searchKeywords: ["Tesla", "last drive", "trip details", "how far did I drive", "efficiency", "Wh/mi"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -25,7 +26,7 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
 
     @Parameter(
         title: "Drive",
-        description: "The drive to describe, such as one the user is looking at or one found with Find Tesla Drives. Leave empty for the most recent drive.",
+        description: "The drive to describe, such as one the user is looking at or one found with Find Drives. Leave empty for the most recent drive.",
         requestValueDialog: IntentDialog("Which drive would you like details for?")
     )
     public var drive: DriveEntity?
@@ -96,12 +97,13 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
 /// and since-last-charge consumption for a selectable time window.
 @AppIntent(.tool)
 public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Driving Stats"
+    public static let title: LocalizedStringResource = "Get Driving Stats"
     public static let description = IntentDescription(
-        "Summarizes road trips and driving efficiency: trip count, total miles, time behind the wheel, Wh/mi and mi/kWh efficiency, Autopilot distance, top speed, and parked energy drain.",
-        searchKeywords: ["driving stats", "efficiency", "Wh/mi", "miles driven", "Autopilot miles", "how much did I drive"]
+        "Summarizes Tesla road trips and driving efficiency: trip count, total miles, time behind the wheel, Wh/mi and mi/kWh efficiency, Autopilot distance, top speed, and parked energy drain.",
+        searchKeywords: ["Tesla", "driving stats", "efficiency", "Wh/mi", "miles driven", "Autopilot miles", "how much did I drive"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -195,12 +197,13 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
 /// and total charging cost over a selectable period.
 @AppIntent(.tool)
 public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Charging Stats"
+    public static let title: LocalizedStringResource = "Get Charging Stats"
     public static let description = IntentDescription(
-        "Summarizes plug-in electricity totals and costs: Supercharger versus home AC sessions, kWh added, range gained, recorded spend, and average price per kWh.",
-        searchKeywords: ["charging stats", "charging cost", "how much did I spend charging", "Supercharger spending", "kWh added"]
+        "Summarizes Tesla plug-in electricity totals and costs: Supercharger versus home AC sessions, kWh added, range gained, recorded spend, and average price per kWh.",
+        searchKeywords: ["Tesla", "charging stats", "charging cost", "how much did I spend charging", "Supercharger spending", "kWh added"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -278,12 +281,13 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
 /// or charges at a specific location).
 @AppIntent(.tool)
 public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Charging History"
+    public static let title: LocalizedStringResource = "Get Charging History"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Tesla Charge Details tool; for totals, the Get Tesla Charging Stats tool.",
-        searchKeywords: ["charges", "charging sessions", "Supercharger stops", "home charging", "charging log"]
+        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.",
+        searchKeywords: ["Tesla", "charges", "charging sessions", "Supercharger stops", "home charging", "charging log"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -415,12 +419,13 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
 /// estimated 100% range, lifetime energy used, phantom drain, and pack voltage/temp.
 @AppIntent(.tool)
 public struct GetBatteryHealthIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Battery Health & Stats"
+    public static let title: LocalizedStringResource = "Get Battery Health & Stats"
     public static let description = IntentDescription(
         "Reads a Tesla vehicle's battery health percentage, estimated degradation percentage, current usable capacity vs original new-pack capacity in kWh, estimated full-charge range at 100%, current energy remaining in kWh, lifetime energy used, phantom drain percentage, and pack voltage and module temperatures.",
-        searchKeywords: ["battery health", "battery degradation", "battery capacity", "phantom drain", "pack health", "full charge range"]
+        searchKeywords: ["Tesla", "battery health", "battery degradation", "battery capacity", "phantom drain", "pack health", "full charge range"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

@@ -21,7 +21,7 @@ public struct VehicleStatusSnippetView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             headerRow
             if !topics.isDisjoint(with: [.battery, .range, .charging]) {
                 batteryCard
@@ -39,7 +39,7 @@ public struct VehicleStatusSnippetView: View {
                 quickControlsRow
             }
         }
-        .padding(14)
+        .padding(12)
         .appEntityIdentifier(EntityIdentifier(for: VehicleStatusEntity.self, identifier: status.id))
     }
 
@@ -75,7 +75,7 @@ public struct VehicleStatusSnippetView: View {
     }
 
     private var batteryCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: batterySymbol)
                     .font(.title3.weight(.semibold))
@@ -87,7 +87,7 @@ public struct VehicleStatusSnippetView: View {
                         .monospacedDigit()
                 } else {
                     Text(status.batteryDisplay)
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
                         .monospacedDigit()
                 }
 
@@ -106,31 +106,25 @@ public struct VehicleStatusSnippetView: View {
             }
 
             if let pct = status.batteryPercent {
-                GeometryReader { proxy in
-                    let width = max(proxy.size.width, 1)
-                    let clampedPct = min(max(Double(pct) / 100.0, 0), 1)
-                    let limitFraction = min(max(Double(status.chargeLimitPercent ?? 80) / 100.0, 0), 1)
+                let clampedPct = min(max(Double(pct) / 100.0, 0), 1)
+                let limitFraction = min(max(Double(status.chargeLimitPercent ?? 80) / 100.0, 0), 1)
 
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(.quaternary)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.quaternary)
 
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [batteryColor.opacity(0.85), batteryColor],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                    FractionalCapsuleBar(fraction: clampedPct, minimumWidth: 8)
+                        .fill(
+                            LinearGradient(
+                                colors: [batteryColor.opacity(0.85), batteryColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                            .frame(width: max(width * clampedPct, 8))
+                        )
 
-                        if status.chargeLimitPercent != nil {
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(.primary.opacity(0.75))
-                                .frame(width: 2.5, height: 14)
-                                .offset(x: min(max(width * limitFraction - 1.25, 0), width - 2.5))
-                        }
+                    if status.chargeLimitPercent != nil {
+                        FractionalTickMark(fraction: limitFraction, tickWidth: 2.5, tickHeight: 14)
+                            .fill(.primary.opacity(0.75))
                     }
                 }
                 .frame(height: 10)
@@ -154,7 +148,7 @@ public struct VehicleStatusSnippetView: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
-        .padding(11)
+        .padding(10)
         .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
@@ -184,7 +178,7 @@ public struct VehicleStatusSnippetView: View {
                         SiriVectorRouteFallbackView(points: fallbackPinPoints)
                     }
                 }
-                .frame(height: 112)
+                .frame(height: 96)
                 .frame(maxWidth: .infinity)
                 .clipped()
 
@@ -686,4 +680,89 @@ public struct ClimateControlSnippetView: View {
         return items
     }
 }
+
+// MARK: - Snippet Layout Helpers (GeometryReader-Free)
+
+/// Proportional capsule segment drawn purely via `Shape` so Siri snippets and static
+/// `CardSnippet` views size cleanly without `GeometryReader`.
+struct FractionalCapsuleBar: Shape {
+    let startFraction: Double
+    let endFraction: Double
+    let minimumWidth: CGFloat
+    let leadingGap: CGFloat
+    let trailingGap: CGFloat
+
+    init(
+        fraction: Double,
+        minimumWidth: CGFloat = 8,
+        leadingGap: CGFloat = 0,
+        trailingGap: CGFloat = 0
+    ) {
+        self.startFraction = 0
+        self.endFraction = min(max(fraction, 0), 1)
+        self.minimumWidth = minimumWidth
+        self.leadingGap = leadingGap
+        self.trailingGap = trailingGap
+    }
+
+    init(
+        startFraction: Double,
+        endFraction: Double,
+        minimumWidth: CGFloat = 6,
+        leadingGap: CGFloat = 0,
+        trailingGap: CGFloat = 0
+    ) {
+        self.startFraction = min(max(startFraction, 0), 1)
+        self.endFraction = min(max(endFraction, 0), 1)
+        self.minimumWidth = minimumWidth
+        self.leadingGap = leadingGap
+        self.trailingGap = trailingGap
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard rect.width > 0, rect.height > 0 else { return Path() }
+        let lo = min(startFraction, endFraction)
+        let hi = max(startFraction, endFraction)
+        guard hi > lo else { return Path() }
+        let x = min(rect.minX + rect.width * lo + leadingGap, rect.maxX)
+        let rawEnd = max(rect.minX + rect.width * hi - trailingGap, x)
+        let maxAvailable = max(rect.maxX - x - trailingGap, 0)
+        let width = min(max(rawEnd - x, minimumWidth), maxAvailable)
+        guard width > 0 else { return Path() }
+        return Capsule().path(in: CGRect(x: x, y: rect.minY, width: width, height: rect.height))
+    }
+}
+
+/// Vertical tick mark positioned proportionally across a gauge bar without `GeometryReader`.
+struct FractionalTickMark: Shape {
+    let fraction: Double
+    let tickWidth: CGFloat
+    let tickHeight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        guard rect.width > 0 else { return Path() }
+        let clamped = min(max(fraction, 0), 1)
+        let x = min(max(rect.minX + rect.width * clamped - tickWidth / 2, rect.minX), rect.maxX - tickWidth)
+        let y = rect.midY - tickHeight / 2
+        return RoundedRectangle(cornerRadius: tickWidth / 2).path(
+            in: CGRect(x: x, y: y, width: tickWidth, height: tickHeight)
+        )
+    }
+}
+
+/// Conditionally attaches `.appEntityIdentifier` so shared snippet views can omit it
+/// when rendered inside purely static `CardSnippet` contexts.
+struct OptionalEntityIdentifierModifier: ViewModifier {
+    let identifier: EntityIdentifier?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.appEntityIdentifier(identifier)
+        } else {
+            content
+        }
+    }
+}
+
 

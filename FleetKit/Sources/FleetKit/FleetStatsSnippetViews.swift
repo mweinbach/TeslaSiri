@@ -3,12 +3,21 @@ import SwiftUI
 
 public struct DrivingStatsSnippetView: View {
     public let stats: DrivingStatsEntity
+    public let includeEntityIdentifier: Bool
 
-    public init(stats: DrivingStatsEntity) {
+    public init(stats: DrivingStatsEntity, includeEntityIdentifier: Bool = true) {
         self.stats = stats
+        self.includeEntityIdentifier = includeEntityIdentifier
     }
 
     public var body: some View {
+        content
+            .modifier(OptionalEntityIdentifierModifier(
+                identifier: includeEntityIdentifier ? EntityIdentifier(for: VehicleEntity.self, identifier: stats.vin) : nil
+            ))
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Label(stats.vehicleName, systemImage: "road.lanes")
@@ -43,13 +52,10 @@ public struct DrivingStatsSnippetView: View {
                             .font(.caption2.weight(.semibold))
                             .monospacedDigit()
                     }
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.quaternary)
-                            Capsule()
-                                .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
-                                .frame(width: max(proxy.size.width * share, 8))
-                        }
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        FractionalCapsuleBar(fraction: share, minimumWidth: 8)
+                            .fill(LinearGradient(colors: [.blue, .cyan], startPoint: .leading, endPoint: .trailing))
                     }
                     .frame(height: 7)
                 }
@@ -76,7 +82,6 @@ public struct DrivingStatsSnippetView: View {
             }
         }
         .padding(14)
-        .appEntityIdentifier(EntityIdentifier(for: VehicleEntity.self, identifier: stats.vin))
     }
 
     private func statPill(icon: String, label: String, value: String) -> some View {
@@ -108,12 +113,21 @@ public struct DrivingStatsSnippetView: View {
 
 public struct ChargingStatsSnippetView: View {
     public let stats: ChargingStatsEntity
+    public let includeEntityIdentifier: Bool
 
-    public init(stats: ChargingStatsEntity) {
+    public init(stats: ChargingStatsEntity, includeEntityIdentifier: Bool = true) {
         self.stats = stats
+        self.includeEntityIdentifier = includeEntityIdentifier
     }
 
     public var body: some View {
+        content
+            .modifier(OptionalEntityIdentifierModifier(
+                identifier: includeEntityIdentifier ? EntityIdentifier(for: VehicleEntity.self, identifier: stats.vin) : nil
+            ))
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Label(stats.vehicleName, systemImage: "bolt.car.fill")
@@ -152,17 +166,25 @@ public struct ChargingStatsSnippetView: View {
                     }
                     .font(.caption2.weight(.semibold))
 
-                    GeometryReader { proxy in
-                        HStack(spacing: 3) {
-                            if scFraction > 0 {
-                                Capsule()
-                                    .fill(Color.red.opacity(0.85))
-                                    .frame(width: max(proxy.size.width * scFraction - 1.5, 6))
-                            }
-                            if scFraction < 1 {
-                                Capsule()
-                                    .fill(Color.green.opacity(0.85))
-                            }
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        if scFraction > 0 {
+                            FractionalCapsuleBar(
+                                startFraction: 0,
+                                endFraction: scFraction,
+                                minimumWidth: 6,
+                                trailingGap: scFraction < 1 ? 1.5 : 0
+                            )
+                            .fill(Color.red.opacity(0.85))
+                        }
+                        if scFraction < 1 {
+                            FractionalCapsuleBar(
+                                startFraction: scFraction,
+                                endFraction: 1,
+                                minimumWidth: 6,
+                                leadingGap: scFraction > 0 ? 1.5 : 0
+                            )
+                            .fill(Color.green.opacity(0.85))
                         }
                     }
                     .frame(height: 7)
@@ -186,7 +208,6 @@ public struct ChargingStatsSnippetView: View {
             }
         }
         .padding(14)
-        .appEntityIdentifier(EntityIdentifier(for: VehicleEntity.self, identifier: stats.vin))
     }
 
     private func miniTile(icon: String, label: String, value: String) -> some View {
@@ -209,17 +230,27 @@ public struct ChargingStatsSnippetView: View {
 
 public struct BatteryHealthSnippetView: View {
     public let battery: BatteryHealthEntity
+    public let includeEntityIdentifier: Bool
 
-    public init(battery: BatteryHealthEntity) {
+    public init(battery: BatteryHealthEntity, includeEntityIdentifier: Bool = true) {
         self.battery = battery
+        self.includeEntityIdentifier = includeEntityIdentifier
     }
 
     public var body: some View {
+        content
+            .modifier(OptionalEntityIdentifierModifier(
+                identifier: includeEntityIdentifier ? EntityIdentifier(for: VehicleEntity.self, identifier: battery.vin) : nil
+            ))
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 11) {
             Label(battery.vehicleName, systemImage: "battery.100percent.bolt")
                 .font(.headline)
 
             if let health = battery.healthPercent {
+                let frac = min(max(health / 100.0, 0), 1)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(String(format: "%.1f%%", health))
@@ -238,14 +269,10 @@ public struct BatteryHealthSnippetView: View {
                         }
                     }
 
-                    GeometryReader { proxy in
-                        let frac = min(max(health / 100.0, 0), 1)
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.quaternary)
-                            Capsule()
-                                .fill(LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing))
-                                .frame(width: max(proxy.size.width * frac, 8))
-                        }
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        FractionalCapsuleBar(fraction: frac, minimumWidth: 8)
+                            .fill(LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing))
                     }
                     .frame(height: 8)
                 }
@@ -276,7 +303,6 @@ public struct BatteryHealthSnippetView: View {
             }
         }
         .padding(14)
-        .appEntityIdentifier(EntityIdentifier(for: VehicleEntity.self, identifier: battery.vin))
     }
 
     private var capacityLabel: String {

@@ -2,7 +2,7 @@ import AppIntents
 import SwiftUI
 
 /// Reads the current battery level, estimated range, and charging state and reports it as structured status plus spoken dialog.
-/// Shortcuts and App Shortcuts only. Siri uses the Get Tesla Vehicle Info tool, which
+/// Shortcuts and App Shortcuts only. Siri uses the Get Vehicle Info tool, which
 /// covers this reading alongside any others in one call.
 public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Check Battery Level"
@@ -10,6 +10,7 @@ public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
         "Checks a Tesla vehicle's current battery percentage, estimated driving range in miles, charge limit, and active charging status. Omit the vehicle parameter to inspect the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -59,7 +60,7 @@ public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
 }
 
 /// Reads the vehicle odometer/mileage from the latest live snapshot.
-/// Shortcuts and App Shortcuts only. Siri uses the Get Tesla Vehicle Info tool, which
+/// Shortcuts and App Shortcuts only. Siri uses the Get Vehicle Info tool, which
 /// covers this reading alongside any others in one call.
 public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Check Vehicle Mileage"
@@ -67,6 +68,7 @@ public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
         "Reads a Tesla vehicle's total odometer mileage in miles from the latest live telemetry snapshot. Omit the vehicle parameter to inspect the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -113,7 +115,7 @@ public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
 }
 
 /// Reads current TPMS PSI values from the latest live snapshot.
-/// Shortcuts and App Shortcuts only. Siri uses the Get Tesla Vehicle Info tool, which
+/// Shortcuts and App Shortcuts only. Siri uses the Get Vehicle Info tool, which
 /// covers this reading alongside any others in one call.
 public struct GetTirePressureIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Check Tire Pressure"
@@ -121,6 +123,7 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
         "Checks a Tesla vehicle's tire pressure monitoring system (TPMS) readings in PSI for front-left, front-right, rear-left, and rear-right tires. Omit the vehicle parameter to inspect the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -168,13 +171,14 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
 
 /// Shows a full vehicle status snippet plus structured telemetry and a short supporting dialog.
 @AppIntent(.tool)
-public struct GetVehicleStatusIntent: AppIntent, PredictableIntent, SnippetIntent {
+public struct GetVehicleStatusIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Check Vehicle Status"
     public static let description = IntentDescription(
-        "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\", \"how's my car?\", or \"show my Tesla\". For specific readings, use the Get Tesla Vehicle Info tool, which answers only what was asked.",
-        searchKeywords: ["check my car", "how is my car", "car status", "my car", "vehicle status"]
+        "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\", \"how's my car?\", or \"show my Tesla\". For specific readings, use the Get Vehicle Info tool, which answers only what was asked.",
+        searchKeywords: ["check my car", "how is my car", "car status", "my car", "vehicle status", "Tesla status"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -202,7 +206,7 @@ public struct GetVehicleStatusIntent: AppIntent, PredictableIntent, SnippetInten
     }
 
     @MainActor
-    public func perform() async throws -> some IntentResult & ReturnsValue<VehicleStatusEntity> & ShowsSnippetView & ProvidesDialog {
+    public func perform() async throws -> some IntentResult & ReturnsValue<VehicleStatusEntity> & ShowsSnippetIntent & ProvidesDialog {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
@@ -219,20 +223,11 @@ public struct GetVehicleStatusIntent: AppIntent, PredictableIntent, SnippetInten
                 locationAddress: address
             )
 
-            let mapData = await SiriMapSnapshotRenderer.renderLocationPin(
-                latitude: snapshot.latitude,
-                longitude: snapshot.longitude,
-                fallbackPlaceQuery: address,
-                style: SiriSnippetStateStore.shared.mapStyle(for: "vehicle"),
-                accentHex: 0x0A84FF,
-                allowNetworkSnapshot: allowNetwork
-            )
-
             log.success("status snippet for \(resolved.name)")
             return .result(
                 value: entity,
                 dialog: IntentDialog("Here's the latest on \(resolved.name)."),
-                view: VehicleStatusSnippetView(status: entity, mapData: mapData)
+                snippetIntent: VehicleStatusSnippetIntent(status: entity, topics: VehicleInfoTopic.allCases)
             )
         } catch {
             throw log.failure(error)

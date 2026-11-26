@@ -7,7 +7,7 @@ description: Get the user's car ready to head out by checking battery, range, ti
 
 ## 1. Check if the car is ready
 
-Start with one call to the Get Tesla Vehicle Info tool requesting battery, range, charging, tire pressure, and climate.
+Start with one call to the Get Vehicle Info tool requesting battery, range, charging, tire pressure, and climate.
 
 - Leave the vehicle empty for "my car." If the user names a car, keep every read and change on that same car (call the List Cars tool once if you need to identify it; ask if ambiguous; stop if unavailable).
 - If they're only asking whether the car is ready, answer from those readings and stop.
@@ -20,10 +20,10 @@ Start with one call to the Get Tesla Vehicle Info tool requesting battery, range
 
 Bundle the cabin settings, any agreed charging changes, and the destination into a single call to the Control Car tool. Setting a target temperature starts climate automatically. Pick sensible defaults from the conditions and what the user asked:
 
-- **Freezing, ice, frost, or snow**: ~22 °C, max defrost on, driver seat heat 3, steering wheel heater on.
-- **Hot cabin** (above ~29 °C / 85 °F): ~20 °C. If they specifically ask for seat cooling or rear seat heat, also call the Set Tesla Seat Climate tool for the same car.
+- **Freezing, ice, frost, or snow**: ~72 °F (22 °C), max defrost on, driver seat heat 3, steering wheel heater on.
+- **Hot cabin** (above ~85 °F / 29 °C): ~68 °F (20 °C). If they specifically ask for seat cooling or rear seat heat, also call the Set Seat Climate tool for the same car.
 - **Smoke or poor air quality**: turn on Bioweapon Defense Mode.
-- **Everyday conditions**: 21 °C, or whatever temperature they asked for (convert Fahrenheit to Celsius and keep it between 15 and 28 °C).
+- **Everyday conditions**: 70 °F (21 °C), or whatever temperature the user asked for—pass their value directly in °F (59–82 °F) or °C (15–28 °C) with the matching temperature unit; no manual unit conversion is needed.
 
 When including a destination, pass the most complete address or place name you have (add the city if they only named a business).
 

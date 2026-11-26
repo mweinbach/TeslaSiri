@@ -7,7 +7,7 @@ description: Check on or lock down a parked car for the night or while the user 
 
 ## 1. Check the whole picture once
 
-Call the Get Tesla Vehicle Info tool once with security, charging, battery, range, and climate.
+Call the Get Vehicle Info tool once with security, charging, battery, range, and climate.
 
 - Leave the vehicle empty for "my car." If the user names a car, use that same car for every read and change (call the List Cars tool once if you need to identify it; ask if ambiguous; stop if unavailable).
 - If they only asked for a check, report what you found and stop.

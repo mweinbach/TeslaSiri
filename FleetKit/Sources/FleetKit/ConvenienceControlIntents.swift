@@ -11,6 +11,7 @@ public struct FlashLightsIntent: AppIntent, PredictableIntent {
         "Briefly flashes the exterior headlights on a Tesla vehicle to help locate it in a parking lot or garage. Omit the vehicle parameter to target the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -60,6 +61,7 @@ public struct HonkHornIntent: AppIntent, PredictableIntent {
         "Briefly honks the horn on a Tesla vehicle to help locate it audibly. Omit the vehicle parameter to target the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -104,12 +106,13 @@ public struct HonkHornIntent: AppIntent, PredictableIntent {
 
 @AppIntent(.tool)
 public struct SendNavigationIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Send Destination to Tesla"
+    public static let title: LocalizedStringResource = "Send Destination to Car"
     public static let description = IntentDescription(
-        "Sends a street address, place name with city, map link, or coordinates to the car's touchscreen navigation. Doesn't open Maps on this device. Use for standalone navigation; use Control Car when combining a destination with climate or other vehicle changes.",
-        searchKeywords: ["navigate", "directions", "send address", "route", "take me to", "drive to"]
+        "Sends a street address, place name with city, map link, or coordinates to the Tesla's touchscreen navigation. Doesn't open Maps on this device. Use for standalone navigation; use Control Car when combining a destination with climate or other vehicle changes.",
+        searchKeywords: ["Tesla", "navigate", "directions", "send address", "route", "take me to", "drive to"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

@@ -119,14 +119,14 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
             }
             additional = [
                 "Set Car Temperature: set a target cabin temperature with an interactive card",
-                "Set Tesla Seat Climate: adjust heating by seat position (front or rear) where equipped",
-                usesTeslascope ? "Install Tesla Software Update: start an available update now" : "Install Tesla Software Update or Cancel Tesla Software Update when an update is available"
+                "Set Seat Climate: adjust heating by seat position (front or rear) where equipped",
+                usesTeslascope ? "Install Software Update: start an available update now" : "Install Software Update or Cancel Software Update when an update is available"
             ]
             if info.canAcceptNavigationRequests != false {
-                additional.append(info.canAcceptNavigationRequests == true ? "Send Destination to Tesla: send a standalone navigation destination" : "Send Destination to Tesla: send a standalone navigation destination if supported")
+                additional.append(info.canAcceptNavigationRequests == true ? "Send Destination to Car: send a standalone navigation destination" : "Send Destination to Car: send a standalone navigation destination if supported")
             }
             if !usesTeslascope, info.hasSeatCooling != false {
-                additional.append(info.hasSeatCooling == true ? "Set Tesla Seat Climate: adjust front seat cooling" : "Set Tesla Seat Climate: adjust front seat cooling if equipped")
+                additional.append(info.hasSeatCooling == true ? "Set Seat Climate: adjust front seat cooling" : "Set Seat Climate: adjust front seat cooling if equipped")
             }
         }
         if allowsCharging {
@@ -140,6 +140,8 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
 /// The vehicle list is small, so an enumerable + string query powers both
 /// Shortcuts suggestions and natural-language Siri AI lookups like "my car".
 public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension, .widgetKitExtension] }
+
     private static let genericCarTerms: Set<String> = [
         "car", "my car", "the car", "our car",
         "vehicle", "my vehicle", "the vehicle",

@@ -442,6 +442,8 @@ extension ChargeSessionEntity: Transferable {
 }
 
 public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
     public init() {}
 
     public func entities(for identifiers: [ChargeSessionEntity.ID]) async throws -> [ChargeSessionEntity] {

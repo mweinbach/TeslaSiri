@@ -298,6 +298,50 @@ struct FleetEntityIndexingTests {
         #expect(OpenChargeSessionIntent.allowedExecutionTargets == .main)
     }
 
+    @Test func `Siri AI tools, snippet intents, and entity queries route to the right execution targets`() {
+        let appAndExtension: IntentExecutionTargets = [.main, .appIntentsExtension]
+
+        // All 18 @AppIntent(.tool) intents avoid the WidgetKit extension.
+        #expect(ListCarsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetVehicleInfoIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetVehicleStatusIntent.allowedExecutionTargets == appAndExtension)
+        #expect(ControlCarIntent.allowedExecutionTargets == appAndExtension)
+        #expect(SetCabinTemperatureIntent.allowedExecutionTargets == appAndExtension)
+        #expect(SetSeatClimateIntent.allowedExecutionTargets == appAndExtension)
+        #expect(SendNavigationIntent.allowedExecutionTargets == appAndExtension)
+        #expect(InstallSoftwareUpdateIntent.allowedExecutionTargets == appAndExtension)
+        #expect(CancelSoftwareUpdateIntent.allowedExecutionTargets == appAndExtension)
+        #expect(FindDrivesIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetDriveDetailsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetDrivingStatsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetRecentChargesIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetChargeDetailsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetChargingStatsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetBatteryHealthIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetSoftwareStatusIntent.allowedExecutionTargets == appAndExtension)
+        #expect(GetReleaseNotesIntent.allowedExecutionTargets == appAndExtension)
+
+        // Interactive & status snippet intents stay in app + AppIntents extension.
+        #expect(DriveRouteSnippetIntent.allowedExecutionTargets == appAndExtension)
+        #expect(VehicleStatusSnippetIntent.allowedExecutionTargets == appAndExtension)
+        #expect(ChargeSessionSnippetIntent.allowedExecutionTargets == appAndExtension)
+        #expect(ClimateControlSnippetIntent.allowedExecutionTargets == appAndExtension)
+        #expect(ToggleSnippetMapStyleIntent.allowedExecutionTargets == appAndExtension)
+        #expect(SelectSnippetItemIntent.allowedExecutionTargets == appAndExtension)
+        #expect(AdjustSnippetClimateIntent.allowedExecutionTargets == appAndExtension)
+
+        // Entity queries: only VehicleEntityQuery runs in WidgetKit.
+        #expect(VehicleEntityQuery.allowedExecutionTargets == [.main, .appIntentsExtension, .widgetKitExtension])
+        #expect(VehicleStatusEntityQuery.allowedExecutionTargets == appAndExtension)
+        #expect(DriveEntityQuery.allowedExecutionTargets == appAndExtension)
+        #expect(ChargeSessionEntityQuery.allowedExecutionTargets == appAndExtension)
+        #expect(SoftwareUpdateEntityQuery.allowedExecutionTargets == appAndExtension)
+        #expect(ReleaseNoteEntityQuery.allowedExecutionTargets == appAndExtension)
+
+        // Widget action intent prefers the WidgetKit extension.
+        #expect(FleetWidgetActionIntent.allowedExecutionTargets == [.widgetKitExtension, .appIntentsExtension, .main])
+    }
+
     @Test func `user-facing fleet entities provide card snippets`() {
         func assertSnippetRepresentable<E: SnippetRepresentableEntity>(_ type: E.Type) {
             _ = E.snippet

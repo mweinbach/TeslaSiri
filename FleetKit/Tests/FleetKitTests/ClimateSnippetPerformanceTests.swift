@@ -58,7 +58,8 @@ struct ClimateSnippetPerformanceTests {
             _ = try await card.perform()
             let control = ControlCarIntent()
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 26)
+            changes.targetTemperature = 26
+            changes.temperatureUnit = .celsius
             control.vehicle = vehicle
             control.changes = changes
             let result = try #require(try await control.perform().value)

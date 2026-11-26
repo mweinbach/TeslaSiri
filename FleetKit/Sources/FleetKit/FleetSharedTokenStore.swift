@@ -114,6 +114,72 @@ public struct FleetSharedTokenStore: Sendable {
     }
 }
 
+/// Resolves the shared `keychain-access-groups` identifier (`<TeamID>.group.com.maxweinbach.TeslaSiri`)
+/// at runtime when the current process holds that entitlement, returning `nil` gracefully in unentitled
+/// environments such as macOS unit test hosts.
+public enum FleetKeychainAccessGroup {
+    private static let probeService = "com.maxweinbach.TeslaSiri.accessGroupProbe"
+    private static let probeAccount = "probe"
+
+    public static let shared: String? = resolveSharedGroup()
+
+    private static func resolveSharedGroup() -> String? {
+        #if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
+        let suffix = ".\(FleetKitConfig.appGroupIdentifier)"
+        let probeQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: probeService,
+            kSecAttrAccount as String: probeAccount,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+
+        var addQuery = probeQuery
+        addQuery[kSecValueData as String] = Data([0x01])
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        addQuery[kSecReturnAttributes as String] = true
+
+        var result: CFTypeRef?
+        var status = SecItemAdd(addQuery as CFDictionary, &result)
+        if status == errSecDuplicateItem {
+            var readQuery = probeQuery
+            readQuery[kSecReturnAttributes as String] = true
+            readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+            status = SecItemCopyMatching(readQuery as CFDictionary, &result)
+        }
+        _ = SecItemDelete(probeQuery as CFDictionary)
+
+        guard status == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let defaultGroup = attributes[kSecAttrAccessGroup as String] as? String,
+              !defaultGroup.isEmpty else {
+            return nil
+        }
+
+        if defaultGroup.hasSuffix(suffix) {
+            return defaultGroup
+        }
+
+        guard let dotIndex = defaultGroup.firstIndex(of: ".") else {
+            return nil
+        }
+        let teamPrefix = String(defaultGroup[..<dotIndex])
+        let candidate = "\(teamPrefix)\(suffix)"
+
+        // Verify the candidate group is entitled before using it on queries.
+        var verifyQuery = probeQuery
+        verifyQuery[kSecAttrAccessGroup as String] = candidate
+        verifyQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        let verifyStatus = SecItemCopyMatching(verifyQuery as CFDictionary, nil)
+        guard verifyStatus == errSecSuccess || verifyStatus == errSecItemNotFound else {
+            return nil
+        }
+        return candidate
+        #else
+        return nil
+        #endif
+    }
+}
+
 private struct SharedAccessTokenKeychain {
     let provider: FleetProvider
 
@@ -122,7 +188,21 @@ private struct SharedAccessTokenKeychain {
     }
 
     func load() throws -> String? {
-        var query = baseQuery
+        if let token = try load(using: baseQuery(includeAccessGroup: true)) {
+            return token
+        }
+        // Fallback once without an explicit access group so tokens written before
+        // explicit group pinning keep working and migrate seamlessly.
+        guard FleetKeychainAccessGroup.shared != nil,
+              let legacyToken = try load(using: baseQuery(includeAccessGroup: false)) else {
+            return nil
+        }
+        try? save(legacyToken)
+        return legacyToken
+    }
+
+    private func load(using queryBase: [String: Any]) throws -> String? {
+        var query = queryBase
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -146,24 +226,25 @@ private struct SharedAccessTokenKeychain {
     }
 
     func save(_ token: String) throws {
+        let query = baseQuery(includeAccessGroup: true)
         let data = Data(token.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
-        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         switch updateStatus {
         case errSecSuccess:
             return
         case errSecItemNotFound:
-            var addQuery = baseQuery
+            var addQuery = query
             attributes.forEach { key, value in
                 addQuery[key] = value
             }
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             if addStatus == errSecDuplicateItem {
-                let retryStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
+                let retryStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
                 guard retryStatus == errSecSuccess else {
                     throw KeychainError(status: retryStatus)
                 }
@@ -178,19 +259,29 @@ private struct SharedAccessTokenKeychain {
     }
 
     func delete() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+        let status = SecItemDelete(baseQuery(includeAccessGroup: true) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError(status: status)
         }
+        if FleetKeychainAccessGroup.shared != nil {
+            let legacyStatus = SecItemDelete(baseQuery(includeAccessGroup: false) as CFDictionary)
+            guard legacyStatus == errSecSuccess || legacyStatus == errSecItemNotFound else {
+                throw KeychainError(status: legacyStatus)
+            }
+        }
     }
 
-    private var baseQuery: [String: Any] {
-        [
+    private func baseQuery(includeAccessGroup: Bool) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: FleetKitConfig.sharedAccessTokenKeychainService,
             kSecAttrAccount as String: account,
             kSecUseDataProtectionKeychain as String: true
         ]
+        if includeAccessGroup, let accessGroup = FleetKeychainAccessGroup.shared {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
     }
 }
 

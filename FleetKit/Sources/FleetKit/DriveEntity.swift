@@ -266,6 +266,8 @@ extension DriveEntity: Transferable {
 }
 
 public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
     public init() {}
 
     public func entities(for identifiers: [DriveEntity.ID]) async throws -> [DriveEntity] {

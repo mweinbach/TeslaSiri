@@ -4,13 +4,14 @@ import AppIntents
 /// since kicking off and confirming the install can take a while.
 @AppIntent(.tool)
 public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Install Tesla Software Update"
+    public static let title: LocalizedStringResource = "Install Software Update"
     public static let description = IntentDescription(
         "Installs the software update that has finished downloading to the user's Tesla, now or at a time the user picks, after asking the user to confirm. The car can't be driven while it installs, usually 20 to 40 minutes. If the update is still downloading or already installing, this tool says so instead of installing.",
-        searchKeywords: ["update my car", "install update", "firmware", "schedule update"]
+        searchKeywords: ["Tesla", "update my car", "install update", "firmware", "schedule update"]
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -124,12 +125,13 @@ public struct InstallSoftwareUpdateIntent: AppIntent, LongRunningIntent, Predict
 /// Cancels a scheduled software update.
 @AppIntent(.tool)
 public struct CancelSoftwareUpdateIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Cancel Tesla Software Update"
+    public static let title: LocalizedStringResource = "Cancel Software Update"
     public static let description = IntentDescription(
         "Cancels a scheduled software update on the user's Tesla before it starts installing, after asking the user to confirm. It can't stop an install that's already running.",
-        searchKeywords: ["cancel update", "stop update", "abort software update", "cancel firmware update"]
+        searchKeywords: ["Tesla", "cancel update", "stop update", "abort software update", "cancel firmware update"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

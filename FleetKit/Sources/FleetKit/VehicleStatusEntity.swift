@@ -271,6 +271,8 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
 }
 
 public struct VehicleStatusEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
     public init() {}
 
     public func entities(for identifiers: [VehicleStatusEntity.ID]) async throws -> [VehicleStatusEntity] {

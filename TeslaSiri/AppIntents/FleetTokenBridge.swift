@@ -38,6 +38,11 @@ enum FleetTokenBridge {
         if !hasLiveToken || store.loadState == .loaded || store.selectedVehicle != nil {
             syncSelectedVehicle(store: store, forceShortcutRefresh: true)
             await FleetIntentDonations.syncCarSuggestions(for: store.selectedVehicle)
+            if hasLiveToken {
+                SiriCarCommandsSetup.updateCarNames(for: store.vehicles)
+            } else {
+                SiriCarCommandsSetup.clearCarNames()
+            }
         }
         return hasLiveToken
     }
@@ -60,6 +65,7 @@ enum FleetTokenBridge {
 
     static func clearVehicleSystemData(for vehicles: [FleetVehicle]) async {
         BatteryReminderManager.shared.clearNotification()
+        SiriCarCommandsSetup.clearCarNames()
         try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
         await FleetIntentDonations.clearVehicleSuggestions(for: vehicles)
     }

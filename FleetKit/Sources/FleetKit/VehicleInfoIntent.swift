@@ -7,13 +7,14 @@ import SwiftUI
 /// Answers questions about one or more live readings in a single call, such as
 /// "what's my tire pressure and mileage?" or "how much range do I have and is it locked?".
 @AppIntent(.tool)
-public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Vehicle Info"
+public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
+    public static let title: LocalizedStringResource = "Get Vehicle Info"
     public static let description = IntentDescription(
         "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions.",
-        searchKeywords: ["my car", "car battery", "battery", "range", "tire pressure", "PSI", "mileage", "odometer", "miles", "charging", "temperature", "locked", "is my car locked", "doors", "windows", "where is my car", "location"]
+        searchKeywords: ["my car", "Tesla", "car battery", "battery", "range", "tire pressure", "PSI", "mileage", "odometer", "miles", "charging", "temperature", "locked", "is my car locked", "doors", "windows", "where is my car", "location"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -56,7 +57,7 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent 
     }
 
     @MainActor
-    public func perform() async throws -> some IntentResult & ReturnsValue<VehicleStatusEntity> & ShowsSnippetView & ProvidesDialog {
+    public func perform() async throws -> some IntentResult & ReturnsValue<VehicleStatusEntity> & ShowsSnippetIntent & ProvidesDialog {
         let log = FleetIntentLog(Self.self, vehicle: vehicle)
         do {
             let service = FleetIntentService.make()
@@ -64,21 +65,11 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent 
             let requested = topics.isEmpty ? VehicleInfoTopic.allCases : topics
             let snapshot = try await service.snapshot(for: resolved, topics: requested)
             let address: String?
-            let mapData: SiriRenderedMapData?
             if requested.contains(.location), let latitude = snapshot.latitude, let longitude = snapshot.longitude {
                 let allowNetwork = FleetIntentService.testingOverride == nil
-                async let place = allowNetwork ? FleetLocationNamer.address(latitude: latitude, longitude: longitude) : nil
-                async let map = SiriMapSnapshotRenderer.renderLocationPin(
-                    latitude: latitude,
-                    longitude: longitude,
-                    style: SiriSnippetStateStore.shared.mapStyle(for: "vehicle"),
-                    accentHex: 0x0A84FF,
-                    allowNetworkSnapshot: allowNetwork
-                )
-                (address, mapData) = await (place, map)
+                address = allowNetwork ? await FleetLocationNamer.address(latitude: latitude, longitude: longitude) : nil
             } else {
                 address = nil
-                mapData = nil
             }
 
             let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, locationAddress: address)
@@ -87,7 +78,7 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent 
             return .result(
                 value: entity,
                 dialog: IntentDialog("\(answer)"),
-                view: VehicleStatusSnippetView(status: entity, mapData: mapData, topics: Set(requested))
+                snippetIntent: VehicleStatusSnippetIntent(status: entity, topics: requested)
             )
         } catch {
             throw log.failure(error)
@@ -95,7 +86,7 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent, SnippetIntent 
     }
 }
 
-/// A group of live readings the Get Tesla Vehicle Info tool can report.
+/// A group of live readings the Get Vehicle Info tool can report.
 public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
     case battery
     case range

@@ -58,12 +58,13 @@ public enum SeatClimateMode: String, AppEnum, Sendable {
 
 @AppIntent(.tool)
 public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Set Tesla Seat Climate"
+    public static let title: LocalizedStringResource = "Set Seat Climate"
     public static let description = IntentDescription(
-        "Heats any physical seat (front or rear) or cools the ventilated front seats on supported cars, from 0 (off) to 3 (high). Starts climate automatically when turning seat climate on. Use for seat cooling, rear-row seat heaters, or a standalone seat adjustment; when combining front seat heat with other vehicle controls, use the Control Car tool instead.",
-        searchKeywords: ["seat warmer", "heated seat", "seat heat", "cooled seat", "ventilated seat", "seat cooling", "rear seat heat", "butt warmer"]
+        "Heats any physical seat (front or rear) or cools the ventilated front seats on supported Tesla cars, from 0 (off) to 3 (high). Starts climate automatically when turning seat climate on. Use for seat cooling, rear-row seat heaters, or a standalone seat adjustment; when combining front seat heat with other vehicle controls, use the Control Car tool instead.",
+        searchKeywords: ["Tesla", "seat warmer", "heated seat", "seat heat", "cooled seat", "ventilated seat", "seat cooling", "rear seat heat", "butt warmer"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -199,6 +200,7 @@ public struct SetSteeringWheelHeaterIntent: AppIntent, LongRunningIntent, Predic
         searchKeywords: ["heated steering wheel", "wheel warmer", "heat the wheel"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -289,6 +291,7 @@ public struct SetChargingAmpsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["charge speed", "charging current", "amperage", "slow charge"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

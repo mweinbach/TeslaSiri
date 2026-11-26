@@ -9,6 +9,7 @@ import SwiftUI
 public struct DriveRouteSnippetIntent: SnippetIntent {
     public static let title: LocalizedStringResource = "Drive Route Card"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Drives")
     public var drives: [DriveEntity]
@@ -66,6 +67,63 @@ public struct DriveRouteSnippetIntent: SnippetIntent {
     }
 }
 
+// MARK: - Interactive Vehicle Status Snippet Intent
+
+/// Presents an interactive vehicle status card in Siri so toggling Standard/Satellite
+/// map imagery reloads only the map snapshot without re-calling live vehicle APIs.
+public struct VehicleStatusSnippetIntent: SnippetIntent {
+    public static let title: LocalizedStringResource = "Vehicle Status Card"
+    public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
+    @Parameter(title: "Vehicle Status")
+    public var status: VehicleStatusEntity
+
+    @Parameter(title: "Topics")
+    public var topics: [VehicleInfoTopic]
+
+    public init() {
+        self.status = VehicleStatusEntity(
+            snapshot: FleetSnapshotInfo(vin: ""),
+            vehicleName: "My Car"
+        )
+        self.topics = VehicleInfoTopic.allCases
+    }
+
+    public init(status: VehicleStatusEntity, topics: [VehicleInfoTopic] = VehicleInfoTopic.allCases) {
+        self.status = status
+        self.topics = topics.isEmpty ? VehicleInfoTopic.allCases : topics
+    }
+
+    @MainActor
+    public func perform() async throws -> some IntentResult & ShowsSnippetView {
+        let requestedTopics = topics.isEmpty ? VehicleInfoTopic.allCases : topics
+        let mapData: SiriRenderedMapData?
+        if requestedTopics.contains(.location),
+           status.locationAddress != nil || (status.latitude != nil && status.longitude != nil) {
+            let allowMap = FleetIntentService.testingOverride == nil
+            mapData = await SiriMapSnapshotRenderer.renderLocationPin(
+                latitude: status.latitude,
+                longitude: status.longitude,
+                fallbackPlaceQuery: status.locationAddress,
+                style: SiriSnippetStateStore.shared.mapStyle(for: "vehicle"),
+                accentHex: 0x0A84FF,
+                allowNetworkSnapshot: allowMap
+            )
+        } else {
+            mapData = nil
+        }
+
+        return .result(
+            view: VehicleStatusSnippetView(
+                status: status,
+                mapData: mapData,
+                topics: Set(requestedTopics)
+            )
+        )
+    }
+}
+
 // MARK: - Interactive Charge Session Snippet Intent
 
 /// Presents an interactive charging session card with Apple Maps charger location,
@@ -73,6 +131,7 @@ public struct DriveRouteSnippetIntent: SnippetIntent {
 public struct ChargeSessionSnippetIntent: SnippetIntent {
     public static let title: LocalizedStringResource = "Charging Session Card"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Sessions")
     public var sessions: [ChargeSessionEntity]
@@ -229,6 +288,7 @@ extension FleetIntentService {
 public struct ClimateControlSnippetIntent: SnippetIntent {
     public static let title: LocalizedStringResource = "Cabin Climate Card"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Vehicle")
     public var vehicle: VehicleEntity
@@ -326,6 +386,7 @@ public struct ClimateControlSnippetIntent: SnippetIntent {
 public struct ToggleSnippetMapStyleIntent: AppIntent {
     public static let title: LocalizedStringResource = "Toggle Snippet Map Style"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Scope")
     public var scope: String
@@ -344,13 +405,11 @@ public struct ToggleSnippetMapStyleIntent: AppIntent {
         case "drive": DriveRouteSnippetIntent.reload()
         case "charge": ChargeSessionSnippetIntent.reload()
         case "vehicle":
-            GetVehicleStatusIntent.reload()
-            GetVehicleInfoIntent.reload()
+            VehicleStatusSnippetIntent.reload()
         default:
             DriveRouteSnippetIntent.reload()
             ChargeSessionSnippetIntent.reload()
-            GetVehicleStatusIntent.reload()
-            GetVehicleInfoIntent.reload()
+            VehicleStatusSnippetIntent.reload()
         }
         return .result()
     }
@@ -360,6 +419,7 @@ public struct ToggleSnippetMapStyleIntent: AppIntent {
 public struct SelectSnippetItemIntent: AppIntent {
     public static let title: LocalizedStringResource = "Select Snippet Item"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Session Key")
     public var sessionKey: String
@@ -398,6 +458,7 @@ public struct SelectSnippetItemIntent: AppIntent {
 public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Adjust Cabin Climate"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(title: "Vehicle")
     public var vehicle: VehicleEntity
@@ -535,8 +596,7 @@ public struct AdjustSnippetClimateIntent: AppIntent, LongRunningIntent {
         ).save(vin: resolved.vin, group: service.appGroupIdentifier)
         SiriSnippetStateStore.shared.notifyChanged(.vehicleStatus(vin: resolved.vin))
         // App Intents re-performs the originating climate snippet after the tap.
-        GetVehicleStatusIntent.reload()
-        GetVehicleInfoIntent.reload()
+        VehicleStatusSnippetIntent.reload()
         return .result()
     }
 }

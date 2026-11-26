@@ -4,12 +4,13 @@ import SwiftUI
 /// Describes one charging session in full, defaulting to the most recent one.
 @AppIntent(.tool)
 public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Get Tesla Charge Details"
+    public static let title: LocalizedStringResource = "Get Charge Details"
     public static let description = IntentDescription(
-        "Gets everything recorded about one charging session: where and when, Supercharger or AC, battery before and after, energy added and drawn from the charger, charging efficiency, range added, duration, and cost. Leave the session empty for the most recent charge, such as \"how much did my last charge cost?\".",
-        searchKeywords: ["last charge", "charge cost", "Supercharger cost", "how much did charging cost", "kWh added"]
+        "Gets everything recorded about one Tesla charging session: where and when, Supercharger or AC, battery before and after, energy added and drawn from the charger, charging efficiency, range added, duration, and cost. Leave the session empty for the most recent charge, such as \"how much did my last charge cost?\".",
+        searchKeywords: ["Tesla", "last charge", "charge cost", "Supercharger cost", "how much did charging cost", "kWh added"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -22,7 +23,7 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
 
     @Parameter(
         title: "Charging Session",
-        description: "The session to describe, such as one the user is looking at or one found with Get Tesla Charging History. Leave empty for the most recent charge.",
+        description: "The session to describe, such as one the user is looking at or one found with Get Charging History. Leave empty for the most recent charge.",
         requestValueDialog: IntentDialog("Which charging session?")
     )
     public var charge: ChargeSessionEntity?
@@ -285,29 +286,23 @@ public struct ChargeSessionSnippetView: View {
             }
 
             if let start = session.startingBatteryPercent, let end = session.endingBatteryPercent, end >= start {
-                GeometryReader { proxy in
-                    let w = max(proxy.size.width, 1)
-                    let startFrac = min(max(Double(start) / 100.0, 0), 1)
-                    let endFrac = min(max(Double(end) / 100.0, 0), 1)
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(.quaternary)
+                let startFrac = min(max(Double(start) / 100.0, 0), 1)
+                let endFrac = min(max(Double(end) / 100.0, 0), 1)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.quaternary)
 
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.32))
-                            .frame(width: max(w * startFrac, 4))
+                    FractionalCapsuleBar(fraction: startFrac, minimumWidth: 4)
+                        .fill(Color.secondary.opacity(0.32))
 
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.8), .mint],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                    FractionalCapsuleBar(startFraction: startFrac, endFraction: endFrac, minimumWidth: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: [.green.opacity(0.8), .mint],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                            .frame(width: max(w * (endFrac - startFrac), 6))
-                            .offset(x: w * startFrac)
-                    }
+                        )
                 }
                 .frame(height: 9)
             }

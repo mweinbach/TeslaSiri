@@ -1,3 +1,4 @@
+import FleetKit
 import Foundation
 import Security
 
@@ -15,7 +16,18 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
     }
 
     func loadAccessToken() throws -> String {
-        var query = baseQuery
+        do {
+            return try loadAccessToken(includeAccessGroup: true)
+        } catch FleetAPIError.missingAccessToken where FleetKeychainAccessGroup.shared != nil {
+            let legacy = try loadAccessToken(includeAccessGroup: false)
+            try? saveAccessToken(legacy)
+            return legacy
+        }
+    }
+
+    private func loadAccessToken(includeAccessGroup: Bool) throws -> String {
+        let queryBase = baseQuery(includeAccessGroup: includeAccessGroup)
+        var query = queryBase
         query[kSecReturnData as String] = true
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -44,7 +56,7 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
         let accessible = attributes[kSecAttrAccessible as String] as? String
         if accessible != (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String) {
             _ = SecItemUpdate(
-                baseQuery as CFDictionary,
+                queryBase as CFDictionary,
                 [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly] as CFDictionary
             )
         }
@@ -53,25 +65,26 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
     }
 
     func saveAccessToken(_ token: String) throws {
+        let query = baseQuery(includeAccessGroup: true)
         let data = Data(token.utf8)
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
-        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         switch updateStatus {
         case errSecSuccess:
             return
         case errSecItemNotFound:
-            var addQuery = baseQuery
+            var addQuery = query
             attributes.forEach { key, value in
                 addQuery[key] = value
             }
 
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             if addStatus == errSecDuplicateItem {
-                let retryStatus = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
+                let retryStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
                 guard retryStatus == errSecSuccess else {
                     throw FleetAPIError.keychain(status: retryStatus)
                 }
@@ -86,18 +99,28 @@ nonisolated struct FleetAccessTokenKeychain: FleetAccessTokenProviding {
     }
 
     func deleteAccessToken() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+        let status = SecItemDelete(baseQuery(includeAccessGroup: true) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw FleetAPIError.keychain(status: status)
         }
+        if FleetKeychainAccessGroup.shared != nil {
+            let legacyStatus = SecItemDelete(baseQuery(includeAccessGroup: false) as CFDictionary)
+            guard legacyStatus == errSecSuccess || legacyStatus == errSecItemNotFound else {
+                throw FleetAPIError.keychain(status: legacyStatus)
+            }
+        }
     }
 
-    private var baseQuery: [String: Any] {
-        [
+    private func baseQuery(includeAccessGroup: Bool) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecUseDataProtectionKeychain as String: true
         ]
+        if includeAccessGroup, let accessGroup = FleetKeychainAccessGroup.shared {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
     }
 }

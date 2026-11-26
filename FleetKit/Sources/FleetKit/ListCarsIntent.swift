@@ -8,6 +8,7 @@ public struct ListCarsIntent: AppIntent {
         "Lists the user's active cars by name, marks the default car, and returns each vehicle with the controls Wattie can request. Use for questions about available cars or their controls. Pass a returned Vehicle to the Control Car tool to target that car. For a command aimed at the default car, use Control Car directly and omit Vehicle.",
         searchKeywords: ["my cars", "my fleet", "which car", "default car", "available controls"]
     )
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     public init() {}
 

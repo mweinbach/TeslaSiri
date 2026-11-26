@@ -3,6 +3,7 @@ import FleetKit
 import Intents
 import IntentsUI
 import SwiftUI
+import UIKit
 
 /// Siri tip + 1-tap natural "my car" phrase pinners + Shortcuts link card at the bottom of the Vehicle tab.
 struct AppIntentDiscoveryCard: View {
@@ -11,6 +12,9 @@ struct AppIntentDiscoveryCard: View {
     @State private var voiceShortcutsByType: [String: INVoiceShortcut] = [:]
     @State private var activeSheet: VoiceShortcutSheetItem?
     @State private var isShowingWidgetGallery = CommandLine.arguments.contains("--preview-siri-widgets")
+    @State private var siriStatus = SiriCarCommandsSetup.authorizationStatus
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     private let columns = [
         GridItem(.flexible(minimum: 130), spacing: 8),
@@ -25,13 +29,15 @@ struct AppIntentDiscoveryCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                carCommandsPermission
+
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(CarSiriVoicePhrase.allCases) { item in
                         phraseButton(for: item)
                     }
                 }
 
-                SiriTipView(intent: climateIntent, isVisible: $isStatusTipVisible)
+                SiriTipView(intent: statusIntent, isVisible: $isStatusTipVisible)
                     .siriTipViewStyle(.automatic)
 
                 Divider()
@@ -55,6 +61,9 @@ struct AppIntentDiscoveryCard: View {
         .task {
             await reloadVoiceShortcuts()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { siriStatus = SiriCarCommandsSetup.authorizationStatus }
+        }
         .sheet(isPresented: $isShowingWidgetGallery) {
             NavigationStack {
                 SiriDynamicWidgetsPreviewSheet(preferredVIN: vehicle?.vin)
@@ -66,6 +75,43 @@ struct AppIntentDiscoveryCard: View {
                 Task { await reloadVoiceShortcuts() }
             }
             .ignoresSafeArea()
+        }
+    }
+
+    /// SiriKit Car Commands ("Lock my car", "Is my car locked?", "How much charge does my car
+    /// have?") need Siri permission. They don't need the app name.
+    @ViewBuilder
+    private var carCommandsPermission: some View {
+        switch siriStatus {
+        case .notDetermined:
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    Task { siriStatus = await SiriCarCommandsSetup.requestAuthorization() }
+                } label: {
+                    Label("Allow Siri Car Commands", systemImage: "car.side.lock")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text("Lets Siri lock, unlock, honk, and check your car's charge, and lets Maps plan EV routes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        case .denied:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Siri car commands are off. Turn on Siri for Wattie in Settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("Open Settings", systemImage: "gear") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .font(.caption.weight(.semibold))
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -103,8 +149,8 @@ struct AppIntentDiscoveryCard: View {
         .accessibilityLabel(isAdded ? "Edit Siri phrase \(existing?.invocationPhrase ?? item.phrase)" : "Add Siri phrase \(item.phrase)")
     }
 
-    private var climateIntent: StartClimateIntent {
-        let intent = StartClimateIntent()
+    private var statusIntent: GetVehicleStatusIntent {
+        let intent = GetVehicleStatusIntent()
         if let vehicle, !vehicle.vin.isEmpty {
             intent.vehicle = VehicleEntity(id: vehicle.vin, name: vehicle.name)
         }

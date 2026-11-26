@@ -72,10 +72,10 @@ public struct FleetSpotlightSearchResult: Identifiable, Sendable {
 public enum FleetSpotlightIndexer {
     public static let indexName = "FleetEntities"
     /// Most recent drives indexed per vehicle. Older drives stay reachable through
-    /// the Find Tesla Drives tool, which queries Tessie directly.
+    /// the Find Drives tool, which queries Tessie directly.
     public static let drivesPerVehicle = 50
     /// Most recent charging sessions indexed per vehicle. Older sessions stay
-    /// reachable through the Get Tesla Charging History tool.
+    /// reachable through the Get Charging History tool.
     public static let chargesPerVehicle = 50
 
     /// Dashboard response bytes are retained only within one active refresh.
@@ -194,7 +194,7 @@ struct SpotlightIndexManifest: Codable {
 private actor SpotlightSyncCoordinator {
     private typealias Group = SpotlightIndexManifest.Group
     private let manifestKey = "FleetSpotlightManifest.v1"
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private var tail: Task<Void, Never>?
     private var ticket = 0
     private var maintenanceGeneration = 0
@@ -203,9 +203,18 @@ private actor SpotlightSyncCoordinator {
     private var manifest = SpotlightIndexManifest(scope: "")
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: "FleetSpotlightManifest.v1"),
+        let sharedDefaults = UserDefaults(suiteName: FleetKitConfig.appGroupIdentifier) ?? .standard
+        self.defaults = sharedDefaults
+
+        if let data = sharedDefaults.data(forKey: "FleetSpotlightManifest.v1"),
            let stored = try? JSONDecoder().decode(SpotlightIndexManifest.self, from: data) {
             manifest = stored
+        } else if sharedDefaults !== UserDefaults.standard,
+                  let legacyData = UserDefaults.standard.data(forKey: "FleetSpotlightManifest.v1"),
+                  let stored = try? JSONDecoder().decode(SpotlightIndexManifest.self, from: legacyData) {
+            manifest = stored
+            sharedDefaults.set(legacyData, forKey: "FleetSpotlightManifest.v1")
+            UserDefaults.standard.removeObject(forKey: "FleetSpotlightManifest.v1")
         }
     }
 

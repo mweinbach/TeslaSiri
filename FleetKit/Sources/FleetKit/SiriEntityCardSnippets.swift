@@ -46,7 +46,7 @@ extension SoftwareUpdateEntity: SnippetRepresentableEntity {
             if context.family == .compact {
                 SoftwareUpdateCompactCardView(software: software)
             } else {
-                SoftwareSnippetView(software: software)
+                SoftwareUpdateStaticCardView(software: software)
             }
         }
     }
@@ -66,7 +66,7 @@ extension DrivingStatsEntity: SnippetRepresentableEntity {
             if context.family == .compact {
                 DrivingStatsCompactCardView(stats: stats)
             } else {
-                DrivingStatsSnippetView(stats: stats)
+                DrivingStatsSnippetView(stats: stats, includeEntityIdentifier: false)
             }
         }
     }
@@ -78,7 +78,7 @@ extension ChargingStatsEntity: SnippetRepresentableEntity {
             if context.family == .compact {
                 ChargingStatsCompactCardView(stats: stats)
             } else {
-                ChargingStatsSnippetView(stats: stats)
+                ChargingStatsSnippetView(stats: stats, includeEntityIdentifier: false)
             }
         }
     }
@@ -90,7 +90,7 @@ extension BatteryHealthEntity: SnippetRepresentableEntity {
             if context.family == .compact {
                 BatteryHealthCompactCardView(battery: battery)
             } else {
-                BatteryHealthSnippetView(battery: battery)
+                BatteryHealthSnippetView(battery: battery, includeEntityIdentifier: false)
             }
         }
     }
@@ -126,68 +126,44 @@ private struct VehicleEntityCardView: View {
             }
             .padding(10)
         } else {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: "car.fill")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(.tint)
-                        .frame(width: 36, height: 36)
-                        .background(.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            HStack(spacing: 10) {
+                Image(systemName: "car.fill")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 36, height: 36)
+                    .background(.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(vehicle.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(subtitleText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    if vehicle.isDefaultCar == true {
-                        Text("Default")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.tint)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(.tint.opacity(0.14), in: Capsule())
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(vehicle.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(subtitleText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
-                if !vehicle.id.isEmpty {
-                    HStack(spacing: 8) {
-                        Button(intent: startClimateIntent) {
-                            Label("Climate", systemImage: "fan.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
+                Spacer(minLength: 4)
 
-                        Button(intent: OpenVehicleIntent(target: vehicle)) {
-                            Label("Open", systemImage: "arrow.up.forward.app")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .controlSize(.small)
+                if vehicle.isDefaultCar == true {
+                    Text("Default")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.tint.opacity(0.14), in: Capsule())
                 }
             }
             .padding(14)
         }
     }
-
-    private var startClimateIntent: StartClimateIntent {
-        let intent = StartClimateIntent()
-        intent.vehicle = vehicle
-        return intent
-    }
 }
 
 // MARK: - Vehicle Status Card
 
-/// Static status card snippet. Deliberately omits GPS/address fields, which are
-/// gated by property-level `.requiresAuthentication` on `VehicleStatusEntity`.
+/// Purely static status card snippet (no interactive buttons, links, or GeometryReader).
+/// Deliberately omits GPS/address fields, which are gated by property-level
+/// `.requiresAuthentication` on `VehicleStatusEntity`.
 private struct VehicleStatusCardView: View {
     let status: VehicleStatusEntity
     let compact: Bool
@@ -228,11 +204,113 @@ private struct VehicleStatusCardView: View {
             }
             .padding(10)
         } else {
-            VehicleStatusSnippetView(
-                status: status,
-                mapData: nil,
-                topics: [.battery, .range, .charging, .climate, .security, .tirePressure, .odometer]
-            )
+            let unit = status.temperatureUnit ?? "°F"
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Label(status.vehicleName, systemImage: "car.fill")
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    if let isLocked = status.isLocked {
+                        Label(
+                            isLocked ? "Locked" : "Unlocked",
+                            systemImage: isLocked ? "lock.fill" : "lock.open.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isLocked ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary, in: Capsule())
+                    }
+
+                    if status.sentryModeOn == true {
+                        Image(systemName: "record.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(status.batteryDisplay)
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(batteryColor)
+                            .monospacedDigit()
+
+                        if let range = status.batteryRangeMiles {
+                            Text("· \(Int(range.rounded())) mi")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        Spacer(minLength: 4)
+
+                        if let state = status.chargingState, !state.isEmpty {
+                            let isCharging = state.localizedStandardContains("charging") && !state.localizedStandardContains("dis")
+                            Label(state.capitalized, systemImage: isCharging ? "bolt.fill" : "powerplug")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(isCharging ? AnyShapeStyle(Color.green) : AnyShapeStyle(.secondary))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(.quaternary, in: Capsule())
+                        }
+                    }
+
+                    if let pct = status.batteryPercent {
+                        let clampedPct = min(max(Double(pct) / 100.0, 0), 1)
+                        let limitFraction = min(max(Double(status.chargeLimitPercent ?? 80) / 100.0, 0), 1)
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.quaternary)
+                            FractionalCapsuleBar(fraction: clampedPct, minimumWidth: 8)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [batteryColor.opacity(0.85), batteryColor],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                            if status.chargeLimitPercent != nil {
+                                FractionalTickMark(fraction: limitFraction, tickWidth: 2.5, tickHeight: 14)
+                                    .fill(.primary.opacity(0.75))
+                            }
+                        }
+                        .frame(height: 9)
+                    }
+                }
+                .padding(10)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                HStack(spacing: 8) {
+                    if let inside = status.insideTemp {
+                        cardMetricTile(
+                            icon: status.isClimateOn == true ? "fan.fill" : "thermometer.medium",
+                            tint: status.isClimateOn == true ? .orange : .secondary,
+                            label: "Cabin",
+                            value: "\(Int(inside.rounded()))\(unit)"
+                        )
+                    }
+                    if let odometer = status.odometerDisplay {
+                        cardMetricTile(
+                            icon: "gauge.with.needle",
+                            tint: .secondary,
+                            label: "Odometer",
+                            value: odometer
+                        )
+                    }
+                    if let tires = status.tireSummary {
+                        cardMetricTile(
+                            icon: "car.side.rear.and.tire.marks",
+                            tint: .secondary,
+                            label: "Tires",
+                            value: tires
+                        )
+                    }
+                }
+            }
+            .padding(14)
         }
     }
 
@@ -344,14 +422,6 @@ private struct DriveEntityCardView: View {
                         )
                     }
                 }
-
-                Button(intent: OpenDriveIntent(target: drive)) {
-                    Label("Open Drive", systemImage: "road.lanes")
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
             }
             .padding(14)
         }
@@ -448,14 +518,6 @@ private struct ChargeSessionCardView: View {
                         cardMetricTile(icon: "clock", tint: .secondary, label: "Duration", value: "\(minutes) min")
                     }
                 }
-
-                Button(intent: OpenChargeSessionIntent(target: session)) {
-                    Label("Open Session", systemImage: "bolt.car.fill")
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
             .padding(14)
         }
@@ -463,6 +525,67 @@ private struct ChargeSessionCardView: View {
 }
 
 // MARK: - Software & Release Note Cards
+
+private struct SoftwareUpdateStaticCardView: View {
+    let software: SoftwareUpdateEntity
+
+    private var activeProgressPercent: Double? {
+        if let install = software.installPercent, install > 0 { return Double(install) }
+        if let download = software.downloadPercent, download > 0, software.updateAvailable { return Double(download) }
+        return nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack {
+                Label(software.vehicleName, systemImage: "car.fill")
+                    .font(.headline)
+                Spacer()
+                if let current = software.currentVersion {
+                    Text("Installed \(current)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.quaternary.opacity(0.45), in: Capsule())
+                }
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: software.updateAvailable ? "arrow.down.circle.dotted" : "checkmark.seal.fill")
+                    .font(.title2)
+                    .foregroundStyle(software.updateAvailable ? AnyShapeStyle(.tint) : AnyShapeStyle(.green))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(software.headline)
+                        .font(.subheadline.weight(.bold))
+                    Text(software.detailText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(.quaternary.opacity(0.36), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if let progress = activeProgressPercent {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(software.installPercent ?? 0 > 0 ? "Installing Update" : "Downloaded")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(progress.rounded()))%")
+                            .font(.caption2.weight(.bold))
+                            .monospacedDigit()
+                    }
+                    ProgressView(value: min(max(progress, 0), 100), total: 100)
+                }
+            }
+        }
+        .padding(14)
+    }
+}
 
 private struct SoftwareUpdateCompactCardView: View {
     let software: SoftwareUpdateEntity
@@ -553,14 +676,6 @@ private struct ReleaseNoteCardView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(4)
                 }
-
-                Button(intent: OpenReleaseNoteIntent(target: note)) {
-                    Label("Open Release Note", systemImage: "doc.text")
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
             .padding(14)
         }

@@ -15,6 +15,7 @@ public struct StopClimateIntent: AppIntent, LongRunningIntent, PredictableIntent
         searchKeywords: ["turn off AC", "turn off heat", "stop preconditioning", "stop car climate", "turn off car climate"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -98,6 +99,7 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
         ]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     /// Tesla accepts roughly 15–28 °C; values outside are clamped.
     static let minCelsius = 15.0
@@ -219,6 +221,7 @@ public struct SetMaxDefrostIntent: AppIntent, LongRunningIntent, PredictableInte
         searchKeywords: ["defrost my car", "defrost windshield", "max defrost", "melt ice"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -299,6 +302,7 @@ public struct SetPetModeIntent: AppIntent, LongRunningIntent, PredictableIntent 
         "Turns Dog Mode (pet climate keeper) on or off in a Tesla vehicle. Turning Dog Mode off requires user confirmation so a pet inside is not inadvertently left without climate control."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -383,6 +387,7 @@ public struct SetBioweaponModeIntent: AppIntent, LongRunningIntent, PredictableI
         "Turns Bioweapon Defense Mode positive-pressure HEPA cabin filtration on or off on supported Tesla vehicles. Omit the vehicle parameter to target the user's selected car."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

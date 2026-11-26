@@ -11,14 +11,39 @@ public enum CarWindowAction: String, AppEnum {
     ]
 }
 
+public enum CabinTemperatureUnit: String, AppEnum, Sendable {
+    case fahrenheit
+    case celsius
+
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Temperature Unit")
+    public static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
+        .fahrenheit: DisplayRepresentation(title: "Fahrenheit", subtitle: "Degrees Fahrenheit (°F), 59 to 82.4"),
+        .celsius: DisplayRepresentation(title: "Celsius", subtitle: "Degrees Celsius (°C), 15 to 28")
+    ]
+}
+
 @AppEntity(.generable)
 public struct CarControlSettings: TransientAppEntity {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Car Control Settings")
 
-    @Property(title: "Climate Power", description: "True to warm up, cool down, precondition, or start cabin climate; false to turn off heat or AC. A cabin temperature also starts HVAC.")
+    @Property(title: "Climate Power", description: "True to warm up, cool down, precondition, or start cabin climate; false to turn off heat or AC. Setting a target temperature also starts climate.")
     public var climateOn: Bool?
-    @Property(title: "Cabin Settings", description: "The requested temperature in Celsius, defrost, front seat heaters, steering wheel heat, Dog Mode, or air filtration. Omit any unchanged settings.")
-    public var cabin: CabinClimateSettings?
+    @Property(title: "Target Temperature", description: "Requested cabin temperature in °F (59 to 82.4) or °C (15 to 28). Pass the exact number the user said without converting. Also starts climate.")
+    public var targetTemperature: Double?
+    @Property(title: "Temperature Unit", description: "Fahrenheit or Celsius for Target Temperature. Optional; values 59 to 82.4 default to Fahrenheit and 15 to 28 default to Celsius.")
+    public var temperatureUnit: CabinTemperatureUnit?
+    @Property(title: "Max Defrost", description: "True to turn on max windshield defrost, false to turn it off.")
+    public var maxDefrost: Bool?
+    @Property(title: "Driver Seat Heat", description: "Driver seat heater level from 0 (off) to 3 (high).")
+    public var driverSeatHeat: Int?
+    @Property(title: "Passenger Seat Heat", description: "Front passenger seat heater level from 0 (off) to 3 (high).")
+    public var passengerSeatHeat: Int?
+    @Property(title: "Steering Wheel Heater", description: "True to turn on the heated steering wheel, false to turn it off.")
+    public var steeringWheelHeat: Bool?
+    @Property(title: "Dog Mode", description: "True to turn on Dog Mode, false to turn it off (requires confirmation).")
+    public var dogMode: Bool?
+    @Property(title: "Bioweapon Defense Mode", description: "True to turn on HEPA cabin filtration, false to turn it off.")
+    public var bioweaponDefense: Bool?
     @Property(title: "Locked", description: "True to lock doors or false to unlock. Unlocking requires confirmation.")
     public var locked: Bool?
     @Property(title: "Sentry Mode", description: "True to enable or false to disable Sentry Mode. Disabling requires confirmation.")
@@ -53,7 +78,7 @@ public struct CarControlSettings: TransientAppEntity {
 public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
-        "Applies one or more Tesla controls in one call: warm up, cool down, precondition, or stop climate, defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locks, Sentry, charging, limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for default car; seat cooling and software updates have dedicated tools.",
+        "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locks, Sentry, charging, limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for default car; seat cooling and updates use dedicated tools.",
         searchKeywords: [
             "control my car", "lock my car", "unlock my car", "warm up my car", "cool down my car",
             "precondition", "turn off climate", "defrost", "dog mode", "bioweapon defense",
@@ -63,6 +88,7 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
         ]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -72,7 +98,7 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
         optionsProvider: SelectedVehicleOptionsProvider()
     )
     public var vehicle: VehicleEntity?
-    @Parameter(title: "Changes", description: "Only the controls explicitly requested for this car. A temperature starts HVAC once even when climate power is also on.")
+    @Parameter(title: "Changes", description: "Only the controls explicitly requested for this car. A target temperature starts climate automatically even if Climate Power is omitted.")
     public var changes: CarControlSettings
 
     public init() {}
@@ -199,14 +225,38 @@ extension CabinClimateSettings {
     }
 
     func controlSteps(climateOn: Bool?, startWhenEmpty: Bool) -> [CarControlStep] {
+        Self.makeControlSteps(
+            climateOn: climateOn,
+            target: roundedTargetCelsius.map { ($0, String(format: "%.1f°C", $0)) },
+            maxDefrost: enableMaxDefrost,
+            driverSeatHeat: driverSeatHeatLevel,
+            passengerSeatHeat: passengerSeatHeatLevel,
+            steeringWheelHeat: steeringWheelHeat,
+            dogMode: enablePetMode,
+            bioweaponDefense: enableBioweaponDefenseMode,
+            startWhenEmpty: startWhenEmpty
+        )
+    }
+
+    static func makeControlSteps(
+        climateOn: Bool?,
+        target: (celsius: Double, label: String)?,
+        maxDefrost: Bool?,
+        driverSeatHeat: Int?,
+        passengerSeatHeat: Int?,
+        steeringWheelHeat: Bool?,
+        dogMode: Bool?,
+        bioweaponDefense: Bool?,
+        startWhenEmpty: Bool
+    ) -> [CarControlStep] {
         var steps: [CarControlStep] = []
-        if let target = roundedTargetCelsius {
-            steps.append(.init("set_temps", String(format: "%.1f°C", target), ["driver_temp": .double(target), "passenger_temp": .double(target)]))
+        if let target {
+            steps.append(.init("set_temps", target.label, ["driver_temp": .double(target.celsius), "passenger_temp": .double(target.celsius)]))
         }
-        if let defrost = enableMaxDefrost {
+        if let defrost = maxDefrost {
             steps.append(.init("remote_defrost", defrost ? "max defrost on" : "max defrost off", ["on": .bool(defrost)]))
         }
-        for (seat, name, requested) in [("front_left", "driver seat", driverSeatHeatLevel), ("front_right", "passenger seat", passengerSeatHeatLevel)] {
+        for (seat, name, requested) in [("front_left", "driver seat", driverSeatHeat), ("front_right", "passenger seat", passengerSeatHeat)] {
             if let requested {
                 let level = min(max(requested, 0), 3)
                 steps.append(.init("set_seat_heat", level > 0 ? "\(name) heat \(level)" : "\(name) heat off", ["seat": .string(seat), "level": .int(level)]))
@@ -215,15 +265,15 @@ extension CabinClimateSettings {
         if let on = steeringWheelHeat {
             steps.append(.init("steering_wheel_heater", on ? "steering wheel heat on" : "steering wheel heat off", ["on": .bool(on)]))
         }
-        if let on = enablePetMode {
+        if let on = dogMode {
             steps.append(.init("set_pet_mode", on ? "Dog Mode on" : "Dog Mode off", ["on": .bool(on)], confirm: !on))
         }
-        if let on = enableBioweaponDefenseMode {
+        if let on = bioweaponDefense {
             steps.append(.init("set_bioweapon_mode", on ? "Bioweapon Defense on" : "Bioweapon Defense off", ["on": .bool(on), "manual_override": .bool(false)]))
         }
 
-        let seatHeatRequested = (driverSeatHeatLevel ?? 0) > 0 || (passengerSeatHeatLevel ?? 0) > 0
-        let requiresHVAC = targetTemperatureCelsius != nil || seatHeatRequested || steeringWheelHeat == true
+        let seatHeatRequested = (driverSeatHeat ?? 0) > 0 || (passengerSeatHeat ?? 0) > 0
+        let requiresHVAC = target != nil || seatHeatRequested || steeringWheelHeat == true
         if climateOn == true || requiresHVAC || (startWhenEmpty && steps.isEmpty) {
             let isImplicit = climateOn != true && !steps.isEmpty
             steps.insert(.init("auto_conditioning_start", "climate on", isImplicitHVACStart: isImplicit), at: 0)
@@ -235,17 +285,55 @@ extension CabinClimateSettings {
 }
 
 private extension CarControlSettings {
-    func steps(for vehicle: FleetVehicleInfo) throws -> [CarControlStep] {
-        if let target = cabin?.targetTemperatureCelsius, !(15.0...28.0).contains(target) {
-            throw FleetKitError.api("Choose a cabin temperature between 15 and 28°C (59 to 82.4°F).")
+    func resolvedTargetTemperature() throws -> (celsius: Double, label: String)? {
+        guard let value = targetTemperature else { return nil }
+        let unit: CabinTemperatureUnit
+        if let explicitUnit = temperatureUnit {
+            unit = explicitUnit
+        } else if (15.0...28.0).contains(value) {
+            unit = .celsius
+        } else if (59.0...82.4).contains(value) {
+            unit = .fahrenheit
+        } else {
+            throw FleetKitError.api("Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).")
         }
-        for level in [cabin?.driverSeatHeatLevel, cabin?.passengerSeatHeatLevel].compactMap({ $0 }) where !(0...3).contains(level) {
+
+        switch unit {
+        case .celsius:
+            guard (15.0...28.0).contains(value) else {
+                throw FleetKitError.api("Choose a cabin temperature between 15 and 28°C (59 to 82.4°F).")
+            }
+            let target = SetCabinTemperatureIntent.targetCelsius(for: Measurement(value: value, unit: .celsius))
+            return (target, String(format: "%.1f°C", target))
+        case .fahrenheit:
+            guard (59.0...82.4).contains(value) else {
+                throw FleetKitError.api("Choose a cabin temperature between 59 and 82.4°F (15 to 28°C).")
+            }
+            let target = SetCabinTemperatureIntent.targetCelsius(for: Measurement(value: value, unit: .fahrenheit))
+            let display = value.formatted(.number.precision(.fractionLength(0...1)))
+            return (target, "\(display)°F")
+        }
+    }
+
+    func steps(for vehicle: FleetVehicleInfo) throws -> [CarControlStep] {
+        let resolvedTarget = try resolvedTargetTemperature()
+        for level in [driverSeatHeat, passengerSeatHeat].compactMap({ $0 }) where !(0...3).contains(level) {
             throw FleetKitError.api("Choose a seat heater level between 0 and 3.")
         }
-        var steps = (cabin ?? CabinClimateSettings()).controlSteps(climateOn: climateOn, startWhenEmpty: false)
+        var steps = CabinClimateSettings.makeControlSteps(
+            climateOn: climateOn,
+            target: resolvedTarget,
+            maxDefrost: maxDefrost,
+            driverSeatHeat: driverSeatHeat,
+            passengerSeatHeat: passengerSeatHeat,
+            steeringWheelHeat: steeringWheelHeat,
+            dogMode: dogMode,
+            bioweaponDefense: bioweaponDefense,
+            startWhenEmpty: false
+        )
         if climateOn == false {
             let activatesClimate = steps.contains { $0.action == "auto_conditioning_start" }
-                || cabin?.enableMaxDefrost == true || cabin?.enablePetMode == true || cabin?.enableBioweaponDefenseMode == true
+                || maxDefrost == true || dogMode == true || bioweaponDefense == true
             if activatesClimate { throw FleetKitError.api("Turning off climate conflicts with the requested cabin settings.") }
         }
         if charging == true && chargePort == .close {

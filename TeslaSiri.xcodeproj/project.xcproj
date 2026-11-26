@@ -55,6 +55,7 @@
         { "path": "<PRODUCTS>/TeslaSiri.app", "id": "000000000000000000000120", "type": "wrapper.application", "index": false },
         { "path": "<PRODUCTS>/TeslaSiriAppIntents.appex", "id": "1FA023BC2FDB3BCD001FDFD5", "type": "wrapper.extensionkit-extension", "index": false, "target-membership": [ { "build-phase": "TeslaSiri/copy/Embed ExtensionKit Extensions", "header-preservation": "remove-on-copy" } ] },
         { "path": "<PRODUCTS>/TeslaSiri WidgetExtension.appex", "id": "1FFDCE7B30AA5FDB00CB681A", "type": "wrapper.app-extension", "index": false, "target-membership": [ { "build-phase": "TeslaSiri/copy/Embed Foundation Extensions", "header-preservation": "remove-on-copy" } ] },
+        { "path": "<PRODUCTS>/TeslaSiriCarIntents.appex", "id": "1F9ECF2F30B7C5A100C5A8E7", "type": "wrapper.app-extension", "index": false, "target-membership": [ { "build-phase": "TeslaSiri/copy/Embed Foundation Extensions", "header-preservation": "remove-on-copy" } ] },
       ],
     },
     { "path": "SiriTesla.icon", "target-membership": [ "TeslaSiri/resources" ] },
@@ -81,6 +82,21 @@
       ],
     },
     { "kind": "folder", "path": "TeslaSiri/UI/Widgets/Components", "target-membership": [ "TeslaSiri WidgetExtension" ] },
+    {
+      "kind": "folder",
+      "path": "TeslaSiriCarIntents",
+      "target-membership": [
+        "TeslaSiriCarIntents",
+      ],
+      "membership-exceptions": [
+        {
+          "target": "TeslaSiriCarIntents",
+          "exclusions": [
+            "Info.plist",
+          ],
+        },
+      ],
+    },
   ],
   "targets": [
     {
@@ -91,6 +107,7 @@
       "dependencies": [
         "TeslaSiriAppIntents",
         "TeslaSiri WidgetExtension",
+        "TeslaSiriCarIntents",
       ],
       "build-phases": [
         "compile-sources",
@@ -118,7 +135,7 @@
         },
       ],
       "build-settings": {
-        "APP_SHORTCUTS_ENABLE_FLEXIBLE_MATCHING": "YES",
+        "APP_SHORTCUTS_ENABLE_FLEXIBLE_MATCHING": "NO",
         "ASSETCATALOG_COMPILER_APPICON_NAME": "SiriTesla",
         "ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS": "NO",
         "CODE_SIGN_ENTITLEMENTS": "TeslaSiri/TeslaSiri.entitlements",
@@ -135,6 +152,7 @@
         "INFOPLIST_KEY_CFBundleDisplayName": "Wattie",
         "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.utilities",
         "INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace": "YES",
+        "INFOPLIST_KEY_NSSiriUsageDescription": "Siri uses Wattie to lock, unlock, honk, and check the charge of your car, and Maps uses it to plan EV routes.",
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]": "YES",
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]": "YES",
         "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]": "YES",
@@ -186,7 +204,7 @@
         "DEVELOPMENT_TEAM": "6UHAW5UAT4",
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_FILE": "TeslaSiriAppIntents/Info.plist",
-        "INFOPLIST_KEY_CFBundleDisplayName": "TeslaSiriAppIntents",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Wattie",
         "INFOPLIST_KEY_NSHumanReadableCopyright": "",
         "IPHONEOS_DEPLOYMENT_TARGET": "27.3",
         "LD_RUNPATH_SEARCH_PATHS": [
@@ -262,6 +280,51 @@
         "SWIFT_VERSION": "5.0",
         "TARGETED_DEVICE_FAMILY": "1,2",
         "XROS_DEPLOYMENT_TARGET": "27.3",
+      },
+    }, {
+      "name": "TeslaSiriCarIntents",
+      "id": "1F9ECF2E30B7C5A100C5A8E7",
+      "product": "Products/TeslaSiriCarIntents.appex",
+      "product-type": "app-extension",
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+      ],
+      "package-product-members": [
+        {
+          "package": "FleetKit",
+          "product-name": "FleetKit",
+          "build-phase": { "build-phase": "frameworks" },
+        },
+      ],
+      "build-settings": {
+        "APPLICATION_EXTENSION_API_ONLY": "YES",
+        "CODE_SIGN_ENTITLEMENTS": "TeslaSiriCarIntents/TeslaSiriCarIntents.entitlements",
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "DEVELOPMENT_TEAM": "6UHAW5UAT4",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "TeslaSiriCarIntents/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Wattie",
+        "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+        "IPHONEOS_DEPLOYMENT_TARGET": "27.3",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/Frameworks",
+          "@executable_path/../../Frameworks",
+        ],
+        "MARKETING_VERSION": "1.1",
+        "PRODUCT_BUNDLE_IDENTIFIER": "com.maxweinbach.TeslaSiri.CarIntents",
+        "PRODUCT_NAME": "$(TARGET_NAME)",
+        "SDKROOT": "iphoneos",
+        "SKIP_INSTALL": "YES",
+        "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
+        "SWIFT_VERSION": "5.0",
+        "TARGETED_DEVICE_FAMILY": "1,2",
       },
     },
   ],

@@ -15,7 +15,8 @@ struct ControlCarTests {
             let intent = ControlCarIntent()
             let changes = CarControlSettings()
             changes.climateOn = true
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
             changes.locked = true
             intent.changes = changes
 
@@ -56,7 +57,8 @@ struct ControlCarTests {
 
             let intent = ControlCarIntent()
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
             intent.vehicle = midnight
             intent.changes = changes
             let result = try #require(try await intent.perform().value)
@@ -78,7 +80,8 @@ struct ControlCarTests {
 
             changes.chargeLimitPercent = nil
             changes.climateOn = false
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
             intent.changes = changes
             await #expect(throws: FleetKitError.self) { _ = try await intent.perform() }
 
@@ -168,7 +171,8 @@ struct ControlCarTests {
         }) { requests in
             let intent = ControlCarIntent()
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
             changes.locked = true
             intent.changes = changes
             let value = try #require(try await intent.perform().value)
@@ -188,6 +192,71 @@ struct ControlCarTests {
             intent.changes = changes
             await #expect(throws: FleetKitError.self) { _ = try await intent.perform() }
             #expect(!requests().contains { $0.httpMethod == "POST" })
+        }
+    }
+
+    @Test(arguments: [CabinTemperatureUnit?.some(.fahrenheit), CabinTemperatureUnit?.none])
+    func controlCarAcceptsFahrenheitExplicitlyAndByAutoDetection(unit: CabinTemperatureUnit?) async throws {
+        try await withIsolatedFleetService(selectedVIN: "VIN-2", responder: Self.respond) { requests in
+            let intent = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.targetTemperature = 72
+            changes.temperatureUnit = unit
+            intent.changes = changes
+
+            let value = try #require(try await intent.perform().value)
+            #expect(value.succeeded)
+            #expect(value.appliedValue == "climate on, 72°F")
+            #expect(value.summary.contains("72°F"))
+            let query = requests().compactMap(\.url).first { $0.lastPathComponent == "set_temperatures" }?.query()
+            #expect(query == "temperature=22.0")
+        }
+    }
+
+    @Test(arguments: [CabinTemperatureUnit?.some(.celsius), CabinTemperatureUnit?.none])
+    func controlCarAcceptsCelsiusExplicitlyAndByAutoDetection(unit: CabinTemperatureUnit?) async throws {
+        try await withIsolatedFleetService(selectedVIN: "VIN-2", responder: Self.respond) { requests in
+            let intent = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.targetTemperature = 22
+            changes.temperatureUnit = unit
+            intent.changes = changes
+
+            let value = try #require(try await intent.perform().value)
+            #expect(value.succeeded)
+            #expect(value.appliedValue == "climate on, 22.0°C")
+            let query = requests().compactMap(\.url).first { $0.lastPathComponent == "set_temperatures" }?.query()
+            #expect(query == "temperature=22.0")
+        }
+    }
+
+    @Test(arguments: [10.0, 40.0, 95.0])
+    func controlCarRejectsOutOfRangeTemperaturesBeforeDispatch(value: Double) async throws {
+        try await withIsolatedFleetService(responder: Self.respond) { requests in
+            let intent = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.targetTemperature = value
+            intent.changes = changes
+            await #expect(throws: FleetKitError.self) { _ = try await intent.perform() }
+            #expect(!requests().contains { $0.httpMethod == "POST" })
+        }
+    }
+
+    @Test func vehicleStatusSnippetIntentRendersWithoutNetworkRequests() async throws {
+        try await withIsolatedFleetService(responder: Self.respond) { requests in
+            let snapshot = FleetSnapshotInfo(
+                vin: "VIN-1",
+                batteryLevel: 81,
+                batteryRangeMiles: 256,
+                locked: true,
+                insideTemp: 70,
+                targetTemp: 72,
+                temperatureInFahrenheit: true
+            )
+            let status = VehicleStatusEntity(snapshot: snapshot, vehicleName: "Roadrunner", locationAddress: "Cupertino, CA")
+            let snippet = VehicleStatusSnippetIntent(status: status)
+            _ = try await snippet.perform()
+            #expect(requests().isEmpty)
         }
     }
 }

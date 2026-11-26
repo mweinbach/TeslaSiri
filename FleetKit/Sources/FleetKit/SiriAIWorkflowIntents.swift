@@ -21,6 +21,7 @@ public struct StartChargingIntent: AppIntent, PredictableIntent {
         searchKeywords: ["charge my car", "begin charging", "plug in"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -71,6 +72,7 @@ public struct StopChargingIntent: AppIntent, PredictableIntent {
         searchKeywords: ["stop charging", "end charge", "pause charging"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -122,6 +124,7 @@ public struct SetChargePortIntent: AppIntent, PredictableIntent {
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -192,6 +195,7 @@ public struct SetSentryModeIntent: AppIntent, PredictableIntent {
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -263,6 +267,7 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
         searchKeywords: ["precondition", "precondition my car", "warm up", "warm up my car", "cool down", "cool down my car", "defrost", "defrost my car", "heat", "AC", "air conditioning"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -360,12 +365,13 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
 /// minimum distance, and result cap).
 @AppIntent(.tool)
 public struct FindDrivesIntent: AppIntent {
-    public static let title: LocalizedStringResource = "Find Tesla Drives"
+    public static let title: LocalizedStringResource = "Find Drives"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Tesla Drive Details tool.",
-        searchKeywords: ["trip", "trips", "drive history", "where did I drive", "when did I go", "commute"]
+        "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Drive Details tool.",
+        searchKeywords: ["Tesla", "trip", "trips", "drive history", "where did I drive", "when did I go", "commute"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -509,12 +515,13 @@ public struct FindDrivesIntent: AppIntent {
 /// Fetches and reads aloud software release notes for a Tesla vehicle's pending or installed firmware version.
 @AppIntent(.tool)
 public struct GetReleaseNotesIntent: AppIntent, PredictableIntent {
-    public static let title: LocalizedStringResource = "Read Tesla Release Notes"
+    public static let title: LocalizedStringResource = "Read Release Notes"
     public static let description = IntentDescription(
         "Reads aloud Tesla's release notes about what's new in the car's software: the release notes for the update waiting to install, or for the installed version when there's no update. Can read the notes for a specific version, or only the features about one topic, such as FSD or Navigation.",
-        searchKeywords: ["what's new", "release notes", "patch notes", "changelog", "new features", "software update"]
+        searchKeywords: ["Tesla", "what's new", "release notes", "patch notes", "changelog", "new features", "software update"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -640,6 +647,7 @@ public struct CloseWindowsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["roll up windows", "close car windows"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

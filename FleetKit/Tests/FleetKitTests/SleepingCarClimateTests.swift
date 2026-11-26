@@ -429,7 +429,9 @@ struct SleepingCarClimateTests {
             let control = ControlCarIntent()
             control.vehicle = Self.vehicle
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22, enableMaxDefrost: false)
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
+            changes.maxDefrost = false
             control.changes = changes
             _ = try await control.perform()
 
@@ -504,11 +506,10 @@ struct SleepingCarClimateTests {
             let control = ControlCarIntent()
             control.vehicle = Self.vehicle
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(
-                targetTemperatureCelsius: 22,
-                enableMaxDefrost: true,
-                steeringWheelHeat: true
-            )
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
+            changes.maxDefrost = true
+            changes.steeringWheelHeat = true
             changes.locked = true
             control.changes = changes
 
@@ -536,11 +537,10 @@ struct SleepingCarClimateTests {
             let control = ControlCarIntent()
             control.vehicle = Self.vehicle
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(
-                targetTemperatureCelsius: 22,
-                enableMaxDefrost: true,
-                steeringWheelHeat: true
-            )
+            changes.targetTemperature = 22
+            changes.temperatureUnit = .celsius
+            changes.maxDefrost = true
+            changes.steeringWheelHeat = true
             changes.locked = true
             control.changes = changes
 
@@ -685,7 +685,8 @@ struct SleepingCarClimateTests {
             let implicit = ControlCarIntent()
             implicit.vehicle = Self.vehicle
             let implicitChanges = CarControlSettings()
-            implicitChanges.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+            implicitChanges.targetTemperature = 22
+            implicitChanges.temperatureUnit = .celsius
             implicitChanges.locked = true
             implicit.changes = implicitChanges
             let implicitResult = try #require(try await implicit.perform().value)
@@ -842,13 +843,12 @@ struct SleepingCarClimateTests {
             let control = ControlCarIntent()
             control.vehicle = Self.vehicle
             let changes = CarControlSettings()
-            changes.cabin = CabinClimateSettings(
-                targetTemperatureCelsius: 21,
-                enableMaxDefrost: true,
-                driverSeatHeatLevel: 2,
-                steeringWheelHeat: true,
-                enablePetMode: true
-            )
+            changes.targetTemperature = 21
+            changes.temperatureUnit = .celsius
+            changes.maxDefrost = true
+            changes.driverSeatHeat = 2
+            changes.steeringWheelHeat = true
+            changes.dogMode = true
             changes.locked = true
             control.changes = changes
             _ = try await control.perform()

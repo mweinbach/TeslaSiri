@@ -218,7 +218,8 @@ final class DemoSiriVerificationRunner {
                 sandbox.applyPreset(.freezingMorning)
                 let changes = CarControlSettings()
                 changes.climateOn = true
-                changes.cabin = CabinClimateSettings(targetTemperatureCelsius: 22)
+                changes.targetTemperature = 22
+                changes.temperatureUnit = .celsius
                 changes.locked = true
                 let control = ControlCarIntent()
                 control.changes = changes

@@ -15,6 +15,7 @@ public struct LockVehicleIntent: AppIntent, PredictableIntent {
         searchKeywords: ["lock my car", "lock car", "lock doors", "lock vehicle", "lock Tesla"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -66,6 +67,7 @@ public struct UnlockVehicleIntent: AppIntent, PredictableIntent {
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -121,6 +123,7 @@ public struct StartClimateIntent: AppIntent, LongRunningIntent, PredictableInten
         ]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -200,6 +203,7 @@ public struct VentWindowsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["crack the windows", "vent", "let air out"]
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -288,6 +292,7 @@ public struct OpenTrunkIntent: AppIntent, PredictableIntent {
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -372,6 +377,7 @@ public struct OpenFrunkIntent: AppIntent, PredictableIntent {
     )
     public static let isDiscoverable = true
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",
@@ -419,6 +425,7 @@ public struct SetChargeLimitIntent: AppIntent, PredictableIntent {
         "Sets the maximum battery state-of-charge percentage (50% to 100%) at which charging stops on a Tesla vehicle, after user confirmation. Use 80% for typical daily driving or up to 100% before long road trips."
     )
     public static let isDiscoverable = true
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
         title: "Vehicle",

@@ -3,6 +3,7 @@ import AppIntents
 public struct FleetWidgetActionIntent: AppIntent {
     public static let title: LocalizedStringResource = "Vehicle Widget Action"
     public static let isDiscoverable = false
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.widgetKitExtension, .appIntentsExtension, .main] }
 
     @Parameter(title: "Vehicle")
     public var vehicle: VehicleEntity?

@@ -69,6 +69,7 @@ TeslaSiri is a SwiftUI iOS 27.3+ app that connects to Tessie or Teslascope for T
 - `FleetKit/Sources/FleetKit/FleetKitLog.swift`: OSLog loggers (subsystem `com.maxweinbach.TeslaSiri`) + `FleetIntentLog` perform tracker; see `AGENTS.md` → Logging (FleetKitLog) for conventions and the device-debug `ENABLE_DEBUG_DYLIB` note.
 - `TeslaSiri/AppIntents/`: `FleetTokenBridge`, `TeslaSiriShortcuts` (all 10 `AppShortcut` slots used), `BatteryReminderManager`.
 - `TeslaSiriAppIntents/`: thin App Intents extension re-exporting `FleetKitPackage`.
+- `TeslaSiriCarIntents/`: SiriKit Intents extension for Apple's built-in car commands (lock/unlock, lock status, charge and range, honk/flash) and Maps EV routing (List Cars). Logic is in `FleetKit/Sources/FleetKit/SiriCarCommands.swift`; the app registers car names and requests Siri permission in `TeslaSiri/AppIntents/SiriCarCommandsSetup.swift`. See `AGENTS.md` → SiriKit Car Commands and Maps EV routing.
 
 ## Worktree Safety
 

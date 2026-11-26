@@ -135,6 +135,8 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
 }
 
 public struct SoftwareUpdateEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
     public init() {}
 
     public func entities(for identifiers: [SoftwareUpdateEntity.ID]) async throws -> [SoftwareUpdateEntity] {
@@ -364,6 +366,8 @@ extension ReleaseNoteEntity: Transferable {
 }
 
 public struct ReleaseNoteEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQuery {
+    public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
+
     private let serviceOverride: FleetIntentService?
 
     private var service: FleetIntentService {
