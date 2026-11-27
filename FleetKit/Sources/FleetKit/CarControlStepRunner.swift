@@ -1,3 +1,4 @@
+import AppIntents
 import Foundation
 
 /// The steps one intent will send to a car, after dropping a redundant HVAC start.
@@ -43,7 +44,9 @@ struct CarControlRunOutcome: Sendable {
     func partialFailureSummary(vehicleName: String) -> String? {
         guard let failure else { return nil }
         let acceptedList = accepted.map(\.label).joined(separator: ", ")
-        let errorMessage = failure.error.localizedDescription
+        // Error messages are usually full sentences; the summary supplies the period.
+        var errorMessage = failure.error.localizedDescription
+        if errorMessage.hasSuffix(".") { errorMessage.removeLast() }
         if notSent.isEmpty {
             return String(
                 localized: "\(vehicleName) accepted: \(acceptedList). I couldn't confirm \(failure.step.label): \(errorMessage).",
@@ -97,5 +100,73 @@ enum CarControlStepRunner {
             }
         }
         return outcome
+    }
+}
+
+extension LongRunningIntent {
+    /// Runs validated steps for the Control Car and Unlock or Open Car tools: checks that the
+    /// provider offers every step, asks once to confirm the sensitive ones, sends the steps in
+    /// order, and describes what the car accepted. A failure after the first accepted step
+    /// comes back as a result that didn't succeed rather than an error.
+    func runCarControl(
+        _ steps: [CarControlStep],
+        on vehicle: FleetVehicleInfo,
+        action: String,
+        service: FleetIntentService,
+        log: FleetIntentLog
+    ) async throws -> VehicleCommandResultEntity {
+        let available = try await service.controlActions(for: vehicle)
+        if let unavailable = steps.first(where: { !available.supports($0.action) }) {
+            throw FleetKitError.unsupportedAction(unavailable.label)
+        }
+        let sensitive = steps.filter(\.needsConfirmation).map(\.label)
+        if !sensitive.isEmpty {
+            let description = sensitive.formatted(.list(type: .and))
+            try await confirmWithSafetyGate(
+                dialog: IntentDialog(
+                    LocalizedStringResource(
+                        "Confirm these changes to \(vehicle.name): \(description)?",
+                        bundle: FleetKitLocalization.bundleDescription,
+                        comment: "Confirmation prompt listing sensitive vehicle control changes."
+                    )
+                )
+            )
+        }
+
+        let plan = await CarControlPlan.make(steps, service: service, vin: vehicle.vin)
+        let outcome = try await performSandboxAwareBackgroundTask(
+            description: String(
+                localized: "Controlling \(vehicle.name)",
+                bundle: .module,
+                comment: "Progress label while running one or more vehicle control commands."
+            )
+        ) {
+            try await CarControlStepRunner.run(plan, service: service, vin: vehicle.vin)
+        }
+
+        let detail = outcome.acceptedDetail
+        if let failure = outcome.failure, let summary = outcome.partialFailureSummary(vehicleName: vehicle.name) {
+            _ = log.failure(failure.error)
+            return VehicleCommandResultEntity(
+                vehicle: vehicle,
+                action: action,
+                succeeded: false,
+                appliedValue: detail,
+                summary: summary
+            )
+        }
+        let summary = outcome.deliveryState.summary(
+            vehicleName: vehicle.name,
+            wakingAction: String(localized: "apply: \(detail)", bundle: .module, comment: "Infinitive action phrase in wake-up message listing requested car controls."),
+            confirmed: String(localized: "\(vehicle.name) accepted: \(detail).", bundle: .module, comment: "Siri confirmation listing vehicle controls accepted by the car.")
+        )
+        log.success("completed \(outcome.accepted.count) requested car controls (\(outcome.deliveryState.rawValue))")
+        return VehicleCommandResultEntity(
+            vehicle: vehicle,
+            action: action,
+            deliveryState: outcome.deliveryState,
+            appliedValue: detail,
+            summary: summary
+        )
     }
 }

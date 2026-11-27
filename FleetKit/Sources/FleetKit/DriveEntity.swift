@@ -9,11 +9,17 @@ import OSLog
 public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiable {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Drive")
     public static let defaultQuery = DriveEntityQuery()
+    /// A drive's start and end addresses are location history, so Siri asks for authentication
+    /// before reading one out. The intents that return drives carry the same policy.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     public let id: String // sessionID
 
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
+
+    @Property(title: "Vehicle Name", description: "The owner's name for the car that made this drive, such as \"Midnight\".")
+    public var vehicleName: String
 
     @Property(title: "Distance", description: "Distance driven on this trip, in miles.")
     public var distanceMiles: Double?
@@ -95,9 +101,10 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     @Property(title: "End Longitude", description: "Ending GPS longitude in decimal degrees, for map rendering.", visibility: .internal)
     public var endLongitude: Double?
 
-    public init(info: FleetDriveInfo) {
+    public init(info: FleetDriveInfo, vehicleName: String) {
         self.id = info.sessionID
         self.vin = info.vin
+        self.vehicleName = vehicleName
         self.distanceMiles = info.distanceMiles
         self.durationMinutes = info.durationMinutes
         self.avgSpeedMPH = info.avgSpeedMPH
@@ -195,10 +202,14 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
         return parts.joined(separator: " • ")
     }
 
-    /// Detailed natural-language summary suitable for Siri voice readout.
+    /// Detailed natural-language summary suitable for Siri voice readout. Names the car the
+    /// drive belongs to unless `vehicleName` overrides it.
     public func spokenSummary(vehicleName: String? = nil) -> String {
         let whenText = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let subject = vehicleName ?? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken drive summary")
+        let named = vehicleName ?? self.vehicleName
+        let subject = named.isEmpty
+            ? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken drive summary")
+            : named
         let durationPhrase = durationMinutes.map { FleetKitFormatting.durationMinutes($0, width: .wide) }
         var sentences: [String] = []
 
@@ -315,8 +326,8 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
             String(localized: "energy", bundle: .module, comment: "Spotlight keyword for energy"),
             "kWh",
             String(localized: "efficiency", bundle: .module, comment: "Spotlight keyword for efficiency"),
-            FleetKitLog.vin(vin), startAddress, endAddress, tag
-        ].compactMap { $0 }
+            FleetKitLog.vin(vin), vehicleName, startAddress, endAddress, tag
+        ].compactMap { $0 }.filter { !$0.isEmpty }
         return attributes
     }
 }
@@ -343,9 +354,15 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
         var found: [DriveEntity] = []
 
         for vehicle in vehicles where !remaining.isEmpty && (hasLegacyID || requestedVINs.contains(vehicle.vin)) {
-            let drives = try await service.drives(vin: vehicle.vin, limit: 100)
+            // A drive Siri found with a dated search can be older than the newest page, so keep
+            // paging back for identifiers that name this car. A legacy identifier could belong
+            // to any car and is only matched against the newest page.
+            let owned = remaining.filter { $0.hasPrefix("\(vehicle.vin):") }
+            let drives = try await service.driveHistory(vin: vehicle.vin) { collected in
+                owned.isSubset(of: collected.map(\.sessionID))
+            }
             for drive in drives where remaining.contains(drive.sessionID) {
-                found.append(DriveEntity(info: drive))
+                found.append(DriveEntity(info: drive, vehicleName: vehicle.name))
                 remaining.remove(drive.sessionID)
             }
         }
@@ -361,7 +378,7 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
         var all: [DriveEntity] = []
         for vehicle in vehicles {
             do {
-                let drives = try await service.drives(vin: vehicle.vin, limit: 50).map(DriveEntity.init(info:))
+                let drives = try await service.drives(vin: vehicle.vin, limit: 50).map { DriveEntity(info: $0, vehicleName: vehicle.name) }
                 all.append(contentsOf: drives)
             } catch FleetKitError.sessionExpired {
                 throw FleetKitError.sessionExpired
@@ -384,7 +401,7 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
     public func suggestedEntities() async throws -> [DriveEntity] {
         let service = FleetIntentService.make()
         let vehicle = try await service.resolvedVehicle(nil)
-        let drives = try await service.drives(vin: vehicle.vin, limit: 10).map(DriveEntity.init(info:))
+        let drives = try await service.drives(vin: vehicle.vin, limit: 10).map { DriveEntity(info: $0, vehicleName: vehicle.name) }
         FleetKitLog.entities.info("DriveEntityQuery suggesting \(drives.count, privacy: .public) drive(s) for \(vehicle.name, privacy: .public)")
         return drives
     }
@@ -397,7 +414,9 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
         let service = FleetIntentService.make()
         var all: [DriveEntity] = []
         for vehicle in try await service.vehicles() {
-            all.append(contentsOf: try await service.drives(vin: vehicle.vin, limit: 50).map(DriveEntity.init(info:)))
+            // The same window the app keeps indexed: `FleetSpotlightIndexer.drivesPerVehicle`.
+            let drives = try await service.driveHistory(vin: vehicle.vin)
+            all.append(contentsOf: drives.map { DriveEntity(info: $0, vehicleName: vehicle.name) })
         }
         try await FleetSpotlightIndexer.donate(all)
     }

@@ -71,9 +71,11 @@ public struct FleetIntentLog: Sendable {
         FleetKitLog.intents.notice("\(self.name, privacy: .public) succeeded in \(elapsed, privacy: .public) ms — \(detail, privacy: .public)")
     }
 
-    /// Logs the failure and hands the error back so call sites can
+    /// Logs the failure and hands back the error to throw, so call sites can
     /// `throw log.failure(error)`. User cancellation is logged as a notice,
-    /// not an error.
+    /// not an error. A transport failure comes back as a `FleetKitError`, because
+    /// Siri can only read the message of an error that supplies one
+    /// (see `FleetKitError.readableBySiri`).
     public func failure(_ error: any Error) -> any Error {
         FleetKitLog.signposter.endInterval("Intent", interval)
         let elapsed = FleetKitLog.milliseconds(since: start)
@@ -82,6 +84,6 @@ public struct FleetIntentLog: Sendable {
         } else {
             FleetKitLog.intents.error("\(self.name, privacy: .public) failed after \(elapsed, privacy: .public) ms — \(error.localizedDescription, privacy: .public)")
         }
-        return error
+        return FleetKitError.readableBySiri(error)
     }
 }

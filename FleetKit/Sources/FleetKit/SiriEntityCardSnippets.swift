@@ -257,9 +257,9 @@ private struct VehicleStatusCardView: View {
 
                         Spacer(minLength: 4)
 
-                        if let state = status.chargingState, !state.isEmpty {
-                            let isCharging = state.localizedStandardContains("charging") && !state.localizedStandardContains("dis")
-                            Label(FleetKitFormatting.localizedChargingState(state), systemImage: isCharging ? "bolt.fill" : "powerplug")
+                        if let label = status.chargingStateLabel {
+                            let isCharging = status.chargingState == .charging
+                            Label(label, systemImage: isCharging ? "bolt.fill" : "powerplug")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(isCharging ? AnyShapeStyle(Color.green) : AnyShapeStyle(.secondary))
                                 .padding(.horizontal, 8)

@@ -234,8 +234,11 @@ struct FleetSiriAIExpansionTests {
             endingBatteryPercent: 75,
             cost: 18.4
         )
-        let entity = ChargeSessionEntity(info: info)
+        let entity = ChargeSessionEntity(info: info, vehicleName: "Roadrunner")
         let attributes = entity.attributeSet
+        #expect(entity.vehicleName == "Roadrunner")
+        #expect(attributes.keywords?.contains("Roadrunner") == true)
+        #expect(attributes.contentDescription?.contains("Roadrunner Supercharged") == true)
         #expect(attributes.kind == "Tesla Charging Session")
         #expect(attributes.keywords?.contains("Supercharger") == true)
         #expect(attributes.keywords?.contains("Kettleman City Supercharger") == true)
@@ -298,8 +301,8 @@ struct FleetSiriAIExpansionTests {
         ])
 
         let allTools: [any ToolIntent.Type] = [
-            ListCarsIntent.self, GetVehicleInfoIntent.self, GetVehicleStatusIntent.self,
-            ControlCarIntent.self, SetCabinTemperatureIntent.self, SetSeatClimateIntent.self,
+            ListCarsIntent.self, GetVehicleInfoIntent.self, GetVehicleStatusIntent.self, LocateCarIntent.self,
+            ControlCarIntent.self, UnlockOrOpenCarIntent.self, SetCabinTemperatureIntent.self, SetSeatClimateIntent.self,
             SendNavigationIntent.self, InstallSoftwareUpdateIntent.self, CancelSoftwareUpdateIntent.self,
             FindDrivesIntent.self, GetDriveDetailsIntent.self, GetDrivingStatsIntent.self,
             GetRecentChargesIntent.self, GetChargeDetailsIntent.self, GetChargingStatsIntent.self,
@@ -308,7 +311,7 @@ struct FleetSiriAIExpansionTests {
         let toolTitles: Set<String> = allTools.reduce(into: []) {
             $0.insert(String(localized: $1.title))
         }
-        #expect(allTools.count == 18)
+        #expect(allTools.count == 20)
         #expect(toolTitles.count == allTools.count, "Every @AppIntent(.tool) must have a unique title")
 
         let namePattern = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -338,8 +341,9 @@ struct FleetSiriAIExpansionTests {
             #expect(!referenced.isEmpty)
             if name == "vehicle-control" {
                 let requiredTools = [
-                    ListCarsIntent.title, GetVehicleInfoIntent.title, ControlCarIntent.title,
-                    SetCabinTemperatureIntent.title, SetSeatClimateIntent.title, SendNavigationIntent.title
+                    ListCarsIntent.title, GetVehicleInfoIntent.title, LocateCarIntent.title, ControlCarIntent.title,
+                    UnlockOrOpenCarIntent.title, SetCabinTemperatureIntent.title, SetSeatClimateIntent.title,
+                    SendNavigationIntent.title
                 ].map { String(localized: $0) }
                 #expect(Set(requiredTools).isSubset(of: Set(referenced)))
             }

@@ -34,8 +34,12 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
     @Property(title: "Installable Now", description: "Whether the update has finished downloading and can be installed right now.")
     public var installable: Bool
 
-    @Property(title: "Status", description: "Update status reported by the car: available (ready to install), downloading, downloading_wifi_wait (waiting for Wi-Fi), scheduled, or installing. Empty when up to date.")
-    public var status: String?
+    @Property(title: "Status", description: "Where the update is in its download and install. Empty when the car is up to date.")
+    public var status: SoftwareUpdateStatus?
+
+    /// The provider's own wording for the status, kept for search and for a value `status`
+    /// has no case for.
+    public let reportedStatus: String?
 
     @Property(title: "Download Progress (%)", description: "How much of the update has downloaded, from 0 to 100.")
     public var downloadPercent: Int?
@@ -48,13 +52,14 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
 
     public init(info: FleetSoftwareInfo, vin: String, vehicleName: String) {
         self.id = Self.entityID(forVIN: vin)
+        self.reportedStatus = info.status
         self.vin = vin
         self.vehicleName = vehicleName
         self.currentVersion = info.currentVersion
         self.availableVersion = info.availableVersion
         self.updateAvailable = info.updateAvailable
         self.installable = info.installable
-        self.status = info.status
+        self.status = info.status.flatMap(SoftwareUpdateStatus.init(reported:))
         self.downloadPercent = info.downloadPercent.map { Int($0.rounded()) }
         self.installPercent = info.installPercent.map { Int($0.rounded()) }
         self.expectedDurationMinutes = info.expectedDurationMinutes.map { Int($0.rounded()) }
@@ -88,21 +93,11 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
             let pct = FleetKitFormatting.percent(downloadPercent)
             return String(localized: "Downloading • \(pct)", bundle: .module, comment: "Software update detail text while downloading with progress percentage")
         }
-        if let status, !status.isEmpty {
-            switch status.lowercased() {
-            case "available":
-                return String(localized: "Available", bundle: .module, comment: "Software update status: ready to install")
-            case "scheduled":
-                return String(localized: "Scheduled", bundle: .module, comment: "Software update status: scheduled to install")
-            case "installing":
-                return String(localized: "Installing", bundle: .module, comment: "Software update status: currently installing")
-            case "downloading":
-                return String(localized: "Downloading", bundle: .module, comment: "Software update status: currently downloading")
-            case "downloading_wifi_wait":
-                return String(localized: "Waiting for Wi-Fi", bundle: .module, comment: "Software update status: waiting for Wi-Fi to download")
-            default:
-                return status.capitalized
-            }
+        if let status {
+            return status.label
+        }
+        if let reportedStatus, !reportedStatus.isEmpty {
+            return reportedStatus.capitalized
         }
         return currentVersion.map {
             String(localized: "Current \($0)", bundle: .module, comment: "Current installed software version label")
@@ -132,8 +127,8 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
             )
         } ?? ""
 
-        switch status?.lowercased() ?? "" {
-        case "installing":
+        switch status {
+        case .installing:
             if let availableVersion {
                 if let installPercent {
                     let pct = FleetKitFormatting.percent(installPercent)
@@ -146,12 +141,12 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
                 return String(localized: "A software update is installing on \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for an unversioned software update currently installing with percent")
             }
             return String(localized: "A software update is installing on \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update currently installing")
-        case "scheduled":
+        case .scheduled:
             let base = availableVersion.map {
                 String(localized: "Software update \($0) is scheduled to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a scheduled versioned software update")
             } ?? String(localized: "A software update is scheduled to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a scheduled unversioned software update")
             return base + durationSuffix
-        case "downloading":
+        case .downloading:
             if let availableVersion {
                 if let downloadPercent {
                     let pct = FleetKitFormatting.percent(downloadPercent)
@@ -164,7 +159,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
                 return String(localized: "A software update is downloading to \(vehicleName), \(pct) done.", bundle: .module, comment: "Spoken status for an unversioned software update downloading with percent")
             }
             return String(localized: "A software update is downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update downloading")
-        case "downloading_wifi_wait":
+        case .waitingForWiFi:
             if let availableVersion {
                 if let downloadPercent {
                     let pct = FleetKitFormatting.percent(downloadPercent)
@@ -177,7 +172,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
                 return String(localized: "A software update is waiting for Wi-Fi to finish downloading to \(vehicleName) (\(pct) done).", bundle: .module, comment: "Spoken status for an unversioned software update waiting on Wi-Fi with percent")
             }
             return String(localized: "A software update is waiting for Wi-Fi to finish downloading to \(vehicleName).", bundle: .module, comment: "Spoken status for an unversioned software update waiting on Wi-Fi")
-        default:
+        case .available, nil:
             if installable {
                 let base = availableVersion.map {
                     String(localized: "Software update \($0) is ready to install on \(vehicleName).", bundle: .module, comment: "Spoken status for a ready-to-install versioned software update")
@@ -199,7 +194,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
         if let availableVersion {
             parts.append(String(localized: "Available version \(availableVersion)", bundle: .module, comment: "Spotlight detail for available software version"))
         }
-        if let status {
+        if let status = reportedStatus {
             parts.append(String(localized: "Status \(status)", bundle: .module, comment: "Spotlight detail for software update status"))
         }
         if installable {
@@ -226,7 +221,7 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
             String(localized: "install", bundle: .module, comment: "Spotlight keyword for install"),
             String(localized: "download", bundle: .module, comment: "Spotlight keyword for download"),
             String(localized: "update available", bundle: .module, comment: "Spotlight keyword for update available"),
-            currentVersion, availableVersion, status
+            currentVersion, availableVersion, reportedStatus
         ].compactMap { $0 }
         return attributes
     }
@@ -285,7 +280,7 @@ public struct SoftwareUpdateEntityQuery: EntityQuery, EntityStringQuery, Indexed
             if isGeneric || !namedMatches.isEmpty
                 || (entity.currentVersion?.localizedStandardContains(trimmed) == true)
                 || (entity.availableVersion?.localizedStandardContains(trimmed) == true)
-                || (entity.status?.localizedStandardContains(trimmed) == true) {
+                || (entity.reportedStatus?.localizedStandardContains(trimmed) == true) {
                 results.append(entity)
             }
         }

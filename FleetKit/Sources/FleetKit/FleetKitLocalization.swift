@@ -151,24 +151,4 @@ public enum FleetKitFormatting {
             .units(allowed: [.hours, .minutes], width: width)
         )
     }
-
-    /// Returns a localized display label for a Tesla charging state string.
-    public static func localizedChargingState(_ state: String) -> String {
-        switch state.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "charging":
-            return String(localized: "Charging", bundle: .module, comment: "Vehicle charging state: actively charging")
-        case "complete":
-            return String(localized: "Complete", bundle: .module, comment: "Vehicle charging state: charging complete")
-        case "stopped":
-            return String(localized: "Stopped", bundle: .module, comment: "Vehicle charging state: plugged in, charging stopped")
-        case "disconnected":
-            return String(localized: "Disconnected", bundle: .module, comment: "Vehicle charging state: unplugged")
-        case "starting":
-            return String(localized: "Starting", bundle: .module, comment: "Vehicle charging state: starting to charge")
-        case "nopower", "no power":
-            return String(localized: "No Power", bundle: .module, comment: "Vehicle charging state: charger has no power")
-        default:
-            return state.capitalized
-        }
-    }
 }

@@ -118,6 +118,19 @@
       },
       "generatesSymbol": false
     },
+    "Actions": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acciones"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Actions available through the named specialist tools, subject to equipment, vehicle state and permissions.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -126,19 +139,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acciones disponibles mediante herramientas especializadas, según equipamiento, estado y permisos."
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
-    "Actuate the rear trunk or front trunk with confirmation. A powered rear trunk can close if already open.": {
-      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acciona el maletero trasero o delantero con confirmación. Un maletero eléctrico abierto puede cerrarse."
           }
         }
       },
@@ -235,14 +235,14 @@
       },
       "generatesSymbol": false
     },
-    "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locks, Sentry, charging, limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for default car; seat cooling and updates use dedicated tools.": {
+    "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening the car, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aplica controles de Tesla en una llamada: clima, temperatura, desempañado, asientos, volante, Modo Perro/Defensa Biológica, seguros, Centinela, carga, puerto, ventanillas, maletero, luces, bocina o destino. Confirma acciones sensibles. Omite Vehículo para el predeterminado."
+            "value": "Aplica controles de Tesla en una llamada: clima, temperatura (°F o °C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloqueo, activar Centinela, carga, límite/amperios, cerrar el puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir el vehículo o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
           }
         }
       },
@@ -295,6 +295,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "millas en Autopilot"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Available": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponible"
           }
         }
       },
@@ -833,6 +846,19 @@
       },
       "generatesSymbol": false
     },
+    "Car Access Action": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acción de acceso al vehículo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Car Control Settings": {
       "comment": "FleetKit Siri/Shortcuts label from ControlCarIntent.",
       "extractionState": "manual",
@@ -945,19 +971,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Límite de carga (%)"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
-    "Charge Port": {
-      "comment": "FleetKit Siri/Shortcuts label from ControlCarIntent.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Puerto de carga"
           }
         }
       },
@@ -1353,6 +1366,19 @@
       },
       "generatesSymbol": false
     },
+    "Close Charge Port": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Close Tesla Windows": {
       "comment": "FleetKit Siri/Shortcuts label from SiriAIWorkflowIntents.",
       "extractionState": "manual",
@@ -1400,6 +1426,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Estado de entrega del comando"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Complete": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completa"
           }
         }
       },
@@ -1795,6 +1834,19 @@
       },
       "generatesSymbol": false
     },
+    "Disconnected": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconectado"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Distance": {
       "comment": "FleetKit Siri/Shortcuts label from DriveEntity.",
       "extractionState": "manual",
@@ -1868,6 +1920,45 @@
           "stringUnit": {
             "state": "translated",
             "value": "Progreso de descarga (%)"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Downloaded and ready to install": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargada y lista para instalar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Downloading": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargando"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Downloading to the car": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargándose en el vehículo"
           }
         }
       },
@@ -2458,6 +2549,19 @@
       },
       "generatesSymbol": false
     },
+    "Every action the user asked for, such as Unlock Doors and Open Trunk for \"unlock my car and pop the trunk\". Include each action once.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las acciones solicitadas, como Desbloquear puertas y Abrir maletero para «desbloquea mi coche y abre el maletero». Incluye cada acción una sola vez."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Every reading the user asked about, for example battery and tire pressure for \"what's my battery and tire pressure?\". Include each topic once.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -2596,6 +2700,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Buscar viajes"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Finds where the user's car (or Tesla) is right now: the address or place it's parked near, shown on a map, or where it is and how fast it's going if someone is driving it. Use for \"where's my car?\" or \"where did I park?\". For past trips, use the Find Drives tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indica dónde está ahora el Tesla: la dirección o el lugar cerca del que está aparcado, en un mapa, o dónde está y a qué velocidad va si alguien lo conduce. Úsalo para «¿dónde está mi coche?» o «¿dónde aparqué?». Para viajes anteriores usa Buscar viajes."
           }
         }
       },
@@ -3199,6 +3316,32 @@
       },
       "generatesSymbol": false
     },
+    "Installing": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instalando"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Installing now; the car can't be driven until it finishes": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instalándose ahora; el vehículo no se puede conducir hasta que termine"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Installs the software update that has finished downloading to the user's Tesla, now or at a time the user picks, after asking the user to confirm. The car can't be driven while it installs, usually 20 to 40 minutes. If the update is still downloading or already installing, this tool says so instead of installing.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -3420,6 +3563,45 @@
       },
       "generatesSymbol": false
     },
+    "Locate ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localizar ${vehicle}"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Locate Car": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localizar vehículo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Locate my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Localizar mi vehículo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Location": {
       "comment": "FleetKit Siri/Shortcuts label from FleetStatsEntities, VehicleInfoIntent.",
       "extractionState": "manual",
@@ -3454,6 +3636,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Búsqueda de lugar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Lock Doors": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear puertas"
           }
         }
       },
@@ -3953,6 +4148,32 @@
       },
       "generatesSymbol": false
     },
+    "No Power": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin energía"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Not plugged in": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin enchufar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Number of charging sessions in the period.": {
       "comment": "FleetKit Siri/Shortcuts label from FleetStatsEntities.",
       "extractionState": "manual",
@@ -4148,6 +4369,19 @@
       },
       "generatesSymbol": false
     },
+    "Open Charge Port": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Open Charging Session": {
       "comment": "FleetKit Siri/Shortcuts label from OpenEntityIntents.",
       "extractionState": "manual",
@@ -4182,6 +4416,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir viaje"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Open Frunk": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir maletero delantero"
           }
         }
       },
@@ -4291,14 +4538,27 @@
       },
       "generatesSymbol": false
     },
-    "Open or close the charge port door. Opening requires confirmation.": {
-      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+    "Open and unlock the charge port door": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre o cierra el puerto de carga. Abrir requiere confirmación."
+            "value": "Abrir y desbloquear la tapa del puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Open the rear trunk; a powered trunk that is already open closes instead": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero trasero; si es eléctrico y ya está abierto, se cierra"
           }
         }
       },
@@ -4512,6 +4772,32 @@
       },
       "generatesSymbol": false
     },
+    "Perform ${actions} on ${vehicle}": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Realizar ${actions} en ${vehicle}"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Perform ${actions} on my car": {
+      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Realizar ${actions} en mi vehículo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Period": {
       "comment": "FleetKit Siri/Shortcuts label from FleetStatsAndDriveDetailIntents, FleetStatsEntities.",
       "extractionState": "manual",
@@ -4538,6 +4824,58 @@
       },
       "generatesSymbol": false
     },
+    "Plugged in and about to start charging": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enchufado y a punto de empezar a cargar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Plugged in and adding energy": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enchufado y cargando"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Plugged in and charged to the limit": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enchufado y cargado hasta el límite"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Plugged in but not charging": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enchufado pero sin cargar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Plugged in or not, charging speed, time to full, charge limit, and charge port": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -4546,6 +4884,32 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conexión, velocidad de carga, tiempo restante, límite y puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Plugged in, but the charger isn't supplying power": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enchufado, pero el cargador no suministra energía"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Pop the front trunk under the hood; it has to be closed by hand": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero delantero bajo el capó; hay que cerrarlo a mano"
           }
         }
       },
@@ -4668,14 +5032,14 @@
       },
       "generatesSymbol": false
     },
-    "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions.": {
+    "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, or locks and open doors. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions. For where the car is, use the Locate Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lee datos en vivo del Tesla y responde solo lo solicitado: batería, autonomía, neumáticos, kilometraje, carga, clima, seguros o ubicación."
+            "value": "Lee datos en vivo del Tesla y responde solo lo solicitado: batería, autonomía, neumáticos, kilometraje, carga, clima o seguros y puertas abiertas. Pasa todos los temas solicitados en una sola llamada. Para saber dónde está el vehículo usa Localizar vehículo."
           }
         }
       },
@@ -4863,6 +5227,19 @@
       },
       "generatesSymbol": false
     },
+    "Scheduled": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Programada"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Scope": {
       "comment": "FleetKit Siri/Shortcuts label from SiriInteractiveSnippetIntents.",
       "extractionState": "manual",
@@ -5045,19 +5422,6 @@
       },
       "generatesSymbol": false
     },
-    "Sentry Mode": {
-      "comment": "FleetKit Siri/Shortcuts label from ControlCarIntent.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modo Centinela"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
     "Sentry Mode On": {
       "comment": "Accessibility label for active Sentry Mode icon",
       "extractionState": "manual",
@@ -5214,6 +5578,19 @@
       },
       "generatesSymbol": false
     },
+    "Set to install at a chosen time": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Programada para instalarse a una hora elegida"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Set true to enable Dog Mode, or false to disable Dog Mode (prompts for confirmation).": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -5305,14 +5682,27 @@
       },
       "generatesSymbol": false
     },
-    "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\", \"how's my car?\", or \"show my Tesla\". For specific readings, use the Get Vehicle Info tool, which answers only what was asked.": {
+    "Shows Location": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra la ubicación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\" or \"how's my car?\". For specific readings, use the Get Vehicle Info tool; for where the car is, the Locate Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muestra una tarjeta general del Tesla: batería, autonomía, carga, seguros, clima, kilometraje y neumáticos. Para datos concretos usa Obtener información del vehículo."
+            "value": "Muestra una tarjeta general del Tesla: batería, autonomía, carga, seguros, clima, kilometraje y neumáticos. Para datos concretos usa Obtener información del vehículo; para saber dónde está, Localizar vehículo."
           }
         }
       },
@@ -5352,6 +5742,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Actualización de software"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Software Update Status": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado de la actualización de software"
           }
         }
       },
@@ -5539,6 +5942,19 @@
       },
       "generatesSymbol": false
     },
+    "Starting": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciando"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Starting Battery": {
       "comment": "FleetKit Siri/Shortcuts label from DriveEntity, FleetStatsEntities.",
       "extractionState": "manual",
@@ -5656,6 +6072,19 @@
       },
       "generatesSymbol": false
     },
+    "Stop Sentry Mode camera monitoring while the car is parked": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener la vigilancia con cámaras del Modo Centinela mientras el vehículo está aparcado"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Stop Tesla Charging": {
       "comment": "FleetKit Siri/Shortcuts label from SiriAIWorkflowIntents.",
       "extractionState": "manual",
@@ -5664,6 +6093,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Detener carga del Tesla"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Stopped": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenida"
           }
         }
       },
@@ -5903,14 +6345,14 @@
       },
       "generatesSymbol": false
     },
-    "Target cabin temperature for both front seats, expressed in the user's preferred temperature unit (°F or °C, valid range 15°C to 28°C / 59°F to 82°F).": {
+    "Target cabin temperature for both front seats, expressed in the user's preferred temperature unit (°F or °C, valid range 15°C to 28°C / 59°F to 82.4°F).": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Temperatura objetivo de cabina en °C o °F (rango válido: 15–28 °C / 59–82 °F)."
+            "value": "Temperatura objetivo de cabina en °C o °F (rango válido: 15–28 °C / 59–82,4 °F)."
           }
         }
       },
@@ -5989,19 +6431,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "estado del Tesla"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
-    "Tesla's charging state: Charging, Complete, Stopped (plugged in but not charging), Starting, NoPower, or Disconnected (unplugged).": {
-      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estado de carga de Tesla: Charging, Complete, Stopped, Starting, NoPower o Disconnected."
           }
         }
       },
@@ -6566,6 +6995,19 @@
       },
       "generatesSymbol": false
     },
+    "The car to locate. Leave empty to use the car the user has selected in the app.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vehículo a localizar. Déjalo vacío para usar el seleccionado en la app."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "The car to read. Leave empty to use the car the user has selected in the app.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -6574,6 +7016,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vehículo a consultar. Déjalo vacío para usar el seleccionado en la app."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "The car to unlock or open. Omit for the selected or default car; pass a vehicle from List Cars if the user specifies another one.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vehículo a desbloquear o abrir. Omítelo para el seleccionado o pasa uno de Listar vehículos."
           }
         }
       },
@@ -6670,6 +7125,19 @@
       },
       "generatesSymbol": false
     },
+    "The download is paused until the car is on Wi-Fi": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La descarga está en pausa hasta que el vehículo tenga Wi-Fi"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "The drive to describe, such as one the user is looking at or one found with Find Drives. Leave empty for the most recent drive.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -6730,6 +7198,32 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nombre que el propietario dio al vehículo en la app Tesla."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "The owner's name for the car that charged, such as \"Midnight\".": {
+      "comment": "Entity property description read by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre que el propietario dio al vehículo que cargó, como «Midnight»."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "The owner's name for the car that made this drive, such as \"Midnight\".": {
+      "comment": "Entity property description read by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre que el propietario dio al vehículo que hizo este viaje, como «Midnight»."
           }
         }
       },
@@ -7268,27 +7762,27 @@
       },
       "generatesSymbol": false
     },
-    "True to enable or false to disable Sentry Mode. Disabling requires confirmation.": {
+    "True to close the charge port door. Leave empty otherwise; opening it uses the Unlock or Open Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "True para activar o false para desactivar el Modo Centinela (desactivar requiere confirmación)."
+            "value": "True para cerrar la tapa del puerto de carga. Déjalo vacío en otro caso; para abrirla usa Desbloquear o abrir vehículo."
           }
         }
       },
       "generatesSymbol": false
     },
-    "True to lock doors or false to unlock. Unlocking requires confirmation.": {
+    "True to lock the doors. Leave empty otherwise; unlocking uses the Unlock or Open Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "True para bloquear o false para desbloquear puertas (desbloquear requiere confirmación)."
+            "value": "True para bloquear las puertas. Déjalo vacío en otro caso; para desbloquear usa Desbloquear o abrir vehículo."
           }
         }
       },
@@ -7302,6 +7796,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "True para iniciar la carga o false para detenerla (detener requiere confirmación)."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "True to turn Sentry Mode on. Leave empty otherwise; turning it off uses the Unlock or Open Car tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "True para activar el Modo Centinela. Déjalo vacío en otro caso; para desactivarlo usa Desbloquear o abrir vehículo."
           }
         }
       },
@@ -7398,6 +7905,19 @@
       },
       "generatesSymbol": false
     },
+    "Turn Off Sentry Mode": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar Modo Centinela"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Turn Off Tesla Climate": {
       "comment": "FleetKit Siri/Shortcuts label from ClimateControlIntents.",
       "extractionState": "manual",
@@ -7406,6 +7926,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apagar climatización del Tesla"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Turn On Sentry Mode": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar Modo Centinela"
           }
         }
       },
@@ -7489,6 +8022,19 @@
       },
       "generatesSymbol": false
     },
+    "Unlock Doors": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear puertas"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Unlock Tesla": {
       "comment": "FleetKit Siri/Shortcuts label from ControlIntents.",
       "extractionState": "manual",
@@ -7497,6 +8043,32 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desbloquear Tesla"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Unlock all of the car's doors": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear todas las puertas del vehículo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Unlock or Open Car": {
+      "comment": "App Intent, parameter, or entity property title shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquear o abrir vehículo"
           }
         }
       },
@@ -7515,6 +8087,19 @@
       },
       "generatesSymbol": false
     },
+    "Unlocks the doors, opens the trunk, frunk, or charge port, or turns off Sentry Mode on the user's car (or Tesla), after asking the user to confirm. Pass every action the user asked for in one call. For locking, climate, charging, and other changes, use the Control Car tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquea las puertas, abre el maletero, el maletero delantero o el puerto de carga, o desactiva el Modo Centinela del Tesla, tras pedir confirmación. Pasa todas las acciones solicitadas en una sola llamada. Para bloquear, clima, carga y otros cambios usa Controlar vehículo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Update Available": {
       "comment": "FleetKit Siri/Shortcuts label from SoftwareUpdateEntity.",
       "extractionState": "manual",
@@ -7523,19 +8108,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Actualización disponible"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
-    "Update status reported by the car: available (ready to install), downloading, downloading_wifi_wait (waiting for Wi-Fi), scheduled, or installing. Empty when up to date.": {
-      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estado de actualización del vehículo: available, downloading, downloading_wifi_wait, scheduled o installing."
           }
         }
       },
@@ -7718,6 +8290,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Asientos delanteros ventilados, solo en vehículos compatibles"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Waiting for Wi-Fi": {
+      "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando Wi-Fi"
           }
         }
       },
@@ -7918,19 +8503,6 @@
       },
       "generatesSymbol": false
     },
-    "Where the car is, and its speed if it's driving": {
-      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ubicación del vehículo y su velocidad si está circulando"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
     "Where the drive ended: a street address or a saved place name such as Home or Work.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -7965,6 +8537,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dónde ocurrió la carga más reciente del período."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Where the update is in its download and install. Empty when the car is up to date.": {
+      "comment": "Entity property description read by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En qué punto de la descarga e instalación está la actualización. Vacío si el vehículo está al día."
           }
         }
       },
@@ -8056,6 +8641,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Si la climatización de la cabina está encendida."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Whether the car is charging, finished, plugged in but not charging, or unplugged. Empty when the car didn't report a state this app knows.": {
+      "comment": "Entity property description read by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indica si el vehículo está cargando, ha terminado, está enchufado sin cargar o está desenchufado. Vacío si el vehículo no informó de un estado que la app conozca."
           }
         }
       },
@@ -8438,6 +9036,19 @@
       },
       "generatesSymbol": false
     },
+    "car location": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ubicación del coche"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "car status": {
       "comment": "Siri search synonym or keyword for App Intents discovery.",
       "extractionState": "manual",
@@ -8672,6 +9283,19 @@
       },
       "generatesSymbol": false
     },
+    "close charge port": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cerrar puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "close windows": {
       "comment": "Short step label for closing windows.",
       "extractionState": "manual",
@@ -8854,6 +9478,19 @@
       },
       "generatesSymbol": false
     },
+    "disable sentry": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desactivar centinela"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "dog mode": {
       "comment": "Siri search synonym or keyword for App Intents discovery.",
       "extractionState": "manual",
@@ -8940,6 +9577,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "detener carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "find my car": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encontrar mi coche"
           }
         }
       },
@@ -9309,6 +9959,19 @@
       },
       "generatesSymbol": false
     },
+    "locate my Tesla": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "localizar mi Tesla"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "location": {
       "comment": "Spoken topic name for vehicle location.",
       "extractionState": "manual",
@@ -9395,6 +10058,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "bloqueado"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "map": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mapa"
           }
         }
       },
@@ -9556,6 +10232,19 @@
       },
       "generatesSymbol": false
     },
+    "open charge port": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abrir puerto de carga"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "open frunk": {
       "comment": "Short step label for opening the front trunk (frunk).",
       "extractionState": "manual",
@@ -9590,6 +10279,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "salud de la batería"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "parked": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aparcado"
           }
         }
       },
@@ -9642,6 +10344,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "enchufar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "pop the trunk": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abrir el maletero"
           }
         }
       },
@@ -9824,19 +10539,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "enviar dirección"
-          }
-        }
-      },
-      "generatesSymbol": false
-    },
-    "sentry mode": {
-      "comment": "Siri search synonym or keyword for App Intents discovery.",
-      "extractionState": "manual",
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "modo centinela"
           }
         }
       },
@@ -10219,6 +10921,19 @@
       },
       "generatesSymbol": false
     },
+    "turn off sentry mode": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desactivar modo centinela"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "turn on AC": {
       "comment": "FleetKit Siri/Shortcuts label from ControlIntents.",
       "extractionState": "manual",
@@ -10240,6 +10955,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "encender calefacción"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "turn on sentry mode": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "activar modo centinela"
           }
         }
       },
@@ -10487,6 +11215,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "adónde conduje"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "where did I park": {
+      "comment": "App Intent search keyword used by Siri and Spotlight.",
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dónde aparqué"
           }
         }
       },

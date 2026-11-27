@@ -106,7 +106,7 @@ struct ControlCarTests {
             changes.climateOn = true
             changes.chargeLimitPercent = 85
             changes.charging = true
-            changes.locked = false
+            changes.windows = .close
             intent.changes = changes
             let result = try await FleetIntentService.$sandboxConfirmationRecorder.withValue({ _ in
                 events.withLock { $0.append("confirmation") }
@@ -114,23 +114,70 @@ struct ControlCarTests {
                 try #require(try await intent.perform().value)
             }
             #expect(result.vin == "VIN-2" && result.succeeded)
-            #expect(events.withLock { $0 } == ["confirmation", "start_climate", "set_charge_limit", "start_charging", "unlock"])
+            #expect(events.withLock { $0 } == ["confirmation", "start_climate", "set_charge_limit", "start_charging", "close_windows"])
         }
     }
 
-    @Test func unlockPrecedesActuationAndLockFollowsActuation() async throws {
+    @Test func unlockOrOpenCarConfirmsOnceThenUnlocksBeforeOpeningAndTurnsSentryOffLast() async throws {
+        let events = Mutex<[String]>([])
+        try await withIsolatedFleetService(responder: { request in
+            if request.httpMethod == "POST" {
+                events.withLock { $0.append(request.url?.lastPathComponent ?? "") }
+            }
+            return Self.respond(request)
+        }) { _ in
+            let intent = UnlockOrOpenCarIntent(actions: [.turnOffSentry, .openFrunk, .unlockDoors, .openFrunk])
+            let result = try await FleetIntentService.$sandboxConfirmationRecorder.withValue({ prompt in
+                events.withLock { $0.append("confirmation") }
+                #expect(prompt.contains("unlock doors, open frunk, and Sentry Mode off"))
+            }) {
+                try #require(try await intent.perform().value)
+            }
+            #expect(result.succeeded && result.action == "unlock_or_open_car")
+            #expect(events.withLock { $0 } == ["confirmation", "unlock", "activate_front_trunk", "disable_sentry"])
+        }
+    }
+
+    @Test func controlCarLeavesAccessActionsToTheAuthenticatedTool() async throws {
+        #expect(UnlockOrOpenCarIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(ControlCarIntent.authenticationPolicy == .alwaysAllowed)
+
         try await withIsolatedFleetService(responder: Self.respond) { requests in
-            let changes = CarControlSettings()
-            changes.openTrunk = .front
-            changes.locked = false
             let intent = ControlCarIntent()
+            let refused: [(CarControlSettings) -> Void] = [{ $0.locked = false }, { $0.sentryOn = false }]
+            for apply in refused {
+                let changes = CarControlSettings()
+                changes.climateOn = true
+                apply(changes)
+                intent.changes = changes
+                do {
+                    _ = try await intent.perform()
+                    Issue.record("Control Car must not unlock or turn Sentry Mode off.")
+                } catch {
+                    // The message names the tool so Siri can send the request there.
+                    #expect(error.localizedDescription.contains("Unlock or Open Car"))
+                }
+            }
+            #expect(!requests().contains { $0.httpMethod == "POST" })
+
+            let changes = CarControlSettings()
+            changes.locked = true
+            changes.sentryOn = true
+            changes.closeChargePort = true
             intent.changes = changes
-            try await FleetIntentService.$sandboxConfirmationRecorder.withValue({ _ in }) {
-                _ = try await intent.perform()
-                changes.locked = true
+            try await FleetIntentService.$sandboxConfirmationRecorder.withValue({ _ in Issue.record("Unexpected confirmation") }) {
                 _ = try await intent.perform()
             }
-            #expect(requests().filter { $0.httpMethod == "POST" }.compactMap { $0.url?.lastPathComponent } == ["unlock", "activate_front_trunk", "activate_front_trunk", "lock"])
+            #expect(requests().filter { $0.httpMethod == "POST" }.compactMap { $0.url?.lastPathComponent } == ["close_charge_port", "lock", "enable_sentry"])
+        }
+    }
+
+    @Test func unlockOrOpenCarNeedsAnActionAndRespectsMissingTrunkActuators() async throws {
+        let roster = #"{"results":[{"vin":"VIN-1","last_state":{"vehicle_config":{"can_actuate_trunks":false}}}]}"#
+        try await withIsolatedFleetService(responder: { _ in (200, Data(roster.utf8)) }) { requests in
+            await #expect(throws: FleetKitError.self) { _ = try await UnlockOrOpenCarIntent(actions: []).perform() }
+            await #expect(throws: FleetKitError.self) { _ = try await UnlockOrOpenCarIntent(actions: [.unlockDoors, .openTrunk]).perform() }
+            #expect(!requests().contains { $0.httpMethod == "POST" })
         }
     }
 
@@ -142,9 +189,6 @@ struct ControlCarTests {
             changes.climateOn = true
             changes.destination = "Palo Alto"
             intent.changes = changes
-            await #expect(throws: FleetKitError.self) { _ = try await intent.perform() }
-            changes.destination = nil
-            changes.openTrunk = .rear
             await #expect(throws: FleetKitError.self) { _ = try await intent.perform() }
             #expect(!requests().contains { $0.httpMethod == "POST" })
         }

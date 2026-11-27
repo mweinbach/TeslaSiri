@@ -82,33 +82,49 @@ public struct VehicleStatusSnippetIntent: SnippetIntent {
     @Parameter(title: "Topics")
     public var topics: [VehicleInfoTopic]
 
+    /// Whether the card may show where the car is. This is a plain value, so it stays as the
+    /// presenting intent set it. `status` does not: the system can fetch it again from
+    /// `VehicleStatusEntityQuery`, which returns the car's position. Only Locate Car, which
+    /// requires authentication, sets this.
+    @Parameter(title: "Shows Location")
+    public var showsLocation: Bool
+
     public init() {
         self.status = VehicleStatusEntity(
             snapshot: FleetSnapshotInfo(vin: ""),
             vehicleName: String(localized: "My Car", bundle: .module, comment: "Default fallback name for a vehicle")
         )
         self.topics = VehicleInfoTopic.allCases
+        self.showsLocation = false
     }
 
-    public init(status: VehicleStatusEntity, topics: [VehicleInfoTopic] = VehicleInfoTopic.allCases) {
+    public init(
+        status: VehicleStatusEntity,
+        topics: [VehicleInfoTopic] = VehicleInfoTopic.allCases,
+        showsLocation: Bool = false
+    ) {
         self.status = status
         self.topics = topics.isEmpty ? VehicleInfoTopic.allCases : topics
+        self.showsLocation = showsLocation
     }
 
     @MainActor
     public func perform() async throws -> some IntentResult & ShowsSnippetView {
         let requestedTopics = topics.isEmpty ? VehicleInfoTopic.allCases : topics
         let mapData: SiriRenderedMapData?
-        if requestedTopics.contains(.location),
-           status.locationAddress != nil || (status.latitude != nil && status.longitude != nil) {
-            let allowMap = FleetIntentService.testingOverride == nil
+        if showsLocation, status.locationAddress != nil || (status.latitude != nil && status.longitude != nil) {
+            let allowNetwork = FleetIntentService.testingOverride == nil
+            if status.locationAddress == nil, allowNetwork {
+                // A status fetched again from its query has coordinates but no place name.
+                status.locationAddress = await FleetLocationNamer.address(latitude: status.latitude, longitude: status.longitude)
+            }
             mapData = await SiriMapSnapshotRenderer.renderLocationPin(
                 latitude: status.latitude,
                 longitude: status.longitude,
                 fallbackPlaceQuery: status.locationAddress,
                 style: SiriSnippetStateStore.shared.mapStyle(for: "vehicle"),
                 accentHex: 0x0A84FF,
-                allowNetworkSnapshot: allowMap
+                allowNetworkSnapshot: allowNetwork
             )
         } else {
             mapData = nil
@@ -118,7 +134,8 @@ public struct VehicleStatusSnippetIntent: SnippetIntent {
             view: VehicleStatusSnippetView(
                 status: status,
                 mapData: mapData,
-                topics: Set(requestedTopics)
+                topics: Set(requestedTopics),
+                showsLocation: showsLocation
             )
         )
     }

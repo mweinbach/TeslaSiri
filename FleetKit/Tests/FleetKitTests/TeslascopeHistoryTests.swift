@@ -170,8 +170,8 @@ struct TeslascopeHistoryTests {
         #expect(mixed.totalCost == nil && mixed.averageCostPerKWH == nil && mixed.formattedCost == nil)
         let same = ChargingStatsEntity(vehicle: car, period: .last7Days, sessions: [euro, session(3, cost: 2, currency: "EUR")])
         #expect(same.totalCost == 10 && same.currency == "EUR" && same.averageCostPerKWH == 0.5)
-        #expect(ChargeSessionEntity(info: euro).formattedCost == 8.0.formatted(.currency(code: "EUR")))
-        let missing = ChargeSessionEntity(info: session(4, cost: nil, currency: nil))
+        #expect(ChargeSessionEntity(info: euro, vehicleName: car.name).formattedCost == 8.0.formatted(.currency(code: "EUR")))
+        let missing = ChargeSessionEntity(info: session(4, cost: nil, currency: nil), vehicleName: car.name)
         #expect(missing.formattedCost == nil)
     }
 }

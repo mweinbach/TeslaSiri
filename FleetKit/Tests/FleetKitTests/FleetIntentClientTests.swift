@@ -126,7 +126,10 @@ struct FleetIntentClientTests {
         let result = try await FleetIntentService(client: client).snapshotAndSoftware(vin: "VIN-1")
         #expect(result.snapshot.batteryLevel == 82.4)
         #expect(result.software.availableVersion == "2026.8.4")
-        #expect(MockURLProtocol.requests.compactMap { $0.url?.path }.sorted() == ["/VIN-1/state", "/VIN-1/tire_pressure"])
+        // The request log is shared across this suite, and an earlier test's cancelled read
+        // can still land in it, so count only this car's requests.
+        let paths = MockURLProtocol.requests.compactMap { $0.url?.path }.filter { $0.hasPrefix("/VIN-1/") }
+        #expect(paths.sorted() == ["/VIN-1/state", "/VIN-1/tire_pressure"])
     }
 
     @Test(arguments: [200, 401, 503])

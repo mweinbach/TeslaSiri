@@ -143,7 +143,7 @@ public struct SetCabinTemperatureIntent: AppIntent, LongRunningIntent, Predictab
 
     @Parameter(
         title: "Temperature",
-        description: "Target cabin temperature for both front seats, expressed in the user's preferred temperature unit (°F or °C, valid range 15°C to 28°C / 59°F to 82°F).",
+        description: "Target cabin temperature for both front seats, expressed in the user's preferred temperature unit (°F or °C, valid range 15°C to 28°C / 59°F to 82.4°F).",
         unit: .celsius,
         unitAdjustForLocale: true,
         supportsNegativeNumbers: false,

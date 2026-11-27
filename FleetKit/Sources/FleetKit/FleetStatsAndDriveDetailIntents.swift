@@ -13,6 +13,8 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["Tesla", "last drive", "trip details", "how far did I drive", "efficiency", "Wh/mi"]
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -97,7 +99,7 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
                         )
                     )
                 }
-                summary = DriveEntity(info: latest)
+                summary = DriveEntity(info: latest, vehicleName: resolved.name)
             }
 
             let targetEntity = try await service.driveDetails(summary)
@@ -202,12 +204,18 @@ public struct GetDrivingStatsIntent: AppIntent, PredictableIntent {
                 effectiveStart = period.startDate()
             }
 
-            let rawDrives = try await service.drives(
-                vin: resolved.vin,
-                limit: service.usesTeslascope ? .max : 200,
-                from: effectiveStart,
-                requireCompleteRows: service.usesTeslascope
-            )
+            let rawDrives: [FleetDriveInfo]
+            if service.usesTeslascope {
+                rawDrives = try await service.drives(
+                    vin: resolved.vin,
+                    limit: .max,
+                    from: effectiveStart,
+                    requireCompleteRows: true
+                )
+            } else {
+                // A single capped response undercounts a busy period, so walk the whole window.
+                rawDrives = try await service.driveHistory(vin: resolved.vin, from: effectiveStart, maxPages: 10)
+            }
             let filteredDrives: [FleetDriveInfo]
             if let effectiveStart {
                 filteredDrives = rawDrives.filter { $0.startedAtDate >= effectiveStart }
@@ -244,6 +252,8 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["Tesla", "charging stats", "charging cost", "how much did I spend charging", "Supercharger spending", "kWh added"]
     )
     public static let isDiscoverable = true
+    // The card names the most recent charging location and totals what was spent.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -338,6 +348,8 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
         searchKeywords: ["Tesla", "charges", "charging sessions", "Supercharger stops", "home charging", "charging log"]
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -443,7 +455,7 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
                    session.location?.localizedCaseInsensitiveContains(loc) != true { return false }
                 return true
             }
-            let results: [ChargeSessionEntity] = matching.prefix(clamped).map(ChargeSessionEntity.init(info:))
+            let results: [ChargeSessionEntity] = matching.prefix(clamped).map { ChargeSessionEntity(info: $0, vehicleName: resolved.name) }
             log.success("returned \(results.count) charge session(s) for \(resolved.name)")
 
             let dialogText: String

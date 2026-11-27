@@ -10,8 +10,8 @@ import SwiftUI
 public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Vehicle Info"
     public static let description = IntentDescription(
-        "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, locks and open doors, or where the car is. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions.",
-        searchKeywords: ["my car", "Tesla", "car battery", "battery", "range", "tire pressure", "PSI", "mileage", "odometer", "miles", "charging", "temperature", "locked", "is my car locked", "doors", "windows", "where is my car", "location"]
+        "Reads live data from the user's car (or Tesla) and answers only what was asked: battery, range, tire pressure, mileage, charging, cabin climate, or locks and open doors. Pass every topic the user asked about in one call. Returns the requested readings for follow-up questions. For where the car is, use the Locate Car tool.",
+        searchKeywords: ["my car", "Tesla", "car battery", "battery", "range", "tire pressure", "PSI", "mileage", "odometer", "miles", "charging", "temperature", "locked", "is my car locked", "doors", "windows"]
     )
     public static let isDiscoverable = true
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
@@ -75,15 +75,8 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let requested = topics.isEmpty ? VehicleInfoTopic.allCases : topics
             let snapshot = try await service.snapshot(for: resolved, topics: requested)
-            let address: String?
-            if requested.contains(.location), let latitude = snapshot.latitude, let longitude = snapshot.longitude {
-                let allowNetwork = FleetIntentService.testingOverride == nil
-                address = allowNetwork ? await FleetLocationNamer.address(latitude: latitude, longitude: longitude) : nil
-            } else {
-                address = nil
-            }
-
-            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, locationAddress: address)
+            // This tool runs from the Lock Screen, so its result never carries the car's location.
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, includesLocation: false)
             let answer = entity.spokenAnswer(for: requested)
             log.success("answered \(requested.map(\.rawValue).joined(separator: ",")) for \(resolved.name)")
             return .result(
@@ -97,7 +90,8 @@ public struct GetVehicleInfoIntent: AppIntent, PredictableIntent {
     }
 }
 
-/// A group of live readings the Get Vehicle Info tool can report.
+/// A group of live readings the Get Vehicle Info tool can report. Location is not a topic:
+/// it is only available through the Locate Car tool, which requires authentication.
 public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
     case battery
     case range
@@ -106,7 +100,6 @@ public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
     case odometer
     case climate
     case security
-    case location
 
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Vehicle Info Topic")
     public static let caseDisplayRepresentations: [VehicleInfoTopic: DisplayRepresentation] = [
@@ -116,8 +109,7 @@ public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
         .tirePressure: DisplayRepresentation(title: "Tire Pressure", subtitle: "PSI of each tire and any low tire", image: .init(systemName: "tirepressure")),
         .odometer: DisplayRepresentation(title: "Mileage", subtitle: "Odometer: total miles driven", image: .init(systemName: "gauge.with.dots.needle.33percent")),
         .climate: DisplayRepresentation(title: "Climate", subtitle: "Cabin and outside temperature, climate on or off, setpoint, seat and steering wheel heat, Dog Mode, defrost", image: .init(systemName: "thermometer.medium")),
-        .security: DisplayRepresentation(title: "Locks & Security", subtitle: "Locked or unlocked, open doors, windows, trunk or frunk, and Sentry Mode", image: .init(systemName: "lock")),
-        .location: DisplayRepresentation(title: "Location", subtitle: "Where the car is, and its speed if it's driving", image: .init(systemName: "location"))
+        .security: DisplayRepresentation(title: "Locks & Security", subtitle: "Locked or unlocked, open doors, windows, trunk or frunk, and Sentry Mode", image: .init(systemName: "lock"))
     ]
 
     var spokenName: String {
@@ -136,15 +128,14 @@ public enum VehicleInfoTopic: String, AppEnum, CaseIterable, Sendable {
             String(localized: "climate", bundle: .module, comment: "Spoken topic name for cabin climate.")
         case .security:
             String(localized: "locks", bundle: .module, comment: "Spoken topic name for door locks and security.")
-        case .location:
-            String(localized: "location", bundle: .module, comment: "Spoken topic name for vehicle location.")
         }
     }
 }
 
 extension VehicleStatusEntity {
-    /// Natural-language answer covering only the requested topics, in the order given.
-    public func spokenAnswer(for topics: [VehicleInfoTopic], now: Date = .now) -> String {
+    /// Natural-language answer covering only the requested topics, in the order given, followed
+    /// by where the car is when `includingLocation` is set.
+    public func spokenAnswer(for topics: [VehicleInfoTopic], includingLocation: Bool = false, now: Date = .now) -> String {
         var seen = Set<VehicleInfoTopic>()
         let ordered = topics.filter { seen.insert($0).inserted }
         var sentences: [String] = []
@@ -170,6 +161,9 @@ extension VehicleStatusEntity {
             if let sentence = sentence(for: topic) {
                 sentences.append(sentence)
             }
+        }
+        if includingLocation {
+            sentences.append(locationSentence)
         }
 
         if let updatedAt, now.timeIntervalSince(updatedAt) > 60 * 60 {
@@ -229,13 +223,11 @@ extension VehicleStatusEntity {
             return climateSentence
         case .security:
             return securitySentence
-        case .location:
-            return locationSentence
         }
     }
 
     private var chargingSentence: String? {
-        guard let chargingState else { return nil }
+        guard let stateLabel = chargingStateLabel else { return nil }
         let limitSentence = chargeLimitPercent.map { percent -> String in
             let percentText = FleetKitFormatting.percent(percent)
             return String(
@@ -245,8 +237,8 @@ extension VehicleStatusEntity {
             )
         }
         var sentences: [String] = []
-        switch chargingState.lowercased() {
-        case "charging", "starting":
+        switch chargingState {
+        case .charging, .starting:
             var clauses: [String] = []
             if let chargerPowerKW, chargerPowerKW > 0 {
                 let powerText = FleetKitFormatting.powerKW(chargerPowerKW, fractionLength: 0)
@@ -287,17 +279,17 @@ extension VehicleStatusEntity {
                 )
             }
             sentences.append(clauses.joined(separator: ", ") + ".")
-        case "complete":
+        case .complete:
             sentences.append(String(localized: "Charging is complete.", bundle: .module, comment: "Spoken sentence when battery charging is finished."))
-        case "stopped", "nopower":
+        case .stopped, .noPower:
             sentences.append(String(localized: "It's plugged in but not charging.", bundle: .module, comment: "Spoken sentence when the car is plugged in but not actively charging."))
-        case "disconnected":
+        case .disconnected:
             sentences.append(String(localized: "It's not plugged in.", bundle: .module, comment: "Spoken sentence when no charging cable is connected."))
-        default:
-            let localizedState = VehicleStatusEntity.localizedChargingState(chargingState)
+        case nil:
+            // The car reported a state this app has no case for; say it in the car's words.
             sentences.append(
                 String(
-                    localized: "Charging state: \(localizedState).",
+                    localized: "Charging state: \(stateLabel).",
                     bundle: .module,
                     comment: "Spoken fallback sentence for an unrecognized charging state."
                 )
@@ -306,7 +298,7 @@ extension VehicleStatusEntity {
         if let limitSentence {
             sentences.append(limitSentence)
         }
-        if chargingState.lowercased() == "disconnected", chargePortDoorOpen == true {
+        if chargingState == .disconnected, chargePortDoorOpen == true {
             sentences.append(
                 String(
                     localized: "The charge port door is open.",
@@ -500,7 +492,7 @@ extension VehicleStatusEntity {
         return sentences.isEmpty ? nil : sentences.joined(separator: " ")
     }
 
-    private var locationSentence: String? {
+    private var locationSentence: String {
         let isDriving = (speedMPH ?? 0) > 0 && (gear == "D" || gear == "R")
         if let locationAddress {
             if isDriving, let speedMPH {

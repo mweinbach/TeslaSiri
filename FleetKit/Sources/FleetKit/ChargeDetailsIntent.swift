@@ -10,6 +10,8 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
         searchKeywords: ["Tesla", "last charge", "charge cost", "Supercharger cost", "how much did charging cost", "kWh added"]
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -78,7 +80,7 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
                 guard let latest = try await service.charges(vin: resolved.vin, limit: 1).first else {
                     throw FleetKitError.api(String(localized: "No charging sessions have been recorded for \(resolved.name) yet.", bundle: .module, comment: "Error when a vehicle has no charging history"))
                 }
-                summary = ChargeSessionEntity(info: latest)
+                summary = ChargeSessionEntity(info: latest, vehicleName: resolved.name)
             }
 
             let session = try await service.chargeDetails(summary)

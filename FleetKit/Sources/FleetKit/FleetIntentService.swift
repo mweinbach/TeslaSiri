@@ -116,10 +116,14 @@ public struct FleetIntentService: Sendable {
         return try await withSession { try await client.snapshot(vin: vin) }
     }
 
-    func snapshot(for vehicle: FleetVehicleInfo, topics: [VehicleInfoTopic]) async throws -> FleetSnapshotInfo {
+    func snapshot(
+        for vehicle: FleetVehicleInfo,
+        topics: [VehicleInfoTopic],
+        includesLocation: Bool = false
+    ) async throws -> FleetSnapshotInfo {
         _ = try validatedScope()
         if let sandbox, sandbox.mode() == .demoVehicle { return sandbox.demoState().snapshotInfo }
-        if let charge = vehicle.rosterCharge, charge.isRecentRosterObservation,
+        if !includesLocation, let charge = vehicle.rosterCharge, charge.isRecentRosterObservation,
            !topics.isEmpty, topics.allSatisfy({ topic in
                switch topic {
                case .battery: charge.batteryLevel != nil
@@ -129,7 +133,9 @@ public struct FleetIntentService: Sendable {
            }) {
             return charge
         }
-        return try await withSession { try await client.snapshot(vin: vehicle.vin, topics: topics) }
+        return try await withSession {
+            try await client.snapshot(vin: vehicle.vin, topics: topics, includesLocation: includesLocation)
+        }
     }
 
     public func batterySnapshotForReminder(for vehicle: FleetVehicleInfo, maxAge: TimeInterval) async throws -> FleetSnapshotInfo? {
@@ -188,19 +194,53 @@ public struct FleetIntentService: Sendable {
         return try await withSession { try await client.drives(vin: vin, limit: limit, from: from, to: to, tag: tag, requireCompleteRows: requireCompleteRows) }
     }
 
+    /// Drives requested per page when walking history.
+    static let driveHistoryPageSize = 100
+    /// Pages a drive search or saved-drive lookup may walk: the newest 500 drives.
+    static let driveHistoryMaxPages = 5
+
+    /// Drive history newest first, paging back in time until `isEnough` accepts what has been
+    /// collected, a page comes back short, or `maxPages` is reached.
+    ///
+    /// Neither provider offers a history cursor or (on Tessie) a drive-by-ID endpoint, so each
+    /// further page asks for the drives that started before the oldest one already fetched.
+    func driveHistory(
+        vin: String,
+        from: Date? = nil,
+        to: Date? = nil,
+        tag: String? = nil,
+        maxPages: Int = FleetIntentService.driveHistoryMaxPages,
+        requireCompleteRows: Bool = false,
+        until isEnough: ([FleetDriveInfo]) -> Bool = { _ in false }
+    ) async throws -> [FleetDriveInfo] {
+        var collected: [FleetDriveInfo] = []
+        var seen: Set<String> = []
+        var before = to
+        for _ in 0..<max(maxPages, 1) {
+            try Task.checkCancellation()
+            let page = try await drives(vin: vin, limit: Self.driveHistoryPageSize, from: from, to: before, tag: tag,
+                                        requireCompleteRows: requireCompleteRows)
+            collected.append(contentsOf: page.filter { seen.insert($0.sessionID).inserted })
+            guard page.count >= Self.driveHistoryPageSize, !isEnough(collected),
+                  let oldest = page.map(\.startedAtDate).min() else { break }
+            before = oldest.addingTimeInterval(-1)
+        }
+        return collected
+    }
+
     /// Teslascope list rows omit fields that are only available on the session detail endpoint.
     func driveDetails(_ summary: DriveEntity) async throws -> DriveEntity {
         try validateHistoryID(summary.id, vin: summary.vin)
         guard usesTeslascope else { return summary }
         let record = try await withSession { try await client.driveDetails(vin: summary.vin, id: summary.id) }
-        return record.map(DriveEntity.init(info:)) ?? summary
+        return record.map { DriveEntity(info: $0, vehicleName: summary.vehicleName) } ?? summary
     }
 
     func chargeDetails(_ summary: ChargeSessionEntity) async throws -> ChargeSessionEntity {
         try validateHistoryID(summary.id, vin: summary.vin)
         guard usesTeslascope else { return summary }
         let record = try await withSession { try await client.chargeDetails(vin: summary.vin, id: summary.id) }
-        return record.map(ChargeSessionEntity.init(info:)) ?? summary
+        return record.map { ChargeSessionEntity(info: $0, vehicleName: summary.vehicleName) } ?? summary
     }
 
     private func validateHistoryID(_ id: String, vin: String) throws {
@@ -338,7 +378,18 @@ public struct FleetIntentService: Sendable {
         if let sandbox, sandbox.mode().interceptsWrites {
             return simulate(sandbox, target.name)
         }
-        return try await withSession(send)
+        do {
+            return try await withSession(send)
+        } catch let error as URLError where error.code == .timedOut {
+            // The command may still reach the car, so don't let this read as a plain failure.
+            throw FleetKitError.api(
+                String(
+                    localized: "\(target.name) didn't respond in time, so the request couldn't be confirmed. Check the car before trying again.",
+                    bundle: .module,
+                    comment: "Error when a vehicle command times out before the car confirms it. Placeholder is the vehicle name."
+                )
+            )
+        }
     }
 
     @discardableResult

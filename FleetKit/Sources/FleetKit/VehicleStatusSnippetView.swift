@@ -9,15 +9,20 @@ public struct VehicleStatusSnippetView: View {
     public let status: VehicleStatusEntity
     public let mapData: SiriRenderedMapData?
     let topics: Set<VehicleInfoTopic>
+    /// The location card appears only when the presenter asks for it. `status` can carry the
+    /// car's position even when the request that produced the card wasn't allowed to show it.
+    let showsLocation: Bool
 
     public init(
         status: VehicleStatusEntity,
         mapData: SiriRenderedMapData? = nil,
-        topics: Set<VehicleInfoTopic> = Set(VehicleInfoTopic.allCases)
+        topics: Set<VehicleInfoTopic> = Set(VehicleInfoTopic.allCases),
+        showsLocation: Bool = false
     ) {
         self.status = status
         self.mapData = mapData
         self.topics = topics
+        self.showsLocation = showsLocation
     }
 
     public var body: some View {
@@ -27,7 +32,7 @@ public struct VehicleStatusSnippetView: View {
                 batteryCard
             }
 
-            if topics.contains(.location), hasLocationCard {
+            if hasLocationCard {
                 parkedLocationMapCard
             }
 
@@ -115,8 +120,8 @@ public struct VehicleStatusSnippetView: View {
 
                 Spacer()
 
-                if topics.contains(.charging), let state = status.chargingState, !state.isEmpty {
-                    chargingBadge(for: state)
+                if topics.contains(.charging), let label = status.chargingStateLabel {
+                    chargingBadge(label, isCharging: status.chargingState == .charging)
                 }
             }
 
@@ -170,9 +175,8 @@ public struct VehicleStatusSnippetView: View {
         .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func chargingBadge(for state: String) -> some View {
-        let isCharging = state.localizedStandardContains("charging") && !state.localizedStandardContains("dis")
-        return Label(VehicleStatusEntity.localizedChargingState(state), systemImage: isCharging ? "bolt.fill" : "powerplug")
+    private func chargingBadge(_ label: String, isCharging: Bool) -> some View {
+        Label(label, systemImage: isCharging ? "bolt.fill" : "powerplug")
             .font(.caption2.weight(.semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
@@ -182,8 +186,9 @@ public struct VehicleStatusSnippetView: View {
             .background(.quaternary, in: Capsule())
     }
 
-    private var hasLocationCard: Bool {
-        mapData != nil || status.locationAddress != nil || (status.latitude != nil && status.longitude != nil)
+    var hasLocationCard: Bool {
+        showsLocation
+            && (mapData != nil || status.locationAddress != nil || (status.latitude != nil && status.longitude != nil))
     }
 
     private var parkedLocationMapCard: some View {

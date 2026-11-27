@@ -3,20 +3,60 @@ import Testing
 @testable import FleetKit
 
 struct SpotlightIncrementalTests {
-    @Test func shortDashboardPagesRetainOlderIndexedIDs() {
+    @Test func newestPagesMergeIntoADeepWindowWithoutRemovingOlderRows() {
         let now = Date()
         var group = SpotlightIndexManifest.Group()
+        group.digests = Dictionary(uniqueKeysWithValues: (0..<500).map { ("VIN:\($0)", Data()) })
+        group.noteHistoryRead(spansWindow: true, limit: 500, at: now)
+        let page = Set((0..<10).map { "VIN:\($0)" })
+
+        // A page that overlaps the index is merged in, new rows and all, and removes nothing.
+        #expect(group.use(ofPage: page, requested: 10, limit: 500, at: now) == .merge)
+        let withNewDrive = Set(page.dropFirst()).union(["VIN:501"])
+        #expect(group.use(ofPage: withNewDrive, requested: 10, limit: 500, at: now) == .merge)
+        #expect(group.removedIDs(in: page, complete: false).isEmpty)
+        #expect(group.removedIDs(in: page, complete: true).count == 490)
+
+        // A page with nothing the index knows means more new rows than fit on it.
+        let allNew = Set((600..<610).map { "VIN:\($0)" })
+        #expect(group.use(ofPage: allNew, requested: 10, limit: 500, at: now) == nil)
+
+        // A short page, or one as long as the window, is the whole window.
+        #expect(group.use(ofPage: ["VIN:1"], requested: 10, limit: 500, at: now) == .window)
+        #expect(group.use(ofPage: [], requested: 50, limit: 50, at: now) == .window)
+        // Unless rows were dropped from it, when being short proves nothing.
+        #expect(group.use(ofPage: ["VIN:1"], requested: 10, limit: 500, intact: false, at: now) == .merge)
+        #expect(group.use(ofPage: ["VIN:900"], requested: 10, limit: 500, intact: false, at: now) == nil)
+    }
+
+    @Test func historyWindowsAreReadAgainDailyAndWhenTheirSizeChanges() {
+        let now = Date()
+        var group = SpotlightIndexManifest.Group()
+        // A manifest written before windows were tracked has only `completeAt`.
         group.digests = Dictionary(uniqueKeysWithValues: (0..<50).map { ("VIN:\($0)", Data()) })
         group.completeAt = now
         let page = Set((0..<10).map { "VIN:\($0)" })
-        #expect(group.canUsePage(ids: page, requested: 10, limit: 50, at: now))
-        #expect(group.removedIDs(in: page, complete: false).isEmpty)
-        #expect(group.removedIDs(in: page, complete: true).count == 40)
-        #expect(!group.canUsePage(ids: page, requested: 10, limit: 50, at: now.addingTimeInterval(901)))
-        let changedHead = Set(page.dropFirst()).union(["VIN:51"])
-        #expect(!group.canUsePage(ids: changedHead, requested: 10, limit: 50, at: now))
-        #expect(group.canUsePage(ids: ["VIN:1"], requested: 10, limit: 50, at: now))
-        #expect(group.canUsePage(ids: [], requested: 50, limit: 50, at: now))
+        #expect(group.needsWindowRead(limit: 500, at: now))
+        #expect(group.use(ofPage: page, requested: 10, limit: 500, at: now) == nil)
+
+        group.noteHistoryRead(spansWindow: true, limit: 500, at: now)
+        #expect(!group.needsWindowRead(limit: 500, at: now.addingTimeInterval(23 * 3_600)))
+        #expect(group.needsWindowRead(limit: 500, at: now.addingTimeInterval(24 * 3_600)))
+        #expect(group.needsWindowRead(limit: 200, at: now))
+
+        // Between window reads the newest page is checked every 15 minutes.
+        #expect(!group.needsRefresh(at: now.addingTimeInterval(899)))
+        #expect(group.needsRefresh(at: now.addingTimeInterval(901)))
+        group.noteHistoryRead(spansWindow: false, limit: 500, at: now.addingTimeInterval(901))
+        #expect(!group.needsRefresh(at: now.addingTimeInterval(1_000)))
+        #expect(!group.needsWindowRead(limit: 500, at: now.addingTimeInterval(1_000)))
+    }
+
+    @Test func spotlightIndexesAsMuchHistoryAsASavedSessionCanBeLookedUpFrom() {
+        #expect(FleetSpotlightIndexer.drivesPerVehicle == 500)
+        #expect(FleetSpotlightIndexer.drivesPerVehicle
+            == FleetIntentService.driveHistoryPageSize * FleetIntentService.driveHistoryMaxPages)
+        #expect(FleetSpotlightIndexer.chargesPerVehicle == 200)
     }
 
     @Test func backgroundHistoryRejectsPartialCoverageWithoutChangingOrdinaryReads() async throws {

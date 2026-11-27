@@ -71,12 +71,16 @@ public struct FleetSpotlightSearchResult: Identifiable, Sendable {
 /// Spotlight search and by Siri without launching the app.
 public enum FleetSpotlightIndexer {
     public static let indexName = "FleetEntities"
-    /// Most recent drives indexed per vehicle. Older drives stay reachable through
-    /// the Find Drives tool, which queries Tessie directly.
-    public static let drivesPerVehicle = 50
-    /// Most recent charging sessions indexed per vehicle. Older sessions stay
-    /// reachable through the Get Charging History tool.
-    public static let chargesPerVehicle = 50
+    /// Most recent drives indexed per vehicle, so Siri can find a drive by place or date
+    /// itself. It matches how far back `DriveEntityQuery` can look a drive up again. Find
+    /// Drives reaches older drives when a request gives a date range.
+    public static let drivesPerVehicle = FleetIntentService.driveHistoryPageSize * FleetIntentService.driveHistoryMaxPages
+    /// Most recent charging sessions indexed per vehicle, which is also how far back
+    /// `ChargeSessionEntityQuery` looks a session up. Get Charging History reaches older
+    /// sessions when a request gives a date range.
+    public static let chargesPerVehicle = 200
+    /// Newest charging sessions read between full reads of the window.
+    static let chargePageSize = 50
 
     /// Dashboard response bytes are retained only within one active refresh.
     public struct DashboardReadings: Sendable {
@@ -168,18 +172,58 @@ public enum FleetSpotlightIndexer {
 /// read cannot erase records whose absence has not been established by Tessie.
 struct SpotlightIndexManifest: Codable {
     struct Group: Codable {
+        /// How a page of a history group's newest rows can be applied.
+        enum PageUse: Equatable {
+            /// The page is the whole window: a short page, or one as long as the window.
+            case window
+            /// The page overlaps what is indexed, so its rows are merged in and none are removed.
+            case merge
+        }
+
+        /// How long a history window is trusted before it is read again in full, which picks
+        /// up edits and deletions older than the newest page.
+        static let windowInterval: TimeInterval = 24 * 60 * 60
+
         var digests: [String: Data] = [:]
+        /// When a read last established the group's whole contents, which allows removing rows.
         var completeAt: Date?
+        /// History groups: when the newest rows were last merged in between window reads.
+        var mergedAt: Date?
+        /// History groups: when the whole window was last read, and how many rows it asked for.
+        var windowAt: Date?
+        var window: Int?
         var version: String?
         var vehicleNameDigest: Data?
 
         func needsRefresh(at now: Date) -> Bool {
-            guard let completeAt else { return true }
-            return now.timeIntervalSince(completeAt) >= 15 * 60
+            guard let latest = [completeAt, mergedAt, windowAt].compactMap({ $0 }).max() else { return true }
+            return now.timeIntervalSince(latest) >= 15 * 60
         }
 
-        func canUsePage(ids: Set<String>, requested: Int, limit: Int, at now: Date) -> Bool {
-            ids.count < requested || requested >= limit || (!needsRefresh(at: now) && ids.isSubset(of: digests.keys))
+        /// A history window is read in full the first time, when its size changes, and once
+        /// it is older than `windowInterval`.
+        func needsWindowRead(limit: Int, at now: Date) -> Bool {
+            guard let windowAt, window == limit else { return true }
+            return now.timeIntervalSince(windowAt) >= Self.windowInterval
+        }
+
+        /// How a page of the newest rows can be applied, or `nil` when the window has to be
+        /// read instead: it is due, or the page shares no row with the index, so rows between
+        /// the two may be missing. A page that lost rows it couldn't decode (`intact` false)
+        /// never counts as the whole window.
+        func use(ofPage ids: Set<String>, requested: Int, limit: Int, intact: Bool = true, at now: Date) -> PageUse? {
+            if intact, ids.count < requested || requested >= limit { return .window }
+            if !needsWindowRead(limit: limit, at: now), !ids.isDisjoint(with: digests.keys) { return .merge }
+            return nil
+        }
+
+        mutating func noteHistoryRead(spansWindow: Bool, limit: Int, at now: Date) {
+            if spansWindow {
+                windowAt = now
+                window = limit
+            } else {
+                mergedAt = now
+            }
         }
 
         func removedIDs(in current: Set<String>, complete: Bool) -> Set<String> {
@@ -333,19 +377,32 @@ private actor SpotlightSyncCoordinator {
             } catch { try record(error, group: "Status and software") }
 
             do {
+                let pageSize = FleetIntentService.driveHistoryPageSize
                 try await history(
-                    vin: vin, name: "Recent Drives", limit: FleetSpotlightIndexer.drivesPerVehicle, force: repair,
+                    vin: vin, name: "Recent Drives", limit: FleetSpotlightIndexer.drivesPerVehicle, pageSize: pageSize,
+                    nameDigest: nameDigest, force: repair,
                     payload: samples?.drives, requested: samples?.driveLimit, decode: FleetIntentClient.spotlightDrives,
-                    fetch: { try await service.drives(vin: vin, limit: $0, requireCompleteRows: true) },
-                    entity: DriveEntity.init(info:), scope: scope, groups: &groups
+                    fetch: { limit in
+                        try await self.tolerantRead { strict in
+                            let pages = (limit + pageSize - 1) / pageSize
+                            let drives = try await service.driveHistory(vin: vin, maxPages: pages, requireCompleteRows: strict)
+                            return Array(drives.prefix(limit))
+                        }
+                    },
+                    entity: { DriveEntity(info: $0, vehicleName: vehicle.name) }, scope: scope, groups: &groups
                 )
             } catch { try record(error, group: "Recent Drives") }
             do {
                 try await history(
-                    vin: vin, name: "Charging Sessions", limit: FleetSpotlightIndexer.chargesPerVehicle, force: repair,
+                    vin: vin, name: "Charging Sessions", limit: FleetSpotlightIndexer.chargesPerVehicle,
+                    pageSize: FleetSpotlightIndexer.chargePageSize, nameDigest: nameDigest, force: repair,
                     payload: samples?.charges, requested: samples?.chargeLimit, decode: FleetIntentClient.spotlightCharges,
-                    fetch: { try await service.charges(vin: vin, limit: $0, requireCompleteRows: true) },
-                    entity: ChargeSessionEntity.init(info:), scope: scope, groups: &groups
+                    fetch: { limit in
+                        try await self.tolerantRead { strict in
+                            try await service.charges(vin: vin, limit: limit, requireCompleteRows: strict)
+                        }
+                    },
+                    entity: { ChargeSessionEntity(info: $0, vehicleName: vehicle.name) }, scope: scope, groups: &groups
                 )
             } catch { try record(error, group: "Charging Sessions") }
 
@@ -373,32 +430,67 @@ private actor SpotlightSyncCoordinator {
         return .init(indexName: FleetSpotlightIndexer.indexName, submittedAt: now, groups: groups, errors: errors)
     }
 
+    /// A strict read fails when the provider returns a row it can't decode. This reads again
+    /// without that requirement and reports the result as not intact, so one bad row doesn't
+    /// keep the rest of the history out of the index, and nothing is removed on the evidence
+    /// of a partial read.
+    private func tolerantRead<Row>(
+        _ read: (_ strict: Bool) async throws -> [Row]
+    ) async throws -> (rows: [Row], intact: Bool) {
+        do {
+            return (try await read(true), true)
+        } catch FleetKitError.badResponse {
+            return (try await read(false), false)
+        }
+    }
+
+    /// Keeps a deep window of history indexed without reading it all on every refresh. The
+    /// whole window is read once a day, when its size changes, and when the car is renamed
+    /// (indexed rows carry the car's name). In between, a page of the newest rows is merged
+    /// in, as long as it overlaps what is already indexed.
     private func history<Row: Encodable & Identifiable & Sendable, Entity: IndexedEntity>(
-        vin: String, name: String, limit: Int, force: Bool, payload: Data?, requested: Int?,
-        decode: (Data, String) throws -> ([Row], Int), fetch: (Int) async throws -> [Row],
+        vin: String, name: String, limit: Int, pageSize: Int, nameDigest: Data, force: Bool,
+        payload: Data?, requested: Int?,
+        decode: (Data, String) throws -> ([Row], Int),
+        fetch: (Int) async throws -> (rows: [Row], intact: Bool),
         entity: (Row) -> Entity, scope: String, groups: inout [FleetSpotlightSubmittedGroup]
     ) async throws where Entity.ID == String, Row.ID == String {
         let group = manifest.vehicles[vin]?[name] ?? Group()
-        let rows: [Row]
-        let complete: Bool
-        if let payload, let requested, requested > 0 {
+        let now = Date()
+        let force = force || group.vehicleNameDigest != nameDigest
+        var newest: (rows: [Row], requested: Int, intact: Bool)?
+        if force {
+            newest = nil
+        } else if let payload, let requested, requested > 0 {
             let (page, count) = try decode(payload, vin)
-            let ids = Set(page.map(\.id))
-            guard ids.count == count else { throw FleetKitError.badResponse }
-            if group.canUsePage(ids: ids, requested: requested, limit: limit, at: Date()) {
-                rows = Array(page.prefix(limit))
-                complete = count < requested || requested >= limit
-            } else {
-                rows = try await fetch(limit)
-                complete = true
-            }
-        } else if force || group.needsRefresh(at: Date()) {
-            rows = try await fetch(limit)
-            complete = true
+            guard Set(page.map(\.id)).count == count else { throw FleetKitError.badResponse }
+            newest = (page, requested, true)
+        } else if group.needsWindowRead(limit: limit, at: now) {
+            newest = nil
+        } else if group.needsRefresh(at: now) {
+            let page = try await fetch(pageSize)
+            newest = (page.rows, pageSize, page.intact)
         } else { return }
+
+        let rows: [Row]
+        let spansWindow: Bool
+        let intact: Bool
+        if let newest,
+           let use = group.use(ofPage: Set(newest.rows.map(\.id)), requested: newest.requested, limit: limit,
+                               intact: newest.intact, at: now) {
+            rows = Array(newest.rows.prefix(limit))
+            spansWindow = use == .window
+            intact = newest.intact
+        } else {
+            let window = try await fetch(limit)
+            rows = window.rows
+            spansWindow = true
+            intact = window.intact
+        }
         guard FleetIntentService.make().sessionScopeID == scope else { throw CancellationError() }
         try await update(rows.map { (entity($0), $0) }, vin: vin, name: name, priority: 4,
-                         complete: complete, force: force, groups: &groups)
+                         complete: spansWindow && intact, force: force, vehicleNameDigest: nameDigest, groups: &groups)
+        manifest.vehicles[vin]?[name]?.noteHistoryRead(spansWindow: spansWindow, limit: limit, at: now)
     }
 
     private func update<Entity: IndexedEntity, Model: Encodable>(

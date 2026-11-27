@@ -313,12 +313,18 @@ public struct DrivingStatsEntity: TransientAppEntity {
 public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiable {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Charging Session")
     public static let defaultQuery = ChargeSessionEntityQuery()
+    /// A charging session names where the car was plugged in, often home, so Siri asks for
+    /// authentication before reading one out. The intents that return sessions do the same.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     /// "<VIN>:<Tessie charge id>"
     public let id: String
 
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
+
+    @Property(title: "Vehicle Name", description: "The owner's name for the car that charged, such as \"Midnight\".")
+    public var vehicleName: String
 
     @Property(
         title: "Location",
@@ -384,9 +390,10 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     @Property(title: "Longitude", description: "Charging site GPS longitude in decimal degrees, for map rendering.", visibility: .internal)
     public var longitude: Double?
 
-    public init(info: FleetChargeInfo) {
+    public init(info: FleetChargeInfo, vehicleName: String) {
         self.id = info.sessionID
         self.vin = info.vin
+        self.vehicleName = vehicleName
         self.location = info.location
         self.isSupercharger = info.isSupercharger
         self.startedAt = info.startedAtDate
@@ -478,14 +485,18 @@ public struct ChargeSessionEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             String(localized: "cost", bundle: .module, comment: "Spotlight keyword for cost"),
             isSupercharger ? "Supercharger" : String(localized: "home charging", bundle: .module, comment: "Spotlight keyword for home charging"),
             isSupercharger ? String(localized: "Supercharging", bundle: .module, comment: "Spotlight keyword for Supercharging") : "AC",
-            location
-        ].compactMap { $0 }
+            vehicleName, location
+        ].compactMap { $0 }.filter { !$0.isEmpty }
         return attributes
     }
 
+    /// Names the car the session belongs to unless `vehicleName` overrides it.
     public func spokenSummary(vehicleName: String? = nil) -> String {
         let whenText = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let subject = vehicleName ?? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken charging summary")
+        let named = vehicleName ?? self.vehicleName
+        let subject = named.isEmpty
+            ? String(localized: "Your Tesla", bundle: .module, comment: "Default vehicle subject in spoken charging summary")
+            : named
         var sentences: [String] = []
 
         if isSupercharger {
@@ -560,9 +571,9 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
         // Only query the vehicles the identifiers belong to ("<VIN>:<id>").
         let requestedVINs = Set(identifiers.compactMap { $0.split(separator: ":").first.map(String.init) })
         for vehicle in vehicles where !remaining.isEmpty && (requestedVINs.isEmpty || requestedVINs.contains(vehicle.vin)) {
-            let charges = try await service.charges(vin: vehicle.vin, limit: 200)
+            let charges = try await service.charges(vin: vehicle.vin, limit: FleetSpotlightIndexer.chargesPerVehicle)
             for charge in charges where remaining.contains(charge.sessionID) {
-                found.append(ChargeSessionEntity(info: charge))
+                found.append(ChargeSessionEntity(info: charge, vehicleName: vehicle.name))
                 remaining.remove(charge.sessionID)
             }
         }
@@ -575,7 +586,7 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
         let service = FleetIntentService.make()
         var all: [ChargeSessionEntity] = []
         for vehicle in try await service.vehicles() {
-            let charges = try await service.charges(vin: vehicle.vin, limit: 50).map(ChargeSessionEntity.init(info:))
+            let charges = try await service.charges(vin: vehicle.vin, limit: 50).map { ChargeSessionEntity(info: $0, vehicleName: vehicle.name) }
             all.append(contentsOf: charges)
         }
         guard !query.isEmpty else { return Array(all.prefix(10)) }
@@ -591,7 +602,7 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
     public func suggestedEntities() async throws -> [ChargeSessionEntity] {
         let service = FleetIntentService.make()
         let vehicle = try await service.resolvedVehicle(nil)
-        return try await service.charges(vin: vehicle.vin, limit: 10).map(ChargeSessionEntity.init(info:))
+        return try await service.charges(vin: vehicle.vin, limit: 10).map { ChargeSessionEntity(info: $0, vehicleName: vehicle.name) }
     }
 
     public func reindexEntities(for identifiers: [ChargeSessionEntity.ID], indexDescription: CSSearchableIndexDescription) async throws {
@@ -602,7 +613,7 @@ public struct ChargeSessionEntityQuery: EntityQuery, EntityStringQuery, IndexedE
         let service = FleetIntentService.make()
         var all: [ChargeSessionEntity] = []
         for vehicle in try await service.vehicles() {
-            all.append(contentsOf: try await service.charges(vin: vehicle.vin, limit: FleetSpotlightIndexer.chargesPerVehicle).map(ChargeSessionEntity.init(info:)))
+            all.append(contentsOf: try await service.charges(vin: vehicle.vin, limit: FleetSpotlightIndexer.chargesPerVehicle).map { ChargeSessionEntity(info: $0, vehicleName: vehicle.name) })
         }
         try await FleetSpotlightIndexer.donate(all)
     }

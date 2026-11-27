@@ -282,7 +282,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                             prompt: "“How's my car?” or “Where is my car?”",
                             subtitle: "Battery & charge-limit gauge, Apple Maps parked-car pin, Directions link & live controls"
                         ) {
-                            VehicleStatusSnippetView(status: statusEntity, mapData: vehicleMapData)
+                            VehicleStatusSnippetView(status: statusEntity, mapData: vehicleMapData, showsLocation: true)
                         }
 
                         siriPlatterCard(
@@ -451,7 +451,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
             async let chargeRead = service.charges(vin: resolved.vin, limit: 5)
             let (rawDrives, snapshot, rawCharges) = try await (driveRead, statusRead, chargeRead)
             guard !Task.isCancelled else { return }
-            drives = rawDrives.map(DriveEntity.init(info:))
+            drives = rawDrives.map { DriveEntity(info: $0, vehicleName: resolved.name) }
             drivingStats = DrivingStatsEntity(vehicle: resolved, period: .last7Days, drives: rawDrives)
 
             statusEntity = VehicleStatusEntity(
@@ -460,7 +460,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                 locationAddress: "Apple Park Way, Cupertino"
             )
 
-            charges = rawCharges.map(ChargeSessionEntity.init(info:))
+            charges = rawCharges.map { ChargeSessionEntity(info: $0, vehicleName: resolved.name) }
             previewService = service
             refreshGalleryMaps()
         } catch {
@@ -472,7 +472,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                 vehicleName = resolved.name
                 vehicleEntity = VehicleEntity(id: resolved.vin, name: resolved.name)
                 let rawDrives = (try? await demoService.drives(vin: resolved.vin, limit: 5)) ?? []
-                drives = rawDrives.map(DriveEntity.init(info:))
+                drives = rawDrives.map { DriveEntity(info: $0, vehicleName: resolved.name) }
                 drivingStats = DrivingStatsEntity(vehicle: resolved, period: .last7Days, drives: rawDrives)
                 if let snap = try? await demoService.snapshot(vin: resolved.vin) {
                     statusEntity = VehicleStatusEntity(
@@ -482,7 +482,7 @@ private struct SiriDynamicWidgetsPreviewSheet: View {
                     )
                 }
                 let rawCharges = (try? await demoService.charges(vin: resolved.vin, limit: 5)) ?? []
-                charges = rawCharges.map(ChargeSessionEntity.init(info:))
+                charges = rawCharges.map { ChargeSessionEntity(info: $0, vehicleName: resolved.name) }
                 guard !Task.isCancelled else { return }
                 previewService = demoService
                 refreshGalleryMaps()

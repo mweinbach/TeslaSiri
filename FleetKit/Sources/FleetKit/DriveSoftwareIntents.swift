@@ -9,6 +9,8 @@ public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
         "Lists the most recent completed drives for a Tesla vehicle, including start/end addresses, distance in miles, duration in minutes, average and max speed, and energy consumed in kWh. To filter drives by place, date, or distance, use Find Drives."
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -63,7 +65,7 @@ public struct GetRecentDrivesIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let clampedCount = min(max(count, 1), 25)
-            let drives = try await service.drives(vin: resolved.vin, limit: clampedCount).map(DriveEntity.init(info:))
+            let drives = try await service.drives(vin: resolved.vin, limit: clampedCount).map { DriveEntity(info: $0, vehicleName: resolved.name) }
             log.success("returned \(drives.count) drive(s) for \(resolved.name)")
             let dialogText = drives.isEmpty
                 ? String(localized: "No recent drives were found for \(resolved.name).", bundle: .module, comment: "Siri answer when a vehicle has no recent drives.")
@@ -91,6 +93,8 @@ public struct GetLastDriveIntent: AppIntent, PredictableIntent {
         "Fetches the single most recent completed drive for a Tesla vehicle, returning its distance, duration, route addresses, speed, energy used, and a rich visual summary."
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -146,7 +150,7 @@ public struct GetLastDriveIntent: AppIntent, PredictableIntent {
                     )
                 )
             }
-            let entity = DriveEntity(info: last)
+            let entity = DriveEntity(info: last, vehicleName: resolved.name)
             log.success("last drive for \(resolved.name): \(entity.distanceText)")
             let spoken = entity.spokenSummary(vehicleName: resolved.name)
             return .result(

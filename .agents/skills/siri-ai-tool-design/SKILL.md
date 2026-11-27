@@ -26,7 +26,7 @@ Use this skill whenever adding, updating, or reviewing Siri AI / Apple Intellige
 3. **Inline String Literals for Metadata**:
    - `appintentsmetadataprocessor` requires inline string literals on `title`, `IntentDescription("...")`, and every `@Parameter(title: "...", description: "...", requestValueDialog: IntentDialog("..."))`. Never pass static constants into `@Parameter`.
 4. **LLM-Oriented Descriptions & Spoken Readout**:
-   - State **what** the tool reads or mutates, **units & valid bounds** (`50...100` percent, `15.0...28.0` °C — convert Fahrenheit before calling), **side effects / confirmation behavior**, and keep the Siri tool surface lean (18 tools): use `ControlCarIntent` as the primary car control tool, with dedicated control tools only for `SetCabinTemperatureIntent`, `SetSeatClimateIntent` ("Set Tesla Seat Climate"), `SendNavigationIntent`, `InstallSoftwareUpdateIntent`, and `CancelSoftwareUpdateIntent`. Single-action control intents stay plain `AppIntent`s for Shortcuts, App Shortcuts, and snippet buttons.
+   - State **what** the tool reads or mutates, **units & valid bounds** (`50...100` percent; a cabin temperature exactly as the user said it, 59–82.4 °F or 15–28 °C, which the tool converts), **side effects / confirmation behavior**, and keep the Siri tool surface lean (20 tools) and each description under 60 words (analyzer rule SMA204): use `ControlCarIntent` as the primary car control tool, `UnlockOrOpenCarIntent` for anything that opens the car or lowers its security, `LocateCarIntent` for where the car is, and dedicated control tools only for `SetCabinTemperatureIntent`, `SetSeatClimateIntent` ("Set Seat Climate"), `SendNavigationIntent`, `InstallSoftwareUpdateIntent`, and `CancelSoftwareUpdateIntent`. Single-action control intents stay plain `AppIntent`s for Shortcuts, App Shortcuts, and snippet buttons.
    - Ensure readouts (`ProvidesDialog`) speak actual user-facing content (such as `ReleaseNoteEntity.spokenDigest(...)`, `DriveEntity.spokenSummary(vehicleName:)`, or stats summaries) rather than bare record counts.
 5. **Default Vehicle Resolution**:
    - Every vehicle-scoped tool takes `public var vehicle: VehicleEntity?` (`optionsProvider: SelectedVehicleOptionsProvider()`) and resolves `try await service.resolvedVehicle(vehicle?.id)` so omitting `vehicle` targets the user's selected car while onscreen/notification `VehicleEntity` context binds automatically.
@@ -36,6 +36,7 @@ Use this skill whenever adding, updating, or reviewing Siri AI / Apple Intellige
    - Every mutation tool returns `ReturnsValue<VehicleCommandResultEntity> & ProvidesDialog` so Siri AI receives machine-readable confirmation (`vehicleName`, `vin`, `action`, `succeeded`, `appliedValue`, `summary`, `executedAt`) for multi-step reasoning.
 7. **Logging Convention**:
    - Every `perform()` must start with `let log = FleetIntentLog(Self.self, vehicle: vehicle)` and wrap its body in `do { ... log.success(...) } catch { throw log.failure(error) }`. Never log raw tokens or full VINs.
+   - Siri reads the error a tool throws, but only when it conforms to `CustomLocalizedStringResourceConvertible`. `log.failure(_:)` converts raw `URLError`/`DecodingError` with `FleetKitError.readableBySiri`, so always throw its return value. Throw `FleetKitError.api("…")` with a sentence that says what went wrong and what would fix it.
 
 ## 3. Confirmation & Safety Policy
 
@@ -52,17 +53,30 @@ Always call `try await requestConfirmation(dialog:)` inside `perform()` before e
 | | `HonkHornIntent` and all read-only telemetry, drive search/details, release notes, and driving/charging/battery stats tools |
 | `InstallSoftwareUpdateIntent`, `CancelSoftwareUpdateIntent` | |
 
-`ControlCarIntent` validates all requested changes, collects the actions in the confirmation column into a single prompt, and obtains that confirmation before dispatching its first command. Keep its action policy aligned with the corresponding single-action tools.
+`ControlCarIntent` and `UnlockOrOpenCarIntent` validate all requested changes, collect the actions in the confirmation column into a single prompt, and obtain that confirmation before dispatching the first command (`LongRunningIntent.runCarControl`). Keep their action policy aligned with the corresponding single-action tools.
+
+### Authentication (Lock Screen) policy
+
+Confirmation is not authentication: `requestConfirmation` on a locked iPhone is only a spoken "yes". `authenticationPolicy` is static per intent and defaults to `.alwaysAllowed`, which runs while the device is locked.
+
+- `ControlCarIntent` stays `.alwaysAllowed` so "warm up my car" works hands-free. It therefore must not unlock doors, open the trunk, frunk, or charge port, or turn Sentry Mode off. Those live in `UnlockOrOpenCarIntent` (`.requiresAuthentication`). `CarControlSettings` rejects `locked: false` and `sentryOn: false` with an error that names the Unlock or Open Car tool, so Siri re-routes.
+- Where the car is, and where it has been, require authentication: `LocateCarIntent`, the drive and charging history tools, and the `DriveEntity` / `ChargeSessionEntity` types. `GetVehicleInfoIntent` and `GetVehicleStatusIntent` build `VehicleStatusEntity(…, includesLocation: false)` and never geocode.
+- A property-level `authenticationPolicy` only gates answers Siri composes from the entity. If a tool's own dialog or snippet would say or show the value, gate the intent.
+- A `SnippetIntent` must not decide what to show from the contents of an entity parameter: the system can fetch the entity again from its query, which may return more than the presenting intent put in. Pass a plain value instead, as `VehicleStatusSnippetIntent.showsLocation` does for the map card.
+- When adding a capability, decide which side of this line it falls on before choosing the tool it joins.
 
 For several requested changes to one car, pass the supported fields together in `CarControlSettings`. The app orders the operations, including starting HVAC once before setting a temperature. After a partial failure, report the accepted steps and the first unconfirmed operation. Resume only on a new user request, using the outstanding changes. Use the specialist tools for software updates and seat cooling.
 
-## 4. Entities: `SyncableEntity`, `EntityStringQuery`, `@Property`, and `@AppEntity(.generable)`
+## 4. Entities: `IndexedEntity`, `SyncableEntity`, `@Property`, and `@AppEntity(.generable)`
 
-1. **Server-Backed Entities (`IndexedEntity` + `SyncableEntity` + `EntityStringQuery`)**:
-   - `VehicleEntity`, `VehicleStatusEntity`, `DriveEntity`, `SoftwareUpdateEntity`, and `ReleaseNoteEntity` conform to both `IndexedEntity` and `SyncableEntity` (with `EntityStringQuery` on `VehicleEntityQuery`, `DriveEntityQuery`, `ReleaseNoteEntityQuery`, and `ChargeSessionEntityQuery`) so Siri AI can resolve natural-language entity references and inspect every `@Property(title: "...")` field.
-   - Keep `public let id: String` unwrapped; declare `@Property(title: "...", description: "...") public var ...` on every model property (iOS 27.3 adds `description:`, `visibility:`, and `indexingKey:`; the analyzer flags missing descriptions as SMA203). Mark VINs `visibility: .internal`, and assign `self.id` **before** `@Property`-wrapped fields in `init`.
+1. **Server-Backed Entities (`IndexedEntity` + `SyncableEntity`)**:
+   - `VehicleEntity`, `VehicleStatusEntity`, `DriveEntity`, `SoftwareUpdateEntity`, and `ReleaseNoteEntity` conform to both `IndexedEntity` and `SyncableEntity` so Siri AI can find them in Spotlight without launching the app and inspect every `@Property(title: "...")` field. For tool intents Siri finds candidates only through Spotlight (`IndexedEntity`) or `EnumerableEntityQuery` (`VehicleEntityQuery`) and resolves them with `entities(for:)`; it does not call `EntityStringQuery.entities(matching:)` or `suggestedEntities()`, which the queries keep for the Shortcuts picker. `entities(for:)` must therefore resolve every identifier a tool can return: `DriveEntityQuery` pages back through `FleetIntentService.driveHistory` for drives older than the newest page.
+   - `FleetSpotlightIndexer` keeps the newest 500 drives and 200 charging sessions per car indexed, the same depth `entities(for:)` can resolve, so prefer letting Siri find a drive or charge in Spotlight over adding search parameters to a tool.
+   - Use an `AppEnum` for a property with a fixed set of values (`VehicleChargingState`, `SoftwareUpdateStatus`). When the provider can report values outside the cases, keep its wording in a plain stored property (`reportedChargingState`, `reportedStatus`) for display and leave the enum property `nil`.
+   - `DriveEntity` and `ChargeSessionEntity` carry `vehicleName`; pass the roster name wherever one is created.
+   - Keep `public let id: String` unwrapped; declare `@Property(title: "...", description: "...") public var ...` on every model property (iOS 27.3 adds `description:`, `visibility:`, and `indexingKey:`; the analyzer flags missing descriptions as SMA203). Mark VINs `visibility: .internal`, and assign `self.id` and any other plain stored property **before** `@Property`-wrapped fields in `init`.
 2. **Composite Generable Inputs (`@AppEntity(.generable)`)**:
-   - Use `@AppEntity(.generable)` + `TransientAppEntity` (e.g., `CabinClimateSettings`, `DriveFilterCriteria` in `FleetSiriAITypes.swift`) when Siri AI should synthesize multi-field structured arguments from natural language in a single tool call.
+   - Use `@AppEntity(.generable)` + `TransientAppEntity` (e.g., `CarControlSettings` in `ControlCarIntent.swift`, `DriveFilterCriteria` in `FleetSiriAITypes.swift`) when Siri AI should synthesize multi-field structured arguments from natural language in a single tool call. Only a type a `@AppIntent(.tool)` takes should be generable; `CabinClimateSettings`, which only the Shortcuts action `ConfigureCabinClimateIntent` takes, is a plain `TransientAppEntity`.
    - Generable entities must have `public init() {}` and contain **only** `@Property(title:description:)` fields of primitive, `AppEnum`, or nested generable types — never put `VehicleEntity` inside a `@AppEntity(.generable)` struct.
 
 ## 5. Onscreen & Notification Grounding
@@ -74,7 +88,7 @@ For several requested changes to one car, pass the supported fields together in 
 
 - Siri-read task skills live in the **app target** at `TeslaSiri/Skills.skillsbundle/Skills/<skill-name>/SKILL.md`. Xcode compiles the bundle to `TeslaSiri.app/Metadata.appintents/Skills.skillsc`; confirm that file exists after building. SwiftPM resources and loose `.md` files are never read by Siri.
 - Frontmatter: only `name` (lowercase kebab-case, equal to its folder) and `description` (≤1,024 chars, says when to use it and which sibling skill covers related requests; avoid an unquoted `: `). Any error drops every skill.
-- Bodies explain the task and orchestrate tools, referring to tools by **title** ("the Get Tesla Vehicle Info tool"), never by Swift type. Don't restate tool metadata; fix the tool instead.
+- Bodies explain the task and orchestrate tools, referring to tools by **title** ("the Get Vehicle Info tool"), never by Swift type. Don't restate tool metadata; fix the tool instead.
 - `FleetSiriAIExpansionTests` validates the format and that every referenced tool title exists.
 
 ## 7. Validation Checklist

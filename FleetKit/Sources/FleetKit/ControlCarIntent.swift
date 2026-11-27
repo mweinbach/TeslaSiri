@@ -44,9 +44,9 @@ public struct CarControlSettings: TransientAppEntity {
     public var dogMode: Bool?
     @Property(title: "Bioweapon Defense Mode", description: "True to turn on HEPA cabin filtration, false to turn it off.")
     public var bioweaponDefense: Bool?
-    @Property(title: "Locked", description: "True to lock doors or false to unlock. Unlocking requires confirmation.")
+    @Property(title: "Lock Doors", description: "True to lock the doors. Leave empty otherwise; unlocking uses the Unlock or Open Car tool.")
     public var locked: Bool?
-    @Property(title: "Sentry Mode", description: "True to enable or false to disable Sentry Mode. Disabling requires confirmation.")
+    @Property(title: "Turn On Sentry Mode", description: "True to turn Sentry Mode on. Leave empty otherwise; turning it off uses the Unlock or Open Car tool.")
     public var sentryOn: Bool?
     @Property(title: "Charging", description: "True to start a charging session, false to stop it. Stopping requires confirmation.")
     public var charging: Bool?
@@ -54,12 +54,10 @@ public struct CarControlSettings: TransientAppEntity {
     public var chargeLimitPercent: Int?
     @Property(title: "Charging Current", description: "The requested current from 5 to 48 amps.")
     public var chargingAmps: Int?
-    @Property(title: "Charge Port", description: "Open or close the charge port door. Opening requires confirmation.")
-    public var chargePort: ChargePortAction?
+    @Property(title: "Close Charge Port", description: "True to close the charge port door. Leave empty otherwise; opening it uses the Unlock or Open Car tool.")
+    public var closeChargePort: Bool?
     @Property(title: "Windows", description: "Vent or close the windows. Closing requires confirmation.")
     public var windows: CarWindowAction?
-    @Property(title: "Open Trunk", description: "Actuate the rear trunk or front trunk with confirmation. A powered rear trunk can close if already open.")
-    public var openTrunk: TrunkPosition?
     @Property(title: "Destination", description: "An address, coordinates, or map URL the user wants sent to the car's navigation.")
     public var destination: String?
     @Property(title: "Flash Lights", description: "True only when the user wants the vehicle lights flashed once.")
@@ -67,8 +65,13 @@ public struct CarControlSettings: TransientAppEntity {
     @Property(title: "Honk Horn", description: "True only when the user wants the horn sounded once.")
     public var honkHorn: Bool?
 
+    /// Names the requested changes, such as "climate on, 72°F, and lock doors", so Shortcuts
+    /// and Siri show what a Control Car request will do instead of the type name.
     public var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "Car Control Settings")
+        guard let labels = try? steps(for: nil).map(\.label), !labels.isEmpty else {
+            return DisplayRepresentation(title: "Car Control Settings")
+        }
+        return DisplayRepresentation(title: LocalizedStringResource(stringLiteral: labels.formatted(.list(type: .and))))
     }
 
     public init() {}
@@ -78,12 +81,12 @@ public struct CarControlSettings: TransientAppEntity {
 public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
-        "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locks, Sentry, charging, limit/amps, charge port, windows, trunk/frunk, lights, horn, or destination. Orders steps and confirms sensitive actions. Omit Vehicle for default car; seat cooling and updates use dedicated tools.",
+        "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening the car, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.",
         searchKeywords: [
-            "control my car", "lock my car", "unlock my car", "warm up my car", "cool down my car",
+            "control my car", "lock my car", "warm up my car", "cool down my car",
             "precondition", "turn off climate", "defrost", "dog mode", "bioweapon defense",
-            "sentry mode", "start charging", "stop charging", "charge limit", "charging amps",
-            "charge port", "vent windows", "close windows", "open trunk", "open frunk",
+            "turn on sentry mode", "start charging", "stop charging", "charge limit", "charging amps",
+            "close charge port", "vent windows", "close windows",
             "flash lights", "honk horn", "steering wheel heater", "prepare my Tesla"
         ]
     )
@@ -117,61 +120,8 @@ public struct ControlCarIntent: AppIntent, LongRunningIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let steps = try changes.steps(for: resolved)
-            let available = try await service.controlActions(for: resolved)
-            if let unavailable = steps.first(where: { !available.supports($0.action) }) {
-                throw FleetKitError.unsupportedAction(unavailable.label)
-            }
-            let sensitive = steps.filter(\.needsConfirmation).map(\.label)
-            if !sensitive.isEmpty {
-                let description = sensitive.formatted(.list(type: .and))
-                try await confirmWithSafetyGate(
-                    dialog: IntentDialog(
-                        LocalizedStringResource(
-                            "Confirm these changes to \(resolved.name): \(description)?",
-                            bundle: FleetKitLocalization.bundleDescription,
-                            comment: "Confirmation prompt listing sensitive vehicle control changes."
-                        )
-                    )
-                )
-            }
-
-            let plan = await CarControlPlan.make(steps, service: service, vin: resolved.vin)
-            let outcome = try await performSandboxAwareBackgroundTask(
-                description: String(
-                    localized: "Controlling \(resolved.name)",
-                    bundle: .module,
-                    comment: "Progress label while running one or more vehicle control commands."
-                )
-            ) {
-                try await CarControlStepRunner.run(plan, service: service, vin: resolved.vin)
-            }
-
-            let detail = outcome.acceptedDetail
-            if let failure = outcome.failure, let summary = outcome.partialFailureSummary(vehicleName: resolved.name) {
-                let result = VehicleCommandResultEntity(
-                    vehicle: resolved,
-                    action: "control_car",
-                    succeeded: false,
-                    appliedValue: detail,
-                    summary: summary
-                )
-                _ = log.failure(failure.error)
-                return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
-            }
-            let summary = outcome.deliveryState.summary(
-                vehicleName: resolved.name,
-                wakingAction: String(localized: "apply: \(detail)", bundle: .module, comment: "Infinitive action phrase in wake-up message listing requested car controls."),
-                confirmed: String(localized: "\(resolved.name) accepted: \(detail).", bundle: .module, comment: "Siri confirmation listing vehicle controls accepted by the car.")
-            )
-            let result = VehicleCommandResultEntity(
-                vehicle: resolved,
-                action: "control_car",
-                deliveryState: outcome.deliveryState,
-                appliedValue: detail,
-                summary: summary
-            )
-            log.success("completed \(outcome.accepted.count) requested car controls (\(outcome.deliveryState.rawValue))")
-            return .result(value: result, dialog: IntentDialog(stringLiteral: summary))
+            let result = try await runCarControl(steps, on: resolved, action: "control_car", service: service, log: log)
+            return .result(value: result, dialog: IntentDialog(stringLiteral: result.summary))
         } catch {
             throw log.failure(error)
         }
@@ -378,7 +328,30 @@ private extension CarControlSettings {
         }
     }
 
-    func steps(for vehicle: FleetVehicleInfo) throws -> [CarControlStep] {
+    /// The commands these settings turn into, in the order they are sent. Pass `nil` to
+    /// describe the settings before a car is known; equipment checks are skipped.
+    func steps(for vehicle: FleetVehicleInfo?) throws -> [CarControlStep] {
+        // This tool runs from the Lock Screen. Anything that opens the car or lowers its
+        // security belongs to Unlock or Open Car, which requires authentication; naming that
+        // tool in the error lets Siri send the request there.
+        if locked == false {
+            throw FleetKitError.api(
+                String(
+                    localized: "Unlocking the doors needs the Unlock or Open Car tool.",
+                    bundle: .module,
+                    comment: "Error from the Control Car tool when asked to unlock; names the Siri tool that unlocks."
+                )
+            )
+        }
+        if sentryOn == false {
+            throw FleetKitError.api(
+                String(
+                    localized: "Turning off Sentry Mode needs the Unlock or Open Car tool.",
+                    bundle: .module,
+                    comment: "Error from the Control Car tool when asked to turn Sentry Mode off; names the Siri tool that does."
+                )
+            )
+        }
         let resolvedTarget = try resolvedTargetTemperature()
         for level in [driverSeatHeat, passengerSeatHeat].compactMap({ $0 }) where !(0...3).contains(level) {
             throw FleetKitError.api(
@@ -413,7 +386,7 @@ private extension CarControlSettings {
                 )
             }
         }
-        if charging == true && chargePort == .close {
+        if charging == true && closeChargePort == true {
             throw FleetKitError.api(
                 String(
                     localized: "Starting charging conflicts with closing the charge port.",
@@ -425,12 +398,11 @@ private extension CarControlSettings {
         if charging == false {
             steps.append(.init("charge_stop", String(localized: "stop charging", bundle: .module, comment: "Short step label for stopping charging."), confirm: true))
         }
-        if let chargePort {
-            let open = chargePort == .open
-            let label = open
-                ? String(localized: "open charge port", bundle: .module, comment: "Short step label for opening the charge port.")
-                : String(localized: "close charge port", bundle: .module, comment: "Short step label for closing the charge port.")
-            steps.append(.init(open ? "charge_port_door_open" : "charge_port_door_close", label, confirm: open))
+        if closeChargePort == true {
+            steps.append(.init(
+                "charge_port_door_close",
+                String(localized: "close charge port", bundle: .module, comment: "Short step label for closing the charge port.")
+            ))
         }
         if let percent = chargeLimitPercent {
             guard (50...100).contains(percent) else {
@@ -469,37 +441,24 @@ private extension CarControlSettings {
         if charging == true {
             steps.append(.init("charge_start", String(localized: "start charging", bundle: .module, comment: "Short step label for starting charging.")))
         }
-        if locked == false {
-            steps.append(.init("door_unlock", String(localized: "unlock doors", bundle: .module, comment: "Short step label for unlocking doors."), confirm: true))
-        }
         if let windows {
             let label = windows == .vent
                 ? String(localized: "vent windows", bundle: .module, comment: "Short step label for venting windows.")
                 : String(localized: "close windows", bundle: .module, comment: "Short step label for closing windows.")
             steps.append(.init("window_control", label, ["command": .string(windows.rawValue)], confirm: windows == .close))
         }
-        if let openTrunk {
-            guard vehicle.canActuateTrunks != false else {
-                throw FleetKitError.unsupportedAction(
-                    String(localized: "actuating the trunk", bundle: .module, comment: "Action name used in unsupported-action errors for trunk actuation.")
-                )
-            }
-            let label = openTrunk == .rear
-                ? String(localized: "open trunk", bundle: .module, comment: "Short step label for opening the rear trunk.")
-                : String(localized: "open frunk", bundle: .module, comment: "Short step label for opening the front trunk (frunk).")
-            steps.append(.init("actuate_trunk", label, ["which_trunk": .string(openTrunk.rawValue)], confirm: true))
-        }
         if locked == true {
             steps.append(.init("door_lock", String(localized: "lock doors", bundle: .module, comment: "Short step label for locking doors.")))
         }
-        if let sentryOn {
-            let label = sentryOn
-                ? String(localized: "Sentry Mode on", bundle: .module, comment: "Short step label for enabling Sentry Mode.")
-                : String(localized: "Sentry Mode off", bundle: .module, comment: "Short step label for disabling Sentry Mode.")
-            steps.append(.init("set_sentry_mode", label, ["on": .bool(sentryOn)], confirm: !sentryOn))
+        if sentryOn == true {
+            steps.append(.init(
+                "set_sentry_mode",
+                String(localized: "Sentry Mode on", bundle: .module, comment: "Short step label for enabling Sentry Mode."),
+                ["on": .bool(true)]
+            ))
         }
         if let destination {
-            guard vehicle.canAcceptNavigationRequests != false else {
+            guard vehicle?.canAcceptNavigationRequests != false else {
                 throw FleetKitError.unsupportedAction(
                     String(localized: "sending a destination", bundle: .module, comment: "Action name used in unsupported-action errors for sending navigation destinations.")
                 )

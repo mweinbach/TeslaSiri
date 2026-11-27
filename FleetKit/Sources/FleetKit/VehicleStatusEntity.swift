@@ -40,9 +40,13 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
 
     @Property(
         title: "Charging State",
-        description: "Tesla's charging state: Charging, Complete, Stopped (plugged in but not charging), Starting, NoPower, or Disconnected (unplugged)."
+        description: "Whether the car is charging, finished, plugged in but not charging, or unplugged. Empty when the car didn't report a state this app knows."
     )
-    public var chargingState: String?
+    public var chargingState: VehicleChargingState?
+
+    /// The provider's own wording for the charging state. Cards and summaries show it, so a
+    /// state `chargingState` has no case for still appears.
+    public let reportedChargingState: String?
 
     @Property(title: "Charger Power", description: "Power flowing into the car while charging, in kilowatts. 0 when not charging.")
     public var chargerPowerKW: Double?
@@ -149,14 +153,24 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     @Property(title: "Last Updated", description: "When the car last reported this data. Older readings can be stale if the car is asleep.")
     public var updatedAt: Date?
 
-    public init(snapshot: FleetSnapshotInfo, vehicleName: String, locationAddress: String? = nil) {
+    /// - Parameter includesLocation: Pass `false` from an intent that runs without
+    ///   authentication, so the entity it returns and the card it shows never carry where the
+    ///   car is. The location properties' own authentication policy only covers answers Siri
+    ///   composes, not an intent's dialog or snippet.
+    public init(
+        snapshot: FleetSnapshotInfo,
+        vehicleName: String,
+        locationAddress: String? = nil,
+        includesLocation: Bool = true
+    ) {
         self.id = Self.entityID(forVIN: snapshot.vin)
+        self.reportedChargingState = snapshot.chargingState
         self.vin = snapshot.vin
         self.vehicleName = vehicleName
         self.batteryPercent = snapshot.batteryLevel.map { Int($0.rounded()) }
         self.batteryRangeMiles = snapshot.batteryRangeMiles
         self.chargeLimitPercent = snapshot.chargeLimitSOC.map { Int($0.rounded()) }
-        self.chargingState = snapshot.chargingState
+        self.chargingState = snapshot.chargingState.flatMap(VehicleChargingState.init(reported:))
         self.chargerPowerKW = snapshot.chargerPowerKW
         self.chargeRateMPH = snapshot.chargeRateMPH
         self.minutesToFullCharge = snapshot.timeToFullCharge.flatMap { $0 > 0 ? Int(($0 * 60).rounded()) : nil }
@@ -180,9 +194,9 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         self.odometerMiles = snapshot.odometer
         self.gear = snapshot.shiftState
         self.speedMPH = snapshot.speed
-        self.locationAddress = locationAddress
-        self.latitude = snapshot.latitude
-        self.longitude = snapshot.longitude
+        self.locationAddress = includesLocation ? locationAddress : nil
+        self.latitude = includesLocation ? snapshot.latitude : nil
+        self.longitude = includesLocation ? snapshot.longitude : nil
         self.frontLeftTirePSI = snapshot.tires?.frontLeftPSI
         self.frontRightTirePSI = snapshot.tires?.frontRightPSI
         self.rearLeftTirePSI = snapshot.tires?.rearLeftPSI
@@ -225,6 +239,12 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         }
     }
 
+    /// The charging state in a word or two, or `nil` when the car didn't report one.
+    public var chargingStateLabel: String? {
+        guard let reportedChargingState, !reportedChargingState.isEmpty else { return nil }
+        return Self.localizedChargingState(reportedChargingState)
+    }
+
     public var batteryDisplay: String {
         batteryPercent.map { FleetKitFormatting.percent($0) }
             ?? String(localized: "unknown battery", bundle: .module, comment: "Fallback text when battery percentage is unavailable.")
@@ -237,8 +257,8 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     public var statusSummary: String {
         var parts: [String] = []
         parts.append(String(localized: "Battery \(batteryDisplay)", bundle: .module, comment: "Summary segment showing battery percentage."))
-        if let chargingState, !chargingState.isEmpty {
-            parts.append(Self.localizedChargingState(chargingState))
+        if let chargingStateLabel {
+            parts.append(chargingStateLabel)
         }
         if let isLocked {
             parts.append(

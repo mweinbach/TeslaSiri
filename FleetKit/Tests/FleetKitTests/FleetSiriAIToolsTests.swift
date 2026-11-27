@@ -442,7 +442,7 @@ struct FleetSiriAIToolsTests {
         }
     }
 
-    @Test func `ConfigureCabinClimateIntent orchestrates generable CabinClimateSettings in one call`() async throws {
+    @Test func `ConfigureCabinClimateIntent orchestrates CabinClimateSettings in one call`() async throws {
         try await withIsolatedFleetService(responder: { request in
             if request.url?.path == "/vehicles" {
                 return (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))

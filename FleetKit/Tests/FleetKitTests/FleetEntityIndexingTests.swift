@@ -101,9 +101,12 @@ struct FleetEntityIndexingTests {
 
     @Test func `drive entity indexes distance duration locations and average speed`() throws {
         let drive = try FleetKitFixtures.decode(FleetDriveInfo.self, from: FleetKitFixtures.driveJSON)
-        let entity = DriveEntity(info: drive)
+        let entity = DriveEntity(info: drive, vehicleName: "Roadrunner")
         let attributes = entity.attributeSet
 
+        // The car's name travels with the drive and is searchable, for accounts with several cars.
+        #expect(entity.vehicleName == "Roadrunner")
+        #expect(attributes.keywords?.contains("Roadrunner") == true)
         #expect(entity.id == "drive-1")
         #expect(entity.durationMinutes == 31)
         #expect(entity.distanceText == "12.3 mi")
@@ -192,7 +195,7 @@ struct FleetEntityIndexingTests {
         #expect(vehicle.attributeSet.keywords?.contains(vin) == false)
         #expect(vehicle.attributeSet.keywords?.contains(shortenedVIN) == false)
 
-        let driveAttributes = DriveEntity(info: longVINDrive).attributeSet
+        let driveAttributes = DriveEntity(info: longVINDrive, vehicleName: "Roadrunner").attributeSet
         #expect(driveAttributes.contentDescription?.contains(vin) == false)
         #expect(driveAttributes.contentDescription?.contains(shortenedVIN) == true)
         #expect(driveAttributes.keywords?.contains(vin) == false)
@@ -229,7 +232,10 @@ struct FleetEntityIndexingTests {
         let vehicle = VehicleEntity(id: vin, name: "Roadrunner", model: "Model Y", color: "Pearl White")
         let snapshot = FleetSnapshotInfo(vin: vin, batteryLevel: 78, batteryRangeMiles: 245, locked: true, insideTemp: 70, temperatureInFahrenheit: true)
         let status = VehicleStatusEntity(snapshot: snapshot, vehicleName: "Roadrunner", locationAddress: "Cupertino, CA")
-        let drive = DriveEntity(info: try FleetKitFixtures.decode(FleetDriveInfo.self, from: FleetKitFixtures.driveJSON.replacingOccurrences(of: "VIN-1", with: vin)))
+        let drive = DriveEntity(
+            info: try FleetKitFixtures.decode(FleetDriveInfo.self, from: FleetKitFixtures.driveJSON.replacingOccurrences(of: "VIN-1", with: vin)),
+            vehicleName: "Roadrunner"
+        )
         let charge = ChargeSessionEntity(info: FleetChargeInfo(
             sessionID: "\(vin):901",
             vin: vin,
@@ -242,7 +248,7 @@ struct FleetEntityIndexingTests {
             startingBatteryPercent: 15,
             endingBatteryPercent: 75,
             cost: 18.4
-        ))
+        ), vehicleName: "Roadrunner")
         let software = SoftwareUpdateEntity(
             info: try FleetKitFixtures.decode(FleetSoftwareInfo.self, from: FleetKitFixtures.softwareJSON),
             vin: vin,
@@ -264,7 +270,8 @@ struct FleetEntityIndexingTests {
         #expect(exportedTexts[1].contains("Roadrunner"))
         #expect(exportedTexts[1].contains("Battery 78%"))
         #expect(exportedTexts[2].contains("12.3 mi"))
-        #expect(exportedTexts[3].contains("Kettleman City Supercharger"))
+        #expect(exportedTexts[2].contains("Roadrunner drove"))
+        #expect(exportedTexts[3].contains("Roadrunner Supercharged at Kettleman City Supercharger"))
         #expect(exportedTexts[4].contains("2026.8.4"))
         #expect(exportedTexts[5].contains("Better routing"))
         for text in exportedTexts {
@@ -274,6 +281,9 @@ struct FleetEntityIndexingTests {
 
     @Test func `security-sensitive intents require authentication while everyday warm-up and lock stay lock-screen friendly`() {
         // Physical access, security disablement, and firmware install require authentication.
+        // Control Car stays lock-screen friendly only because it can't do any of these:
+        // Siri reaches them through Unlock or Open Car.
+        #expect(UnlockOrOpenCarIntent.authenticationPolicy == .requiresAuthentication)
         #expect(UnlockVehicleIntent.authenticationPolicy == .requiresAuthentication)
         #expect(OpenTrunkIntent.authenticationPolicy == .requiresAuthentication)
         #expect(OpenFrunkIntent.authenticationPolicy == .requiresAuthentication)
@@ -281,10 +291,25 @@ struct FleetEntityIndexingTests {
         #expect(SetSentryModeIntent.authenticationPolicy == .requiresAuthentication)
         #expect(InstallSoftwareUpdateIntent.authenticationPolicy == .requiresAuthentication)
 
+        // Where the car is and where it has been (drive and charging history) require authentication.
+        #expect(LocateCarIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(FindDrivesIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetDriveDetailsIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetRecentDrivesIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetLastDriveIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetRecentChargesIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetChargeDetailsIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(GetChargingStatsIntent.authenticationPolicy == .requiresAuthentication)
+        #expect(DriveEntity.authenticationPolicy == .requiresAuthentication)
+        #expect(ChargeSessionEntity.authenticationPolicy == .requiresAuthentication)
+
         // Everyday climate/lock commands and non-GPS vehicle status remain usable while locked.
         #expect(ControlCarIntent.authenticationPolicy == .alwaysAllowed)
         #expect(StartClimateIntent.authenticationPolicy == .alwaysAllowed)
         #expect(LockVehicleIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(GetVehicleInfoIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(GetVehicleStatusIntent.authenticationPolicy == .alwaysAllowed)
+        #expect(GetDrivingStatsIntent.authenticationPolicy == .alwaysAllowed)
         #expect(VehicleStatusEntity.authenticationPolicy == .alwaysAllowed)
     }
 
@@ -301,8 +326,10 @@ struct FleetEntityIndexingTests {
     @Test func `Siri AI tools, snippet intents, and entity queries route to the right execution targets`() {
         let appAndExtension: IntentExecutionTargets = [.main, .appIntentsExtension]
 
-        // All 18 @AppIntent(.tool) intents avoid the WidgetKit extension.
+        // All 20 @AppIntent(.tool) intents avoid the WidgetKit extension.
         #expect(ListCarsIntent.allowedExecutionTargets == appAndExtension)
+        #expect(LocateCarIntent.allowedExecutionTargets == appAndExtension)
+        #expect(UnlockOrOpenCarIntent.allowedExecutionTargets == appAndExtension)
         #expect(GetVehicleInfoIntent.allowedExecutionTargets == appAndExtension)
         #expect(GetVehicleStatusIntent.allowedExecutionTargets == appAndExtension)
         #expect(ControlCarIntent.allowedExecutionTargets == appAndExtension)

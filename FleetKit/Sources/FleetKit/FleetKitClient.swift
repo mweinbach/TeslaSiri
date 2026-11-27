@@ -54,6 +54,46 @@ public enum FleetKitError: Swift.Error, LocalizedError, CustomLocalizedStringRes
             )
         }
     }
+
+    /// Gives a transport failure a message Siri can pass on.
+    ///
+    /// App Intents replaces the message of an error that doesn't conform to
+    /// `CustomLocalizedStringResourceConvertible`, so a raw `URLError` or `DecodingError`
+    /// reaches Siri as a generic failure. Cancellation, errors that already carry a message,
+    /// and the system's own App Intents errors are returned unchanged.
+    static func readableBySiri(_ error: any Error) -> any Error {
+        if error is any CustomLocalizedStringResourceConvertible { return error }
+        if error is DecodingError { return FleetKitError.badResponse }
+        guard let urlError = error as? URLError else { return error }
+        switch urlError.code {
+        case .cancelled:
+            return error
+        case .timedOut:
+            return FleetKitError.api(
+                String(
+                    localized: "Your vehicle provider didn't respond in time. Try again in a moment.",
+                    bundle: .module,
+                    comment: "Error when a request to the vehicle provider times out."
+                )
+            )
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff:
+            return FleetKitError.api(
+                String(
+                    localized: "This device appears to be offline. Check the internet connection and try again.",
+                    bundle: .module,
+                    comment: "Error when the device has no internet connection for a vehicle request."
+                )
+            )
+        default:
+            return FleetKitError.api(
+                String(
+                    localized: "Couldn't reach your vehicle provider. Try again in a moment.",
+                    bundle: .module,
+                    comment: "Error when the vehicle provider can't be reached for a reason other than a timeout or being offline."
+                )
+            )
+        }
+    }
 }
 
 /// A control parameter value that can be translated to Tessie's command query items.
@@ -200,8 +240,8 @@ public struct FleetIntentClient: Sendable {
         try await snapshotState(vin: vin).snapshot
     }
 
-    func snapshot(vin: String, topics: [VehicleInfoTopic]) async throws -> FleetSnapshotInfo {
-        try await snapshotState(vin: vin, topics: topics).snapshot
+    func snapshot(vin: String, topics: [VehicleInfoTopic], includesLocation: Bool = false) async throws -> FleetSnapshotInfo {
+        try await snapshotState(vin: vin, topics: topics, includesLocation: includesLocation).snapshot
     }
 
     func snapshotAndSoftware(vin: String) async throws -> (snapshot: FleetSnapshotInfo, software: FleetSoftwareInfo) {
@@ -211,16 +251,17 @@ public struct FleetIntentClient: Sendable {
 
     private func snapshotState(
         vin: String,
-        topics: [VehicleInfoTopic]? = nil
+        topics: [VehicleInfoTopic]? = nil,
+        includesLocation: Bool = false
     ) async throws -> (snapshot: FleetSnapshotInfo, state: TessieObject) {
         if let client = try teslascope {
             let data = try await client.stateData(vin: vin)
             let state = try JSONDecoder().decode(TessieObject.self, from: data)
-            return (state.snapshot(vin: vin, tireState: nil, topics: topics), state)
+            return (state.snapshot(vin: vin, tireState: nil, topics: topics, includesLocation: includesLocation), state)
         }
         if let topics, !topics.contains(.tirePressure) {
             let state: TessieObject = try await get("/\(encoded(vin))/state")
-            return (state.snapshot(vin: vin, tireState: nil, topics: topics), state)
+            return (state.snapshot(vin: vin, tireState: nil, topics: topics, includesLocation: includesLocation), state)
         }
         async let tireRead: TessieObject = get(
             "/\(encoded(vin))/tire_pressure",
@@ -238,7 +279,7 @@ public struct FleetIntentClient: Sendable {
             try Task.checkCancellation()
             tireState = nil
         }
-        return (state.snapshot(vin: vin, tireState: tireState, topics: topics), state)
+        return (state.snapshot(vin: vin, tireState: tireState, topics: topics, includesLocation: includesLocation), state)
     }
 
     public func user() async throws -> FleetUserInfo {
@@ -1022,7 +1063,14 @@ private extension Dictionary where Key == String, Value == TessieValue {
         return usesFahrenheit ? (celsius * 9 / 5) + 32 : celsius
     }
 
-    func snapshot(vin: String, tireState: TessieObject?, topics: [VehicleInfoTopic]? = nil) -> FleetSnapshotInfo {
+    /// - Parameter includesLocation: With `topics`, also counts the drive-state timestamp so a
+    ///   stale position isn't reported as current.
+    func snapshot(
+        vin: String,
+        tireState: TessieObject?,
+        topics: [VehicleInfoTopic]? = nil,
+        includesLocation: Bool = false
+    ) -> FleetSnapshotInfo {
         let charge = object("charge_state")
         let climate = object("climate_state")
         let drive = object("drive_state")
@@ -1035,15 +1083,15 @@ private extension Dictionary where Key == String, Value == TessieValue {
         let updatedAt: Int64?
         if let topics {
             // An unrelated fresh reading must not make an older requested topic look current.
-            updatedAt = topics.compactMap { topic in
+            let topicTimes = topics.map { topic in
                 switch topic {
                 case .battery, .range, .charging: chargeTime
                 case .climate: climateTime
-                case .location: driveTime
                 case .odometer, .security: vehicleTime
                 case .tirePressure: tires?.lastMeasuredAt ?? vehicleTime
                 }
-            }.min()
+            }
+            updatedAt = (topicTimes + (includesLocation ? [driveTime] : [])).compactMap { $0 }.min()
         } else {
             updatedAt = [chargeTime, climateTime, driveTime, vehicleTime].compactMap { $0 }.max()
         }

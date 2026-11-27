@@ -282,7 +282,7 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
 public struct GetVehicleStatusIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Check Vehicle Status"
     public static let description = IntentDescription(
-        "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\", \"how's my car?\", or \"show my Tesla\". For specific readings, use the Get Vehicle Info tool, which answers only what was asked.",
+        "Shows a card with the user's car (or Tesla) at a glance: battery, range, charging, locks, climate, mileage, and tire pressure. Use for broad requests like \"check my car\" or \"how's my car?\". For specific readings, use the Get Vehicle Info tool; for where the car is, the Locate Car tool.",
         searchKeywords: ["check my car", "how is my car", "car status", "my car", "vehicle status", "Tesla status"]
     )
     public static let isDiscoverable = true
@@ -333,16 +333,8 @@ public struct GetVehicleStatusIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
-            let allowNetwork = FleetIntentService.testingOverride == nil
-
-            let address: String? = allowNetwork
-                ? await FleetLocationNamer.address(latitude: snapshot.latitude, longitude: snapshot.longitude)
-                : nil
-            let entity = VehicleStatusEntity(
-                snapshot: snapshot,
-                vehicleName: resolved.name,
-                locationAddress: address
-            )
+            // This tool runs from the Lock Screen, so its result never carries the car's location.
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, includesLocation: false)
 
             log.success("status snippet for \(resolved.name)")
             return .result(

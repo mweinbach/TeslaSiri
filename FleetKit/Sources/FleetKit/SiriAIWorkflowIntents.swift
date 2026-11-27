@@ -493,8 +493,9 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
     }
 }
 
-/// Searches recent drives using synthesized `DriveFilterCriteria` (location substring,
-/// minimum distance, and result cap).
+/// Searches drive history using synthesized `DriveFilterCriteria` (places, dates, tag,
+/// distance, duration, sort order, and result cap), paging back up to
+/// `FleetIntentService.driveHistoryMaxPages` pages when a condition is checked on-device.
 @AppIntent(.tool)
 public struct FindDrivesIntent: AppIntent {
     public static let title: LocalizedStringResource = "Find Drives"
@@ -503,6 +504,8 @@ public struct FindDrivesIntent: AppIntent {
         searchKeywords: ["Tesla", "trip", "trips", "drive history", "where did I drive", "when did I go", "commute"]
     )
     public static let isDiscoverable = true
+    // Drive and charging history reveals addresses, including home.
+    public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     public static var allowedExecutionTargets: IntentExecutionTargets { [.main, .appIntentsExtension] }
 
     @Parameter(
@@ -537,20 +540,12 @@ public struct FindDrivesIntent: AppIntent {
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let maxResults = min(max(filter.maximumResults ?? 10, 1), 50)
             let normalizedTag = filter.tagQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let rawDrives = try await service.drives(
-                vin: resolved.vin,
-                limit: 100,
-                from: filter.startDate,
-                to: filter.endDate,
-                tag: normalizedTag
-            )
-
             let generalLoc = filter.locationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let startLoc = filter.startLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let endLoc = filter.endLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let tagLower = normalizedTag?.lowercased()
 
-            var matched = rawDrives.filter { drive in
+            let matches: (FleetDriveInfo) -> Bool = { drive in
                 if let startDate = filter.startDate, drive.startedAtDate < startDate {
                     return false
                 }
@@ -595,7 +590,26 @@ public struct FindDrivesIntent: AppIntent {
                 return true
             }
 
-            switch filter.sortBy ?? .mostRecent {
+            // One page answers a plain "recent drives" request. Place, distance, and duration
+            // conditions are checked here rather than by the provider, and any other sort order
+            // has to see the whole window, so those keep paging back through history.
+            let sortOrder = filter.sortBy ?? .mostRecent
+            let filtersOnDevice = [generalLoc, startLoc, endLoc].contains { $0?.isEmpty == false }
+                || filter.minimumDistanceMiles != nil
+                || filter.maximumDistanceMiles != nil
+                || filter.minimumDurationMinutes != nil
+            let rawDrives = try await service.driveHistory(
+                vin: resolved.vin,
+                from: filter.startDate,
+                to: filter.endDate,
+                tag: normalizedTag,
+                maxPages: filtersOnDevice || sortOrder != .mostRecent ? FleetIntentService.driveHistoryMaxPages : 1
+            ) { collected in
+                sortOrder == .mostRecent && collected.lazy.filter(matches).prefix(maxResults).count >= maxResults
+            }
+            var matched = rawDrives.filter(matches)
+
+            switch sortOrder {
             case .mostRecent:
                 break // Both live and demo history arrive newest first.
             case .longestDistance:
@@ -608,7 +622,7 @@ public struct FindDrivesIntent: AppIntent {
                 matched.sort { ($0.efficiencyWhPerMile ?? .infinity) < ($1.efficiencyWhPerMile ?? .infinity) }
             }
 
-            let results = matched.prefix(maxResults).map(DriveEntity.init(info:))
+            let results = matched.prefix(maxResults).map { DriveEntity(info: $0, vehicleName: resolved.name) }
             log.success("matched \(results.count) drive(s) for \(resolved.name)")
 
             let dialogText: String

@@ -147,20 +147,23 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
                 "Turn cabin climate on or off and set the target temperature",
                 usesTeslascope ? "Adjust seat heat and max defrost" : "Adjust front seat heat, steering wheel heat, and max defrost",
                 usesTeslascope ? "Turn Dog Mode on or off" : "Turn Dog Mode or Bioweapon Defense Mode on or off where equipped",
-                usesTeslascope ? "Enable or disable Sentry Mode; lock or unlock the doors if Allow Unlock is enabled in Teslascope" : "Lock or unlock the doors and enable or disable Sentry Mode",
+                "Lock the doors and turn on Sentry Mode",
                 "Vent or close the windows, honk the horn, and flash the lights"
             ]
-            if info.canActuateTrunks != false {
-                commands.append(info.canActuateTrunks == true ? "Open the trunk or frunk" : "Open the trunk or frunk if equipped")
-            }
             if info.canAcceptNavigationRequests != false {
                 commands.append(info.canAcceptNavigationRequests == true ? "Send a navigation destination" : "Send a navigation destination if supported")
             }
             additional = [
                 "Set Car Temperature: set a target cabin temperature with an interactive card",
                 "Set Seat Climate: adjust heating by seat position (front or rear) where equipped",
-                usesTeslascope ? "Install Software Update: start an available update now" : "Install Software Update or Cancel Software Update when an update is available"
+                usesTeslascope ? "Install Software Update: start an available update now" : "Install Software Update or Cancel Software Update when an update is available",
+                usesTeslascope
+                    ? "Unlock or Open Car: turn off Sentry Mode, or unlock the doors if Allow Unlock is enabled in Teslascope"
+                    : "Unlock or Open Car: unlock the doors or turn off Sentry Mode"
             ]
+            if info.canActuateTrunks != false {
+                additional.append(info.canActuateTrunks == true ? "Unlock or Open Car: open the trunk or frunk" : "Unlock or Open Car: open the trunk or frunk if equipped")
+            }
             if info.canAcceptNavigationRequests != false {
                 additional.append(info.canAcceptNavigationRequests == true ? "Send Destination to Car: send a standalone navigation destination" : "Send Destination to Car: send a standalone navigation destination if supported")
             }
@@ -169,7 +172,8 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
             }
         }
         if allowsCharging {
-            commands.append(usesTeslascope ? "Start or stop charging, set the charge limit, and open or close the charge port" : "Start or stop charging, set the charge limit and charging amps, and open or close the charge port")
+            commands.append(usesTeslascope ? "Start or stop charging, set the charge limit, and close the charge port" : "Start or stop charging, set the charge limit and charging amps, and close the charge port")
+            additional.append("Unlock or Open Car: open the charge port")
         }
         self.controls = commands
         self.additionalControls = additional

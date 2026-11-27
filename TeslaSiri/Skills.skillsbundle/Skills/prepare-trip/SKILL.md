@@ -36,5 +36,5 @@ Wrap up in a few clear lines: battery and range, what cabin or charging changes 
 
 ## Don't
 
-- Don't unlock the doors or open the trunk or frunk unless asked.
+- Don't unlock the doors or open the trunk or frunk unless asked. If they ask, that's a separate call to the Unlock or Open Car tool after the prep call.
 - Don't turn off Dog Mode.

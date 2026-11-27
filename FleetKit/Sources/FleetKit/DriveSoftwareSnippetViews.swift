@@ -635,8 +635,9 @@ public struct SoftwareSnippetView: View {
     }
 
     private var canCancelUpdate: Bool {
-        software.status?.localizedCaseInsensitiveContains("scheduled") == true
-            || software.status?.localizedCaseInsensitiveContains("pending") == true
-            || software.status?.localizedCaseInsensitiveContains("countdown") == true
+        software.status == .scheduled
+            || software.reportedStatus?.localizedCaseInsensitiveContains("scheduled") == true
+            || software.reportedStatus?.localizedCaseInsensitiveContains("pending") == true
+            || software.reportedStatus?.localizedCaseInsensitiveContains("countdown") == true
     }
 }

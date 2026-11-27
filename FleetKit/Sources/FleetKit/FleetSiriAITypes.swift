@@ -115,9 +115,9 @@ public struct VehicleCommandResultEntity: TransientAppEntity {
     }
 }
 
-/// Composite cabin climate settings Siri writes from requests such as
-/// "warm my car to 72 with the seat heater on high and defrost the windshield".
-@AppEntity(.generable)
+/// Composite cabin climate settings for the Configure Tesla Cabin Climate shortcut action.
+/// It isn't generable: no Siri tool takes it, so the model never writes one. Siri's own
+/// climate requests go through Control Car and `CarControlSettings`.
 public struct CabinClimateSettings: TransientAppEntity {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Cabin Climate Settings")
 

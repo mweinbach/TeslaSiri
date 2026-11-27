@@ -10,7 +10,7 @@ struct FleetDriveLatencyTests {
             avgSpeedMPH: nil, maxSpeedMPH: nil, energyUsedKWH: nil,
             startedAt: 1_710_000_000_000, endedAt: end, startAddress: nil, endAddress: nil,
             startLatitude: 10, startLongitude: 20, endLatitude: 11, endLongitude: 21
-        ))
+        ), vehicleName: "Roadrunner")
     }
 
     @Test func knownDriveChecksMembershipWithoutLoadingHistory() async throws {
