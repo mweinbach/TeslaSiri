@@ -492,6 +492,9 @@ struct VehicleQuickActionBar: View {
                     }
                 }
             }
+            // On wide canvases (iPhone Duo inner display, iPad) keep the tiles at
+            // handheld proportions instead of stretching them into oversized slabs.
+            .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 560 : 440)
             .disabled(!controlsEnabled || isRunningControl)
             .sensoryFeedback(.impact(flexibility: .solid), trigger: hapticTrigger)
 
