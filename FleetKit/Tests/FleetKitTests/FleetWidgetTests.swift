@@ -130,4 +130,147 @@ struct FleetWidgetTests {
         #expect(FleetWidgetAction.startCharging.command == "charge_start")
         #expect(FleetWidgetAction.refresh.command == nil)
     }
+
+    @Test func actionFeedbackPersistsSeparatesAndExpires() throws {
+        let suite = "FleetWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = FleetWidgetStore(appGroup: suite)
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        let feedback = FleetWidgetActionFeedback.confirmed(action: .lock, at: now)
+        store.recordFeedback(feedback, vin: "car-one", mode: .demoVehicle)
+
+        #expect(store.latestFeedback(vin: "car-one", mode: .demoVehicle, at: now.addingTimeInterval(2)) == feedback)
+        #expect(store.latestFeedback(vin: "car-two", mode: .demoVehicle, at: now.addingTimeInterval(2)) == nil)
+        #expect(store.latestFeedback(vin: "car-one", mode: .live, at: now.addingTimeInterval(2)) == nil)
+
+        // Past expiry: automatically pruned and returns nil
+        let expiredAt = now.addingTimeInterval(FleetWidgetActionFeedback.confirmationDuration + 1)
+        #expect(store.latestFeedback(vin: "car-one", mode: .demoVehicle, at: expiredAt) == nil)
+        #expect(store.latestFeedback(vin: "car-one", mode: .demoVehicle, at: now) == nil)
+    }
+
+    @Test func widgetActionIntentRecordsConfirmedFeedbackOnSuccess() async throws {
+        let suite = "FleetWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let sandbox = FleetSandboxStore(appGroup: suite)
+        sandbox.setMode(.demoVehicle)
+        let service = FleetIntentService(sandbox: sandbox)
+        let store = FleetWidgetStore(appGroup: suite)
+
+        let lockIntent = FleetWidgetActionIntent(action: .lock)
+        try await FleetIntentService.$testingOverride.withValue(service) {
+            _ = try await lockIntent.perform()
+        }
+
+        let feedback = try #require(store.latestFeedback(vin: FleetDemoVehicleState.demoVIN, mode: .demoVehicle))
+        #expect(feedback.action == .lock)
+        #expect(feedback.outcome == .confirmed)
+        #expect(feedback.message == "Locked")
+
+        let cached = try #require(store.cached(vin: FleetDemoVehicleState.demoVIN, mode: .demoVehicle))
+        #expect(cached.actionFeedback == feedback)
+        #expect(cached.withoutFeedback().actionFeedback == nil)
+
+        // Refresh action also records confirmed feedback
+        let refreshIntent = FleetWidgetActionIntent(action: .refresh)
+        try await FleetIntentService.$testingOverride.withValue(service) {
+            _ = try await refreshIntent.perform()
+        }
+        let refreshFeedback = try #require(store.latestFeedback(vin: FleetDemoVehicleState.demoVIN, mode: .demoVehicle))
+        #expect(refreshFeedback.action == .refresh)
+        #expect(refreshFeedback.outcome == .confirmed)
+        #expect(refreshFeedback.message == "Updated")
+    }
+
+    @Test func widgetActionIntentRecordsFailedFeedbackOnErrorAndStillThrows() async throws {
+        let suite = "FleetWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let sandbox = FleetSandboxStore(appGroup: suite)
+        sandbox.setMode(.demoVehicle)
+        let service = FleetIntentService(sandbox: sandbox)
+        let store = FleetWidgetStore(appGroup: suite)
+
+        let missingVIN = "removed-car"
+        let intent = FleetWidgetActionIntent(action: .lock, vehicle: VehicleEntity(id: missingVIN, name: "Removed car"))
+        await #expect(throws: FleetKitError.self) {
+            try await FleetIntentService.$testingOverride.withValue(service) {
+                _ = try await intent.perform()
+            }
+        }
+
+        let feedback = try #require(store.latestFeedback(vin: missingVIN, mode: .demoVehicle))
+        #expect(feedback.action == .lock)
+        #expect(feedback.outcome == .failed)
+        #expect(!feedback.message.isEmpty)
+    }
+
+    @Test func widgetStoreMaxCacheAgeReusesRecentSnapshotWithFeedback() async throws {
+        let suite = "FleetWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let sandbox = FleetSandboxStore(appGroup: suite)
+        sandbox.setMode(.demoVehicle)
+        let service = FleetIntentService(sandbox: sandbox)
+        let store = FleetWidgetStore(appGroup: suite)
+
+        var seeded = FleetWidgetSnapshot.sample
+        seeded.vin = FleetDemoVehicleState.demoVIN
+        seeded.batteryLevel = 42
+        seeded.fetchedAt = .now
+        store.save(seeded)
+        let feedback = FleetWidgetActionFeedback.confirmed(action: .startClimate)
+        store.recordFeedback(feedback, vin: FleetDemoVehicleState.demoVIN, mode: .demoVehicle)
+
+        let loaded = try await store.load(vin: FleetDemoVehicleState.demoVIN, service: service, maxCacheAge: 10)
+        #expect(loaded.batteryLevel == 42)
+        #expect(loaded.actionFeedback == feedback)
+    }
+
+    @Test func credentialInvalidationClearsWidgetFeedback() throws {
+        let suite = "FleetWidgetTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = FleetWidgetStore(appGroup: suite)
+        let feedback = FleetWidgetActionFeedback.confirmed(action: .lock)
+        store.recordFeedback(feedback, vin: FleetWidgetSnapshot.sample.vin, mode: .demoVehicle)
+        #expect(store.latestFeedback(vin: FleetWidgetSnapshot.sample.vin, mode: .demoVehicle) != nil)
+
+        FleetSharedTokenStore(appGroup: suite).invalidateSession()
+        #expect(store.latestFeedback(vin: FleetWidgetSnapshot.sample.vin, mode: .demoVehicle) == nil)
+    }
+
+    @Test func failureMessageMapsCommonVehicleAndNetworkErrors() {
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: FleetKitError.api("not_plugged_in"), action: .startCharging)
+            == "Plug in to charge"
+        )
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: FleetKitError.api("charging complete"), action: .startCharging)
+            == "Already charged"
+        )
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: FleetKitError.api("vehicle unavailable / asleep"), action: .lock)
+            == "Car is asleep"
+        )
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: FleetKitError.notSignedIn, action: .lock)
+            == "Sign in in Wattie"
+        )
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: URLError(.notConnectedToInternet), action: .refresh)
+            == "No connection"
+        )
+        #expect(
+            FleetWidgetActionFeedback.failureMessage(for: URLError(.timedOut), action: .startClimate)
+            == "Car timed out"
+        )
+    }
 }

@@ -1,5 +1,6 @@
 {
   "sourceLanguage": "en",
+  "version": "1.0",
   "strings": {
     "${action} charge port on ${vehicle}": {
       "comment": "App Intents parameter summary shown in the Shortcuts app.",
@@ -3665,7 +3666,7 @@
       }
     },
     "Climate on": {
-      "comment": "Widget climate caption when HVAC is running.",
+      "comment": "Widget climate caption when HVAC is running.\nWidget confirmation banner shown after cabin climate starts.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7600,7 +7601,7 @@
       }
     },
     "Locked": {
-      "comment": "Short lock status in Spotlight display name.\nSummary segment indicating vehicle doors are locked.\nVehicle lock status badge: locked\nWidget security status when doors are locked.",
+      "comment": "Short lock status in Spotlight display name.\nSummary segment indicating vehicle doors are locked.\nVehicle lock status badge: locked\nWidget confirmation banner shown after the car reports locked.\nWidget security status when doors are locked.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -19728,7 +19729,171 @@
           }
         }
       }
+    },
+    "Action unavailable": {
+      "comment": "Widget failure banner when the car cannot run the requested command.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acción no disponible"
+          }
+        }
+      }
+    },
+    "Already charged": {
+      "comment": "Widget failure banner when charging fails because the battery is complete.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya está cargado"
+          }
+        }
+      }
+    },
+    "Car is asleep": {
+      "comment": "Widget failure banner when the car is asleep or offline.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El vehículo está dormido"
+          }
+        }
+      }
+    },
+    "Car timed out": {
+      "comment": "Widget failure banner when the car did not answer in time.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El vehículo no respondió"
+          }
+        }
+      }
+    },
+    "Charging started": {
+      "comment": "Widget confirmation banner shown after a charge starts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga iniciada"
+          }
+        }
+      }
+    },
+    "Couldn't lock": {
+      "comment": "Widget failure banner when locking fails without a clearer reason.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo bloquear"
+          }
+        }
+      }
+    },
+    "Couldn't refresh": {
+      "comment": "Widget failure banner when a status refresh fails without a clearer reason.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo actualizar"
+          }
+        }
+      }
+    },
+    "Couldn't start charge": {
+      "comment": "Widget failure banner when a charge start fails without a clearer reason.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo iniciar la carga"
+          }
+        }
+      }
+    },
+    "Couldn't start climate": {
+      "comment": "Widget failure banner when climate start fails without a clearer reason.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo encender el clima"
+          }
+        }
+      }
+    },
+    "No connection": {
+      "comment": "Widget failure banner when the device is offline.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión"
+          }
+        }
+      }
+    },
+    "Plug in to charge": {
+      "comment": "Widget failure banner when charging fails because the car is unplugged.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta el cargador"
+          }
+        }
+      }
+    },
+    "Reconnect in Wattie": {
+      "comment": "Widget failure banner when the provider rejected the saved token.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a conectar en Wattie"
+          }
+        }
+      }
+    },
+    "Sign in in Wattie": {
+      "comment": "Widget failure banner when the shared session has no access token.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión en Wattie"
+          }
+        }
+      }
+    },
+    "Updated": {
+      "comment": "Widget confirmation banner shown after vehicle status refreshes.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizado"
+          }
+        }
+      }
+    },
+    "Waking car…": {
+      "comment": "Widget banner shown while a sleeping car wakes to start climate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despertando el vehículo…"
+          }
+        }
+      }
     }
-  },
-  "version": "1.0"
+  }
 }

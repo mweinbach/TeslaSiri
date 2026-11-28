@@ -3,11 +3,54 @@ import SwiftUI
 import WidgetKit
 
 struct WidgetGalleryView: View {
+    private enum GallerySize: String, CaseIterable, Identifiable {
+        case small, medium, large
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .small:
+                String(localized: "Small", comment: "Widget gallery size picker choice for small widgets.")
+            case .medium:
+                String(localized: "Medium", comment: "Widget gallery size picker choice for medium widgets.")
+            case .large:
+                String(localized: "Large", comment: "Widget gallery size picker choice for large widgets.")
+            }
+        }
+    }
+
+    private enum FeedbackPreviewMode: String, CaseIterable, Identifiable {
+        case live, confirmed, waking, failed
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .live:
+                String(localized: "Resting", comment: "Widget gallery activation state choice showing no confirmation.")
+            case .confirmed:
+                String(localized: "Confirmed", comment: "Widget gallery activation state choice showing a successful action.")
+            case .waking:
+                String(localized: "Waking", comment: "Widget gallery activation state choice showing a sleeping-car wait.")
+            case .failed:
+                String(localized: "Error", comment: "Widget gallery activation state choice showing a failed action.")
+            }
+        }
+    }
+
     @State private var snapshot: FleetWidgetSnapshot?
     @State private var isLoading = false
     @State private var isUsingSample = false
-    @State private var showsMedium = false
-    @State private var sample = FleetWidgetSnapshot.sample
+    @State private var selectedSize: GallerySize = .small
+    @State private var feedbackPreviewMode: FeedbackPreviewMode = .live
+    @State private var sample: FleetWidgetSnapshot = {
+        var value = FleetWidgetSnapshot.sample
+        if value.openClosures == nil {
+            value.openClosures = []
+        }
+        return value
+    }()
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -26,24 +69,44 @@ struct WidgetGalleryView: View {
             VStack(alignment: .leading, spacing: 20) {
                 headerSection
 
-                Picker("Widget size", selection: $showsMedium) {
-                    Text("Small").tag(false)
-                    Text("Medium").tag(true)
-                }
-                .pickerStyle(.segmented)
-
-                if showsMedium {
-                    VStack(spacing: 14) {
-                        ForEach(VehicleWidgetTopic.allCases) { topic in
-                            previewCard(for: topic, family: .systemMedium)
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Widget size", selection: $selectedSize) {
+                        ForEach(GallerySize.allCases) { size in
+                            Text(size.title).tag(size)
                         }
                     }
-                } else {
+                    .pickerStyle(.segmented)
+
+                    HStack(spacing: 8) {
+                        Text("Activation state")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Picker("Activation state", selection: $feedbackPreviewMode) {
+                            ForEach(FeedbackPreviewMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .font(.caption.weight(.semibold))
+                    }
+                }
+
+                switch selectedSize {
+                case .small:
                     LazyVGrid(columns: smallColumns, spacing: 14) {
                         ForEach(VehicleWidgetTopic.allCases) { topic in
                             previewCard(for: topic, family: .systemSmall)
                         }
                     }
+                case .medium:
+                    VStack(spacing: 14) {
+                        ForEach(VehicleWidgetTopic.allCases) { topic in
+                            previewCard(for: topic, family: .systemMedium)
+                        }
+                    }
+                case .large:
+                    previewCard(for: .overview, family: .systemLarge)
                 }
 
                 setupInstructions
@@ -87,29 +150,100 @@ struct WidgetGalleryView: View {
                 }
             }
 
-            Text("Add live status and quick controls to your Home Screen, Lock Screen, Control Center, or Apple HomeView.")
+            Text("Add live status and quick controls to your Home Screen, Lock Screen, Control Center, or Apple HomeView. Buttons confirm activation inline right on the widget.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
+    private func previewSnapshot(for topic: VehicleWidgetTopic) -> FleetWidgetSnapshot {
+        var value = snapshot ?? sample
+        switch feedbackPreviewMode {
+        case .live:
+            return value
+        case .confirmed:
+            let action: FleetWidgetAction = switch topic {
+            case .overview, .security: .lock
+            case .charging: .startCharging
+            case .climate: .startClimate
+            }
+            if topic == .climate { value.climateOn = true }
+            if topic == .charging {
+                value.chargingState = "Charging"
+                value.chargerPowerKW = value.chargerPowerKW ?? 11.5
+            }
+            value.actionFeedback = .confirmed(action: action)
+            return value
+        case .waking:
+            let action: FleetWidgetAction = switch topic {
+            case .overview, .climate: .startClimate
+            case .charging: .startCharging
+            case .security: .lock
+            }
+            if topic == .overview || topic == .climate {
+                value.climateOn = false
+                value.climateStartRequestedAt = .now
+            } else if topic == .charging {
+                value.chargingState = "Stopped"
+            }
+            value.actionFeedback = .waking(action: action)
+            return value
+        case .failed:
+            let action: FleetWidgetAction = switch topic {
+            case .overview, .security: .lock
+            case .charging: .startCharging
+            case .climate: .startClimate
+            }
+            if topic == .charging {
+                value.chargingState = "Stopped"
+            }
+            let msg: String = switch topic {
+            case .charging: "Plug in to charge"
+            case .climate: "Car is asleep"
+            case .overview, .security: "Car timed out"
+            }
+            value.actionFeedback = FleetWidgetActionFeedback(action: action, outcome: .failed, message: msg)
+            return value
+        }
+    }
+
     private func previewCard(for topic: VehicleWidgetTopic, family: WidgetFamily) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let displayed = previewSnapshot(for: topic)
+        let cardHeight: CGFloat = switch family {
+        case .systemSmall: 168
+        case .systemMedium: 164
+        default: 356
+        }
+
+        return VStack(alignment: .leading, spacing: 8) {
             Text(topic.title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)
 
             VehicleWidgetPanel(
-                snapshot: snapshot ?? sample,
+                snapshot: displayed,
                 topic: topic,
                 family: family
             )
             .padding(14)
             .frame(maxWidth: .infinity)
-            .frame(height: family == .systemSmall ? 168 : 164)
-            .appSurface(cornerRadius: 24)
+            .frame(height: cardHeight)
+            .background(VehicleWidgetBackdrop(snapshot: displayed, topic: topic))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [AppTheme.topEdgeHighlight, AppTheme.hairline],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.75
+                    )
+            }
+            .shadow(color: AppTheme.surfaceShadow, radius: 12, y: 4)
             .allowsHitTesting(false)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(topic.title) widget preview")
@@ -127,6 +261,13 @@ struct WidgetGalleryView: View {
                 )
                 Divider()
                 instructionRow(
+                    "Interactive Confirmation",
+                    symbol: "checkmark.circle.fill",
+                    tint: AppTheme.chargeGreen,
+                    text: "Tapping Lock, Climate, Charge, or Refresh highlights the control immediately and displays an inline confirmation or retry message when the car responds."
+                )
+                Divider()
+                instructionRow(
                     "Apple HomeView",
                     symbol: "house",
                     tint: AppTheme.alertAmber,
@@ -136,8 +277,8 @@ struct WidgetGalleryView: View {
                 instructionRow(
                     "Control Center & Action Button",
                     symbol: "switch.2",
-                    tint: AppTheme.chargeGreen,
-                    text: "Add Lock Car, Start Car Climate, or Start Car Charging in Control Center, Lock Screen controls, or the Action button."
+                    tint: AppTheme.climateBlue,
+                    text: "Add Lock Car, Start Car Climate, or Start Car Charging in Control Center, Lock Screen controls, or the Action button with live status confirmation."
                 )
                 Divider()
                 instructionRow(
@@ -184,3 +325,11 @@ struct WidgetGalleryView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Widget Gallery") {
+    NavigationStack {
+        WidgetGalleryView()
+    }
+}
+#endif

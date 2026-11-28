@@ -1,5 +1,6 @@
 {
   "sourceLanguage" : "en",
+  "version" : "1.1",
   "strings" : {
     "" : {
       "comment" : "Formatting symbol, brand name, or identifier kept untranslated.",
@@ -273,7 +274,7 @@
       }
     },
     "%@ to limit" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -703,6 +704,7 @@
     },
     "Add live status and quick controls to your Home Screen, Lock Screen, Control Center, or Apple HomeView." : {
       "comment" : "Label or instructional copy in the in-app Widgets & Controls gallery.",
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -714,6 +716,7 @@
     },
     "Add Lock Car, Start Car Climate, or Start Car Charging in Control Center, Lock Screen controls, or the Action button." : {
       "comment" : "Label or instructional copy in the in-app Widgets & Controls gallery.",
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2549,7 +2552,7 @@
       }
     },
     "Charging" : {
-      "comment" : "Default label for an active charging session\nVehicle charging state: actively charging\nVehicle subtitle when actively charging\nWidget topic title for charging status",
+      "comment" : "Default label for an active charging session\nVehicle charging state: actively charging\nVehicle subtitle when actively charging\nWidget status chip while the car is charging.\nWidget topic title for charging status",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3107,7 +3110,7 @@
       }
     },
     "Climate" : {
-      "comment" : "Demo Car Mode or Sandbox control label.",
+      "comment" : "Short widget quick action label for climate.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3155,7 +3158,7 @@
       }
     },
     "Climate On" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget quick action label while climate is running.\nWidget status chip while cabin climate is running.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4441,6 +4444,7 @@
     },
     "Doors" : {
       "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7359,7 +7363,7 @@
       }
     },
     "Limit %@" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget chip showing the charge limit percentage.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7694,7 +7698,7 @@
       }
     },
     "Lock" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Short widget quick action label for locking.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7742,7 +7746,7 @@
       }
     },
     "Lock Car" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget quick action label for locking.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7864,7 +7868,7 @@
       }
     },
     "Locked" : {
-      "comment" : "Accessibility value when vehicle is locked\nDemo car security summary: locked\nVehicle subtitle lock state: locked",
+      "comment" : "Accessibility value when vehicle is locked\nDemo car security summary: locked\nVehicle subtitle lock state: locked\nWidget pill while the car is locked.\nWidget quick action label after the car locks.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8197,7 +8201,7 @@
       }
     },
     "Medium" : {
-      "comment" : "Label or instructional copy in the in-app Widgets & Controls gallery.",
+      "comment" : "Widget gallery size picker choice for medium widgets.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8972,7 +8976,7 @@
       }
     },
     "On" : {
-      "comment" : "Climate status in demo car summary: on\nClimate status when climate control is on",
+      "comment" : "Climate status in demo car summary: on\nClimate status when climate control is on\nShort widget quick action label while climate is running.\nWidget quick action label after cabin climate starts.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -10642,7 +10646,7 @@
       }
     },
     "Refresh" : {
-      "comment" : "Demo Car Mode or Sandbox control label.",
+      "comment" : "Widget quick action label for refreshing.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -10688,7 +10692,7 @@
       }
     },
     "Refresh vehicle" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "VoiceOver label for the widget refresh button.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -10873,7 +10877,7 @@
       "shouldTranslate" : false
     },
     "Retry" : {
-      "comment" : "User-facing string in DashboardView.",
+      "comment" : "Widget quick action label after a failed action.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12308,7 +12312,7 @@
       }
     },
     "Small" : {
-      "comment" : "Label or instructional copy in the in-app Widgets & Controls gallery.",
+      "comment" : "Widget gallery size picker choice for small widgets.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12561,7 +12565,7 @@
       }
     },
     "Start Climate" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget quick action label for starting climate.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12735,7 +12739,7 @@
       }
     },
     "Starting…" : {
-      "comment" : "Vehicle dashboard, telemetry, or 3D showroom label.",
+      "comment" : "Widget quick action label while a sleeping car wakes.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12797,6 +12801,7 @@
     },
     "Status unavailable" : {
       "comment" : "Widget security detail when closure status is unavailable",
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13269,7 +13274,7 @@
       }
     },
     "Target %@" : {
-      "comment" : "Demo car target cabin temperature",
+      "comment" : "Demo car target cabin temperature\nLock Screen accessory line showing the climate target temperature.\nWidget line showing the climate target temperature.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15719,7 +15724,7 @@
       }
     },
     "Unavailable" : {
-      "comment" : "Climate status when telemetry is unavailable\nVoiceOver fallback when battery charge is unavailable",
+      "comment" : "Climate status when telemetry is unavailable\nVoiceOver fallback when battery charge is unavailable\nWidget security detail when closure status is unavailable",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15957,7 +15962,7 @@
       }
     },
     "Unlocked" : {
-      "comment" : "Accessibility value when vehicle is unlocked\nDemo car security summary: unlocked\nVehicle subtitle lock state: unlocked",
+      "comment" : "Accessibility value when vehicle is unlocked\nDemo car security summary: unlocked\nVehicle subtitle lock state: unlocked\nWidget pill while the car is unlocked.\nWidget status chip while the car is unlocked.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -16120,7 +16125,7 @@
       }
     },
     "Updated" : {
-      "comment" : "Status banner confirming the vehicle reported the updated state",
+      "comment" : "Status banner confirming the vehicle reported the updated state\nWidget quick action label after a status refresh.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -17340,7 +17345,181 @@
           }
         }
       }
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@, failed, double tap to retry" : {
+      "comment" : "VoiceOver label for a widget quick action that failed.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@; falló; toca dos veces para reintentar"
+          }
+        }
+      }
+    },
+    "Activation state" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estado de activación"
+          }
+        }
+      }
+    },
+    "Add live status and quick controls to your Home Screen, Lock Screen, Control Center, or Apple HomeView. Buttons confirm activation inline right on the widget." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade estado en vivo y controles rápidos a tu pantalla de inicio, pantalla de bloqueo, Centro de control o HomeView de Apple. Los botones confirman la activación directamente en el widget."
+          }
+        }
+      }
+    },
+    "Add Lock Car, Start Car Climate, or Start Car Charging in Control Center, Lock Screen controls, or the Action button with live status confirmation." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade Bloquear vehículo, Encender clima o Iniciar carga al Centro de control, a los controles de la pantalla de bloqueo o al botón de Acción, con confirmación del estado en vivo."
+          }
+        }
+      }
+    },
+    "Closures" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierres"
+          }
+        }
+      }
+    },
+    "Error" : {
+      "comment" : "Widget gallery activation state choice showing a failed action.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error"
+          }
+        }
+      }
+    },
+    "Interactive Confirmation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmación interactiva"
+          }
+        }
+      }
+    },
+    "Large" : {
+      "comment" : "Widget gallery size picker choice for large widgets.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grande"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "comment" : "Widget status chip when nothing needs attention.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo"
+          }
+        }
+      }
+    },
+    "Resting" : {
+      "comment" : "Widget gallery activation state choice showing no confirmation.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En reposo"
+          }
+        }
+      }
+    },
+    "Start Charge" : {
+      "comment" : "Widget quick action label for starting a charge.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar carga"
+          }
+        }
+      }
+    },
+    "Started" : {
+      "comment" : "Widget quick action label after a charge starts.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciado"
+          }
+        }
+      }
+    },
+    "Tapping Lock, Climate, Charge, or Refresh highlights the control immediately and displays an inline confirmation or retry message when the car responds." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al tocar Bloquear, Clima, Carga o Actualizar, el control se resalta al instante y muestra un mensaje de confirmación o de reintento cuando el vehículo responde."
+          }
+        }
+      }
+    },
+    "Vehicle updated" : {
+      "comment" : "VoiceOver label after a widget status refresh succeeds.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vehículo actualizado"
+          }
+        }
+      }
+    },
+    "Waking" : {
+      "comment" : "Widget gallery activation state choice showing a sleeping-car wait.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Despertando"
+          }
+        }
+      }
     }
-  },
-  "version" : "1.1"
+  }
 }

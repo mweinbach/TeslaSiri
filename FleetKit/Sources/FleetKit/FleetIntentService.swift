@@ -32,7 +32,7 @@ public struct FleetIntentService: Sendable {
         testingOverride ?? FleetIntentService(sandbox: .shared)
     }
 
-    private var sandboxMode: FleetSandboxMode {
+    var sandboxMode: FleetSandboxMode {
         sandbox?.mode() ?? .live
     }
 

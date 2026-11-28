@@ -1,5 +1,6 @@
 {
   "sourceLanguage": "en",
+  "version": "1.0",
   "strings": {
     "${action} charge port on ${vehicle}": {
       "comment": "App Intents parameter summary shown in the Shortcuts app.",
@@ -1187,7 +1188,7 @@
       "generatesSymbol": false
     },
     "Charging": {
-      "comment": "Widget topic title for charging status",
+      "comment": "Widget status chip while the car is charging.\nWidget topic title for charging status",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -1621,7 +1622,7 @@
       "generatesSymbol": false
     },
     "Climate": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Short widget quick action label for climate.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -2323,6 +2324,7 @@
     },
     "Doors": {
       "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4117,7 +4119,7 @@
       "generatesSymbol": false
     },
     "Limit %@": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Widget chip showing the charge limit percentage.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4297,7 +4299,7 @@
       "generatesSymbol": false
     },
     "Lock": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Control Center status when lock state is unknown.\nShort widget quick action label for locking.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4319,7 +4321,7 @@
       }
     },
     "Lock Car": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Control Center button title for the lock action.\nWidget quick action label for locking.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -5270,6 +5272,7 @@
     },
     "Open Wattie to set up your car": {
       "comment": "Widget or Control Center configuration description shown in the iOS widget gallery.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -5741,6 +5744,7 @@
     },
     "Range": {
       "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -5994,7 +5998,7 @@
       "generatesSymbol": false
     },
     "Refresh vehicle": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "VoiceOver label for the widget refresh button.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -6897,7 +6901,7 @@
       }
     },
     "Start Charging": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Control Center button title for the charging action.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -6908,7 +6912,7 @@
       }
     },
     "Start Climate": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Control Center button title for the climate action.\nWidget quick action label for starting climate.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7121,7 +7125,7 @@
       "generatesSymbol": false
     },
     "Starting…": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Control Center button title while a sleeping car wakes to start climate.\nWidget quick action label while a sleeping car wakes.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7185,6 +7189,7 @@
     },
     "Status unavailable": {
       "comment": "Widget security detail when closure status is unavailable",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7460,7 +7465,7 @@
       "generatesSymbol": false
     },
     "Target %@": {
-      "comment": "Widget or Control Center label shown on Home Screen, Lock Screen, or Control Center.",
+      "comment": "Lock Screen accessory line showing the climate target temperature.\nWidget line showing the climate target temperature.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -9360,7 +9365,7 @@
       "generatesSymbol": false
     },
     "Unavailable": {
-      "comment": "VoiceOver fallback when battery charge is unavailable",
+      "comment": "VoiceOver fallback when battery charge is unavailable\nWidget security detail when closure status is unavailable",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -12760,7 +12765,228 @@
         }
       },
       "generatesSymbol": false
+    },
+    "%@ · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ · %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@, failed, double tap to retry": {
+      "comment": "VoiceOver label for a widget quick action that failed.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@; falló; toca dos veces para reintentar"
+          }
+        }
+      }
+    },
+    "Cabin %@": {
+      "comment": "Control Center status showing the current cabin temperature.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cabina %@"
+          }
+        }
+      }
+    },
+    "Charge · %@": {
+      "comment": "Control Center button title showing battery charge.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga · %@"
+          }
+        }
+      }
+    },
+    "Charging · %@": {
+      "comment": "Control Center button title while the car is charging.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando · %@"
+          }
+        }
+      }
+    },
+    "Charging at %@": {
+      "comment": "Control Center status showing charger power.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando a %@"
+          }
+        }
+      }
+    },
+    "Climate on · %@": {
+      "comment": "Control Center status while cabin climate is running.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clima activo · %@"
+          }
+        }
+      }
+    },
+    "Closures": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cierres"
+          }
+        }
+      }
+    },
+    "On · %@": {
+      "comment": "Control Center button title while cabin climate is running.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encendido · %@"
+          }
+        }
+      }
+    },
+    "Open Wattie to connect your car": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre Wattie para conectar tu vehículo"
+          }
+        }
+      }
+    },
+    "Ready": {
+      "comment": "Widget status chip when nothing needs attention.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "comment": "Widget quick action label for refreshing.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "comment": "Widget quick action label after a failed action.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
+          }
+        }
+      }
+    },
+    "Security": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguridad"
+          }
+        }
+      }
+    },
+    "Start Charge": {
+      "comment": "Widget quick action label for starting a charge.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar carga"
+          }
+        }
+      }
+    },
+    "Started": {
+      "comment": "Widget quick action label after a charge starts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciado"
+          }
+        }
+      }
+    },
+    "Unlocked": {
+      "comment": "Control Center button title while the car is unlocked.\nWidget pill while the car is unlocked.\nWidget status chip while the car is unlocked.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloqueado"
+          }
+        }
+      }
+    },
+    "Updated": {
+      "comment": "Widget quick action label after a status refresh.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizado"
+          }
+        }
+      }
+    },
+    "Vehicle updated": {
+      "comment": "VoiceOver label after a widget status refresh succeeds.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vehículo actualizado"
+          }
+        }
+      }
+    },
+    "Waking car to start climate": {
+      "comment": "Control Center status while a sleeping car wakes to start climate.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despertando el vehículo para encender el clima"
+          }
+        }
+      }
     }
-  },
-  "version": "1.0"
+  }
 }

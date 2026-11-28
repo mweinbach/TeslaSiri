@@ -7,7 +7,7 @@ import Foundation
 /// character: Model Y "Juniper" (`bayberry`) from 2025, Model 3 "Highland" (`poppyseed`) from
 /// 2024, and the Model S/X "Palladium" refresh from 2021. Performance Model Ys use the
 /// bundled Performance fascia build. Paint is matched by name against the build's presets.
-struct VehicleModelSpec: Hashable, Sendable {
+nonisolated struct VehicleModelSpec: Hashable, Sendable {
     var modelID: String
     var bodyStyle: String
     /// Raw Tessie paint name (`exterior_color`), matched against the catalog at load time.
