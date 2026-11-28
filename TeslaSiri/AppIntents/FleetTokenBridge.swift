@@ -66,6 +66,7 @@ enum FleetTokenBridge {
     static func clearVehicleSystemData(for vehicles: [FleetVehicle]) async {
         BatteryReminderManager.shared.clearNotification()
         SiriCarCommandsSetup.clearCarNames()
+        FleetSharedPlaceStore.shared.clearAll()
         try? await FleetSpotlightIndexer.deleteAllIndexedEntities()
         await FleetIntentDonations.clearVehicleSuggestions(for: vehicles)
     }

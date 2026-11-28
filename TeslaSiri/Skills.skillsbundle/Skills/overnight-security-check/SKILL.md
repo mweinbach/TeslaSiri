@@ -18,7 +18,8 @@ When the user asks to secure the car, combine every needed fix into one call to 
 
 - **Doors**: lock them if unlocked.
 - **Sentry Mode**: turn it on only if they asked for full security or said the car is parked away from home. Skip it and warn them if the battery is at or below 20% (Tesla disables Sentry Mode there).
-- **Windows**: include closing them if the user asked about windows (Wattie will ask to confirm).
+- **Windows**: include closing them if the user asked about windows or any window is reported open (Wattie will ask to confirm).
+- **Rear trunk**: close a powered rear trunk if the security reading shows it is open (Wattie will ask to confirm).
 - **Charge port**: close it if the door is open while unplugged.
 - **Climate**: turn it off if running and they didn't ask to keep it on—**except** if Dog Mode is active, leave climate running, mention Dog Mode, and never turn it off unless they explicitly ask.
 - **Charging**: if plugged in and not charging, start charging when they want it ready by morning. Only change the charge limit if they name one. If unplugged below 50%, call that out clearly since you can't plug it in.

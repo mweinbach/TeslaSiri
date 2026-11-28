@@ -334,6 +334,8 @@ private actor SpotlightSyncCoordinator {
         for vin in Set(manifest.vehicles.keys).subtracting(vins) {
             try await removeVehicle(vin)
         }
+        let defaultVIN = service.defaultVehicle(in: vehicles)?.vin
+        let ownerName = service.ownerDisplayName
         for vehicle in vehicles {
             guard service.sessionScopeID == scope else { throw CancellationError() }
             let vin = vehicle.vin
@@ -348,15 +350,18 @@ private actor SpotlightSyncCoordinator {
                 }
             }
 
-            let identity = VehicleEntity(info: vehicle, usesTeslascope: service.usesTeslascope)
+            let isDefault = (vin == defaultVIN)
+            let identity = VehicleEntity(info: vehicle, usesTeslascope: service.usesTeslascope, ownerName: ownerName)
+            identity.isDefaultCar = isDefault
             // The roster's optional telemetry is independent of the identity registered in Spotlight.
-            let fields = [identity.name, identity.model ?? "", identity.color ?? ""]
+            let fields = [identity.name, identity.model ?? "", identity.color ?? "", ownerName ?? "", isDefault ? "default" : "secondary"]
                 + (identity.controls ?? []) + (identity.additionalControls ?? [])
             try await update([(identity, fields)],
                              vin: vin, name: "Vehicles", priority: 10, complete: true, force: repair, groups: &groups)
-            let nameDigest = Data(SHA256.hash(data: Data(vehicle.name.utf8)))
+            let nameDigest = Data(SHA256.hash(data: Data("\(vehicle.name)|\(ownerName ?? "")|\(isDefault)".utf8)))
             let stateChangedName = group("Live Status").vehicleNameDigest != nameDigest
             var version = group("Software").version
+            var indexedStatus: VehicleStatusEntity?
             do {
                 let state: (FleetSnapshotInfo, FleetSoftwareInfo)?
                 if let data = samples?.state {
@@ -366,21 +371,51 @@ private actor SpotlightSyncCoordinator {
                 } else { state = nil }
                 if let (snapshot, software) = state {
                     guard service.sessionScopeID == scope else { throw CancellationError() }
-                    try await update([(VehicleStatusEntity(snapshot: snapshot, vehicleName: vehicle.name), snapshot)],
+                    let statusEntity = VehicleStatusEntity(snapshot: snapshot, vehicleName: vehicle.name, ownerName: ownerName)
+                    indexedStatus = statusEntity
+                    try await update([(statusEntity, snapshot)],
                                      vin: vin, name: "Live Status", priority: 10, complete: true, force: repair || stateChangedName,
                                      vehicleNameDigest: nameDigest, groups: &groups)
                     version = software.availableVersion ?? software.currentVersion
-                    try await update([(SoftwareUpdateEntity(info: software, vin: vin, vehicleName: vehicle.name), software)],
+                    try await update([(SoftwareUpdateEntity(info: software, vin: vin, vehicleName: vehicle.name, ownerName: ownerName), software)],
                                      vin: vin, name: "Software", priority: 8, complete: true, force: repair || stateChangedName,
                                      version: version, groups: &groups)
                 }
             } catch { try record(error, group: "Status and software") }
 
             do {
+                if repair || stateChangedName || indexedStatus != nil || group("Car Action Anchors").digests.isEmpty {
+                    let companionItems = FleetSpotlightNaming.companionSearchItems(
+                        for: identity, status: indexedStatus, ownerName: ownerName
+                    )
+                    try await CSSearchableIndex(name: FleetSpotlightIndexer.indexName).indexSearchableItems(companionItems)
+                    var anchorGroup = group("Car Action Anchors")
+                    for item in companionItems {
+                        anchorGroup.digests[item.uniqueIdentifier] = nameDigest
+                    }
+                    anchorGroup.vehicleNameDigest = nameDigest
+                    anchorGroup.completeAt = now
+                    manifest.vehicles[vin, default: [:]]["Car Action Anchors"] = anchorGroup
+                    groups.append(.init(
+                        name: "Car Action Anchors",
+                        count: companionItems.count,
+                        sampleTitles: companionItems.compactMap { $0.attributeSet.title }
+                    ))
+                }
+            } catch { try record(error, group: "Car Action Anchors") }
+
+            let placeStore = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier)
+            let knownPlaces = placeStore.places(forVIN: vin)
+            let placesDigest = placeStore.digest(forVIN: vin)
+            let historyIdentityDigest = placesDigest.isEmpty
+                ? nameDigest
+                : Data(SHA256.hash(data: nameDigest + placesDigest))
+
+            do {
                 let pageSize = FleetIntentService.driveHistoryPageSize
                 try await history(
                     vin: vin, name: "Recent Drives", limit: FleetSpotlightIndexer.drivesPerVehicle, pageSize: pageSize,
-                    nameDigest: nameDigest, force: repair,
+                    nameDigest: historyIdentityDigest, force: repair,
                     payload: samples?.drives, requested: samples?.driveLimit, decode: FleetIntentClient.spotlightDrives,
                     fetch: { limit in
                         try await self.tolerantRead { strict in
@@ -389,20 +424,20 @@ private actor SpotlightSyncCoordinator {
                             return Array(drives.prefix(limit))
                         }
                     },
-                    entity: { DriveEntity(info: $0, vehicleName: vehicle.name) }, scope: scope, groups: &groups
+                    entity: { DriveEntity(info: $0, vehicleName: vehicle.name, knownPlaces: knownPlaces) }, scope: scope, groups: &groups
                 )
             } catch { try record(error, group: "Recent Drives") }
             do {
                 try await history(
                     vin: vin, name: "Charging Sessions", limit: FleetSpotlightIndexer.chargesPerVehicle,
-                    pageSize: FleetSpotlightIndexer.chargePageSize, nameDigest: nameDigest, force: repair,
+                    pageSize: FleetSpotlightIndexer.chargePageSize, nameDigest: historyIdentityDigest, force: repair,
                     payload: samples?.charges, requested: samples?.chargeLimit, decode: FleetIntentClient.spotlightCharges,
                     fetch: { limit in
                         try await self.tolerantRead { strict in
                             try await service.charges(vin: vin, limit: limit, requireCompleteRows: strict)
                         }
                     },
-                    entity: { ChargeSessionEntity(info: $0, vehicleName: vehicle.name) }, scope: scope, groups: &groups
+                    entity: { ChargeSessionEntity(info: $0, vehicleName: vehicle.name, knownPlaces: knownPlaces) }, scope: scope, groups: &groups
                 )
             } catch { try record(error, group: "Charging Sessions") }
 
@@ -533,6 +568,8 @@ private actor SpotlightSyncCoordinator {
         try await remove(ChargeSessionEntity.self, "Charging Sessions")
         try await remove(SoftwareUpdateEntity.self, "Software")
         try await remove(ReleaseNoteEntity.self, "Release Notes")
+        let companionIDs = FleetSpotlightNaming.companionItemIdentifiers(forVIN: vin)
+        try await CSSearchableIndex(name: FleetSpotlightIndexer.indexName).deleteSearchableItems(withIdentifiers: companionIDs)
         manifest.vehicles[vin] = nil
     }
 }

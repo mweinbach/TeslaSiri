@@ -18,6 +18,8 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
     /// can't collide with other VIN-keyed entity types in the shared Spotlight
     /// index, where the identifier is the primary key and collisions overwrite.
     public let id: String
+    /// Optional owner name (e.g. "Max") used to build Spotlight titles like "Max's Car Status: Ares".
+    let spotlightOwnerName: String?
 
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
@@ -161,10 +163,12 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
         snapshot: FleetSnapshotInfo,
         vehicleName: String,
         locationAddress: String? = nil,
-        includesLocation: Bool = true
+        includesLocation: Bool = true,
+        ownerName: String? = nil
     ) {
         self.id = Self.entityID(forVIN: snapshot.vin)
         self.reportedChargingState = snapshot.chargingState
+        self.spotlightOwnerName = ownerName
         self.vin = snapshot.vin
         self.vehicleName = vehicleName
         self.batteryPercent = snapshot.batteryLevel.map { Int($0.rounded()) }
@@ -320,19 +324,44 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             descriptionParts.append(String(localized: "Updated \(timestamp)", bundle: .module, comment: "Spotlight description segment for last update timestamp."))
         }
         let description = descriptionParts.joined(separator: ". ")
-        let statusTitle = String(localized: "\(vehicleName) Status", bundle: .module, comment: "Spotlight item title for a vehicle's status.")
+        let spokenSnapshot = spokenAnswer(for: VehicleInfoTopic.allCases, includingLocation: false)
+        let statusTitle = FleetSpotlightNaming.statusTitle(vehicleName: vehicleName, ownerName: spotlightOwnerName)
+        let carHeader = FleetSpotlightNaming.carTitle(vehicleName: vehicleName, ownerName: spotlightOwnerName)
+        var glanceParts: [String] = [carHeader]
+        if let batteryPercent { glanceParts.append(FleetKitFormatting.percent(batteryPercent)) }
+        if let isLocked {
+            glanceParts.append(
+                isLocked
+                    ? String(localized: "Locked", bundle: .module, comment: "Short lock status in Spotlight display name.")
+                    : String(localized: "Unlocked", bundle: .module, comment: "Short unlock status in Spotlight display name.")
+            )
+        }
         attributes.title = statusTitle
-        attributes.displayName = String(localized: "\(vehicleName) vehicle status", bundle: .module, comment: "Spotlight display name for a vehicle's status.")
-        attributes.alternateNames = [
+        attributes.displayName = glanceParts.joined(separator: " · ")
+        var altNames: [String] = [
             String(localized: "My Car", bundle: .module, comment: "Spotlight alternate name for the user's car."),
             String(localized: "My Car Status", bundle: .module, comment: "Spotlight alternate name for the user's car status."),
             String(localized: "Car Climate", bundle: .module, comment: "Spotlight alternate name for car climate status."),
+            "\(vehicleName) Status",
+            "\(vehicleName) Battery",
+            "\(vehicleName) Climate",
+            "\(vehicleName) Tires",
+            "\(vehicleName) Location",
+            "Car Battery",
+            "Car Location",
             statusTitle
         ]
+        if let possessive = FleetSpotlightNaming.possessiveOwner(spotlightOwnerName) {
+            altNames.append("\(possessive) Car")
+            altNames.append("\(possessive) Car Status")
+            altNames.append("\(possessive) Car Battery")
+            altNames.append("\(possessive) Car Climate")
+        }
+        attributes.alternateNames = FleetSpotlightNaming.deduplicated(altNames)
         attributes.kind = String(localized: "Tesla Vehicle Status", bundle: .module, comment: "Spotlight item kind for a Tesla vehicle status snapshot.")
         attributes.contentDescription = description
-        attributes.textContent = description
-        attributes.keywords = [
+        attributes.textContent = "\(spokenSnapshot) \(description)"
+        attributes.keywords = FleetSpotlightNaming.deduplicated([
             vehicleName, FleetKitLog.vin(vin), "car", "my car", "the car", "vehicle", "my vehicle", "Tesla",
             "vehicle status", "car status", "battery", "range", "charge", "charging",
             "lock", "lock my car", "unlock", "unlock my car", "locked", "unlocked", "mileage", "odometer", "miles",
@@ -340,7 +369,7 @@ public struct VehicleStatusEntity: AppEntity, IndexedEntity, SyncableEntity, Ide
             "climate", "warm up", "warm up my car", "cool down", "cool down my car", "precondition", "defrost",
             "heat", "AC", "cabin", "temperature", "location",
             "coche", "mi coche", "carro", "vehículo", "vehiculo", "estado", "batería", "bateria", "autonomía", "autonomia", "carga", "clima", "ubicación", "ubicacion"
-        ]
+        ] + (attributes.alternateNames ?? []))
         if let latitude, let longitude {
             attributes.latitude = NSNumber(value: latitude)
             attributes.longitude = NSNumber(value: longitude)

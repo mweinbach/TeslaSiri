@@ -61,8 +61,9 @@ struct FleetEntityIndexingTests {
         #expect(entity.name == "Roadrunner")
         #expect(attributes.contentDescription?.contains("battery") == true)
         #expect(attributes.contentDescription?.contains("unlock") == true)
-        #expect(attributes.title == "Roadrunner")
-        #expect(attributes.displayName == "Roadrunner")
+        #expect(attributes.title == "My Car: Roadrunner")
+        #expect(attributes.displayName == "My Car: Roadrunner (Model Y)")
+        #expect(attributes.alternateNames?.contains("Pearl White Model Y") == true)
         #expect(attributes.kind == "Model Y")
         #expect(attributes.keywords?.contains("Model Y") == true)
         #expect(attributes.keywords?.contains("Pearl White") == true)
@@ -88,8 +89,9 @@ struct FleetEntityIndexingTests {
         #expect(entity.statusSummary.contains("Tires FL 39 PSI"))
         #expect(attributes.contentDescription?.contains("Charge limit 90%") == true)
         #expect(attributes.contentDescription?.contains("Speed 41 mph") == true)
-        #expect(attributes.title == "Roadrunner Status")
-        #expect(attributes.displayName == "Roadrunner vehicle status")
+        #expect(attributes.title == "My Car Status: Roadrunner")
+        #expect(attributes.displayName == "My Car: Roadrunner · 82% · Locked")
+        #expect(attributes.alternateNames?.contains("Roadrunner Climate") == true)
         #expect(attributes.kind == "Tesla Vehicle Status")
         #expect(attributes.textContent?.contains("Charge limit 90%") == true)
         #expect(attributes.keywords?.contains("mileage") == true)
@@ -116,8 +118,9 @@ struct FleetEntityIndexingTests {
         #expect(entity.detailText.contains("max 55 mph"))
         #expect(entity.detailText.contains("3.4 kWh"))
         #expect(attributes.contentDescription?.contains("Tesla drive for vehicle VIN-1") == true)
-        #expect(attributes.title?.contains("Tesla Drive") == true)
-        #expect(attributes.displayName?.contains("Tesla Drive") == true)
+        #expect(attributes.title == "Drive to 3500 Deer Creek Road")
+        #expect(attributes.displayName == "Roadrunner drive to 3500 Deer Creek Road (12.3 mi)")
+        #expect(attributes.namedLocation == "3500 Deer Creek Road")
         #expect(attributes.kind == "Tesla Drive")
         #expect(attributes.textContent?.contains("1 Infinite Loop") == true)
         #expect(attributes.keywords?.contains("average speed") == true)
@@ -137,8 +140,9 @@ struct FleetEntityIndexingTests {
         #expect(attributes.contentDescription?.contains("Current version 2026.2.1") == true)
         #expect(attributes.contentDescription?.contains("Available version 2026.8.4") == true)
         #expect(attributes.contentDescription?.contains("Installable now") == true)
-        #expect(attributes.title == "Roadrunner Software")
+        #expect(attributes.title == "My Car Software: Roadrunner (2026.8.4)")
         #expect(attributes.displayName == "Roadrunner software update")
+        #expect(attributes.alternateNames?.contains("My Car Update") == true)
         #expect(attributes.kind == "Tesla Software Update")
         #expect(attributes.textContent?.contains("Available version 2026.8.4") == true)
         #expect(attributes.keywords?.contains("release version") == true)
@@ -173,7 +177,7 @@ struct FleetEntityIndexingTests {
         #expect(attributes.contentDescription?.contains("Version 2026.8.4") == true)
         #expect(attributes.contentDescription?.contains("Better routing") == true)
         #expect(attributes.title == "Better routing")
-        #expect(attributes.displayName == "Better routing 2026.8.4")
+        #expect(attributes.displayName == "Better routing (2026.8.4)")
         #expect(attributes.kind == "Tesla Release Note")
         #expect(attributes.textContent?.contains("Route planning improvements") == true)
         #expect(attributes.keywords?.contains("release note") == true)
@@ -382,5 +386,63 @@ struct FleetEntityIndexingTests {
         assertSnippetRepresentable(DrivingStatsEntity.self)
         assertSnippetRepresentable(ChargingStatsEntity.self)
         assertSnippetRepresentable(BatteryHealthEntity.self)
+    }
+
+    @Test func `owner name personalizes Spotlight titles and companion anchors without exposing full VIN`() throws {
+        let vin = "5YJ3E1EA7KF000316"
+        let vehicle = VehicleEntity(id: vin, name: "Ares", model: "Model Y", color: "Ultra Red", ownerName: "Max")
+        vehicle.isDefaultCar = true
+        let vehicleAttrs = vehicle.attributeSet
+        #expect(vehicleAttrs.title == "Max's Car: Ares")
+        #expect(vehicleAttrs.displayName == "Max's Car: Ares (Model Y)")
+        #expect(vehicleAttrs.alternateNames?.contains("Max's Car") == true)
+        #expect(vehicleAttrs.alternateNames?.contains("Max's Model Y") == true)
+        #expect(vehicleAttrs.alternateNames?.contains("Ultra Red Model Y") == true)
+        #expect(vehicleAttrs.contentDescription?.contains(vin) == false)
+
+        #expect(FleetSpotlightNaming.possessiveOwner("Chris") == "Chris'")
+        #expect(FleetSpotlightNaming.possessiveOwner("Max") == "Max's")
+
+        let snapshot = try FleetKitFixtures.decode(FleetSnapshotInfo.self, from: FleetKitFixtures.snapshotJSON)
+        let status = VehicleStatusEntity(snapshot: snapshot, vehicleName: "Ares", ownerName: "Max")
+        #expect(status.attributeSet.title == "Max's Car Status: Ares")
+        #expect(status.attributeSet.displayName == "Max's Car: Ares · 82% · Locked")
+        #expect(status.attributeSet.alternateNames?.contains("Max's Car Climate") == true)
+
+        let anchors = FleetSpotlightNaming.companionSearchItems(for: vehicle, status: status, ownerName: "Max")
+        #expect(anchors.count == 2)
+        #expect(anchors[0].attributeSet.title == "Warm Up Max's Car: Ares")
+        #expect(anchors[0].attributeSet.alternateNames?.contains("Warm up my car") == true)
+        #expect(anchors[0].attributeSet.alternateNames?.contains("Warm up Max's car") == true)
+        #expect(anchors[0].uniqueIdentifier == "car-climate:\(vin)")
+        #expect(anchors[1].uniqueIdentifier == "car-controls:\(vin)")
+        #expect(anchors[1].attributeSet.title == "Control Max's Car: Ares")
+        if Bundle.main.bundleIdentifier != nil {
+            #expect(anchors[0].relatedAppEntityIdentifier == EntityIdentifier(for: vehicle))
+            #expect(anchors[1].relatedAppEntityIdentifier == EntityIdentifier(for: vehicle))
+        }
+        for item in anchors {
+            #expect(item.attributeSet.contentDescription?.contains(vin) == false)
+        }
+
+        let charge = ChargeSessionEntity(
+            info: FleetChargeInfo(
+                sessionID: "\(vin):901", vin: vin,
+                startedAt: 1_710_003_600_000, endedAt: 1_710_005_400_000,
+                location: "Kettleman City Supercharger", isSupercharger: true,
+                energyAddedKWH: 44, milesAdded: 180,
+                startingBatteryPercent: 15, endingBatteryPercent: 75, cost: 18.40
+            ),
+            vehicleName: "Ares"
+        )
+        #expect(charge.attributeSet.title == "Supercharger at Kettleman City Supercharger")
+        #expect(charge.attributeSet.namedLocation == "Kettleman City Supercharger")
+
+        let fsdNote = ReleaseNoteEntity(
+            info: FleetReleaseNoteInfo(title: "Full Self-Driving (Supervised)", subtitle: "Autopilot", details: "Smoother lane changes"),
+            vin: vin,
+            version: "2026.8.4"
+        )
+        #expect(fsdNote.attributeSet.keywords?.contains("FSD") == true)
     }
 }

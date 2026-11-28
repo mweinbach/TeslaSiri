@@ -207,6 +207,11 @@ public struct SendNavigationIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
+            guard resolved.canAcceptNavigationRequests != false else {
+                throw FleetKitError.unsupportedAction(
+                    String(localized: "sending a destination", bundle: .module, comment: "Action name used in unsupported-action errors for sending navigation destinations.")
+                )
+            }
             let trimmed = destination.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
                 throw FleetKitError.api(

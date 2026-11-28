@@ -80,7 +80,8 @@ public struct GetChargeDetailsIntent: AppIntent, PredictableIntent {
                 guard let latest = try await service.charges(vin: resolved.vin, limit: 1).first else {
                     throw FleetKitError.api(String(localized: "No charging sessions have been recorded for \(resolved.name) yet.", bundle: .module, comment: "Error when a vehicle has no charging history"))
                 }
-                summary = ChargeSessionEntity(info: latest, vehicleName: resolved.name)
+                let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: resolved.vin)
+                summary = ChargeSessionEntity(info: latest, vehicleName: resolved.name, knownPlaces: knownPlaces)
             }
 
             let session = try await service.chargeDetails(summary)

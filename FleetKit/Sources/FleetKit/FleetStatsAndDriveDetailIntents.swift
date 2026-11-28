@@ -99,7 +99,8 @@ public struct GetDriveDetailsIntent: AppIntent, PredictableIntent {
                         )
                     )
                 }
-                summary = DriveEntity(info: latest, vehicleName: resolved.name)
+                let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: resolved.vin)
+                summary = DriveEntity(info: latest, vehicleName: resolved.name, knownPlaces: knownPlaces)
             }
 
             let targetEntity = try await service.driveDetails(summary)
@@ -313,10 +314,16 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
                 sessions = try await service.charges(vin: resolved.vin, limit: 1)
             } else {
                 let start = period.startDate()
-                let raw = try await service.charges(
-                    vin: resolved.vin, limit: service.usesTeslascope ? .max : 100, from: start,
-                    requireCompleteRows: service.usesTeslascope
-                )
+                let raw: [FleetChargeInfo]
+                if service.usesTeslascope {
+                    raw = try await service.charges(
+                        vin: resolved.vin, limit: .max, from: start,
+                        requireCompleteRows: true
+                    )
+                } else {
+                    // A single capped response undercounts a busy period, so walk the whole window.
+                    raw = try await service.chargeHistory(vin: resolved.vin, from: start, maxPages: 10)
+                }
                 if let start {
                     sessions = raw.filter { $0.startedAtDate >= start }
                 } else {
@@ -344,7 +351,7 @@ public struct GetChargingStatsIntent: AppIntent, PredictableIntent {
 public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
     public static let title: LocalizedStringResource = "Get Charging History"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.",
+        "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place (including saved nicknames), or within dates. Add a date range for older history. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.",
         searchKeywords: ["Tesla", "charges", "charging sessions", "Supercharger stops", "home charging", "charging log"]
     )
     public static let isDiscoverable = true
@@ -437,25 +444,45 @@ public struct GetRecentChargesIntent: AppIntent, PredictableIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
+            let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: resolved.vin)
             let clamped = min(max(count, 1), 25)
-            let hasFilter = superchargersOnly != nil || !(locationQuery ?? "").isEmpty
-            let raw = try await service.charges(
-                vin: resolved.vin,
-                limit: hasFilter ? 200 : max(clamped, 25),
-                from: startDate,
-                to: endDate
-            )
             let trimmedLoc = locationQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasFilter = superchargersOnly != nil || !(trimmedLoc ?? "").isEmpty
 
-            let matching = raw.lazy.filter { session in
+            let matches: (FleetChargeInfo) -> Bool = { session in
                 if let scOnly = self.superchargersOnly, session.isSupercharger != scOnly { return false }
                 if let startDate = self.startDate, session.startedAtDate < startDate { return false }
                 if let endDate = self.endDate, session.startedAtDate > endDate { return false }
-                if let loc = trimmedLoc, !loc.isEmpty,
-                   session.location?.localizedCaseInsensitiveContains(loc) != true { return false }
+                if let loc = trimmedLoc, !loc.isEmpty {
+                    guard FleetSharedPlaceStore.matches(
+                        query: loc, address: session.location,
+                        latitude: session.latitude, longitude: session.longitude, in: knownPlaces
+                    ) else { return false }
+                }
                 return true
             }
-            let results: [ChargeSessionEntity] = matching.prefix(clamped).map { ChargeSessionEntity(info: $0, vehicleName: resolved.name) }
+
+            let raw: [FleetChargeInfo]
+            if hasFilter {
+                raw = try await service.chargeHistory(
+                    vin: resolved.vin,
+                    from: startDate,
+                    to: endDate,
+                    maxPages: FleetIntentService.chargeHistoryMaxPages
+                ) { collected in
+                    collected.lazy.filter(matches).prefix(clamped).count >= clamped
+                }
+            } else {
+                raw = try await service.charges(
+                    vin: resolved.vin,
+                    limit: max(clamped, 25),
+                    from: startDate,
+                    to: endDate
+                )
+            }
+            let results: [ChargeSessionEntity] = raw.lazy.filter(matches).prefix(clamped).map {
+                ChargeSessionEntity(info: $0, vehicleName: resolved.name, knownPlaces: knownPlaces)
+            }
             log.success("returned \(results.count) charge session(s) for \(resolved.name)")
 
             let dialogText: String

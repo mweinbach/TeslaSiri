@@ -14,6 +14,8 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     public static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     public let id: String // sessionID
+    /// Search aliases from the app's shared Drives place index (nicknames, detected Home, POI names/categories, raw addresses).
+    let placeSearchTerms: [String]
 
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
@@ -101,8 +103,16 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     @Property(title: "End Longitude", description: "Ending GPS longitude in decimal degrees, for map rendering.", visibility: .internal)
     public var endLongitude: Double?
 
-    public init(info: FleetDriveInfo, vehicleName: String) {
+    public init(info: FleetDriveInfo, vehicleName: String, knownPlaces: [FleetKnownPlace] = []) {
         self.id = info.sessionID
+        let startTerms = FleetSharedPlaceStore.searchTerms(
+            address: info.startAddress, latitude: info.startLatitude, longitude: info.startLongitude, in: knownPlaces
+        )
+        let endTerms = FleetSharedPlaceStore.searchTerms(
+            address: info.endAddress, latitude: info.endLatitude, longitude: info.endLongitude, in: knownPlaces
+        )
+        var seenTerms: Set<String> = []
+        self.placeSearchTerms = (startTerms + endTerms).filter { seenTerms.insert($0.lowercased()).inserted }
         self.vin = info.vin
         self.vehicleName = vehicleName
         self.distanceMiles = info.distanceMiles
@@ -110,8 +120,12 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
         self.avgSpeedMPH = info.avgSpeedMPH
         self.maxSpeedMPH = info.maxSpeedMPH
         self.energyUsedKWH = info.energyUsedKWH
-        self.startAddress = info.startAddress
-        self.endAddress = info.endAddress
+        self.startAddress = FleetSharedPlaceStore.displayLabel(
+            address: info.startAddress, latitude: info.startLatitude, longitude: info.startLongitude, in: knownPlaces
+        )
+        self.endAddress = FleetSharedPlaceStore.displayLabel(
+            address: info.endAddress, latitude: info.endLatitude, longitude: info.endLongitude, in: knownPlaces
+        )
         self.startedAt = info.startedAtDate
         self.endedAt = info.endedAtDate
         self.startingBatteryPercent = info.startingBatteryPercent
@@ -297,19 +311,46 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
         let formattedDate = startedAt.formatted(date: .abbreviated, time: .shortened)
-        let title = String(localized: "Tesla Drive \(formattedDate)", bundle: .module, comment: "Spotlight title for a completed Tesla drive")
+        let title: String
+        if let endAddress, !endAddress.isEmpty {
+            title = String(localized: "Drive to \(endAddress)", bundle: .module, comment: "Spotlight title for a completed drive with a known destination")
+        } else {
+            title = String(localized: "Tesla Drive \(formattedDate)", bundle: .module, comment: "Spotlight title for a completed Tesla drive")
+        }
+        let displayName: String
+        if let endAddress, !endAddress.isEmpty {
+            displayName = String(localized: "\(vehicleName) drive to \(endAddress) (\(distanceText))", bundle: .module, comment: "Spotlight display name for a completed drive naming the car, destination, and distance")
+        } else {
+            displayName = "\(vehicleName) · \(title)"
+        }
         let description = String(
             localized: "Tesla drive for vehicle \(FleetKitLog.vin(vin)). \(distanceText). \(detailText).",
             bundle: .module,
             comment: "Spotlight searchable description for a completed Tesla drive"
         )
         attributes.title = title
-        attributes.displayName = title
+        attributes.displayName = displayName
+        attributes.alternateNames = FleetSpotlightNaming.deduplicated([
+            routeText,
+            endAddress,
+            startAddress,
+            endAddress.map { "Trip to \($0)" },
+            "\(vehicleName) drive",
+            "Tesla Drive \(formattedDate)",
+            tag
+        ].compactMap { $0 })
+        if let endAddress, !endAddress.isEmpty {
+            attributes.namedLocation = endAddress
+        }
+        if let endLatitude, let endLongitude {
+            attributes.latitude = NSNumber(value: endLatitude)
+            attributes.longitude = NSNumber(value: endLongitude)
+        }
         attributes.kind = String(localized: "Tesla Drive", bundle: .module, comment: "Spotlight kind for a Tesla drive")
         attributes.contentCreationDate = startedAt
         attributes.contentModificationDate = endedAt ?? startedAt
         attributes.contentDescription = description
-        attributes.textContent = description
+        attributes.textContent = "\(spokenSummary()) \(description)"
         attributes.keywords = [
             "Tesla",
             String(localized: "drive", bundle: .module, comment: "Spotlight keyword for a drive"),
@@ -328,6 +369,10 @@ public struct DriveEntity: AppEntity, IndexedEntity, SyncableEntity, Identifiabl
             String(localized: "efficiency", bundle: .module, comment: "Spotlight keyword for efficiency"),
             FleetKitLog.vin(vin), vehicleName, startAddress, endAddress, tag
         ].compactMap { $0 }.filter { !$0.isEmpty }
+        var seenKeywords = Set(attributes.keywords?.map { $0.lowercased() } ?? [])
+        for term in placeSearchTerms where !term.isEmpty && seenKeywords.insert(term.lowercased()).inserted {
+            attributes.keywords?.append(term)
+        }
         return attributes
     }
 }
@@ -361,8 +406,9 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
             let drives = try await service.driveHistory(vin: vehicle.vin) { collected in
                 owned.isSubset(of: collected.map(\.sessionID))
             }
+            let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: vehicle.vin)
             for drive in drives where remaining.contains(drive.sessionID) {
-                found.append(DriveEntity(info: drive, vehicleName: vehicle.name))
+                found.append(DriveEntity(info: drive, vehicleName: vehicle.name, knownPlaces: knownPlaces))
                 remaining.remove(drive.sessionID)
             }
         }
@@ -376,9 +422,13 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
         let service = FleetIntentService.make()
         let vehicles = try await service.vehicles()
         var all: [DriveEntity] = []
+        let placeStore = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier)
         for vehicle in vehicles {
             do {
-                let drives = try await service.drives(vin: vehicle.vin, limit: 50).map { DriveEntity(info: $0, vehicleName: vehicle.name) }
+                let knownPlaces = placeStore.places(forVIN: vehicle.vin)
+                let drives = try await service.drives(vin: vehicle.vin, limit: 50).map {
+                    DriveEntity(info: $0, vehicleName: vehicle.name, knownPlaces: knownPlaces)
+                }
                 all.append(contentsOf: drives)
             } catch FleetKitError.sessionExpired {
                 throw FleetKitError.sessionExpired
@@ -392,6 +442,7 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
         return all.filter { drive in
             drive.startAddress?.localizedCaseInsensitiveContains(query) == true
                 || drive.endAddress?.localizedCaseInsensitiveContains(query) == true
+                || drive.placeSearchTerms.contains { $0.localizedCaseInsensitiveContains(query) }
                 || drive.tag?.localizedCaseInsensitiveContains(query) == true
                 || drive.distanceText.localizedCaseInsensitiveContains(query)
                 || drive.startedAt.formatted(date: .abbreviated, time: .shortened).localizedCaseInsensitiveContains(query)
@@ -401,7 +452,10 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
     public func suggestedEntities() async throws -> [DriveEntity] {
         let service = FleetIntentService.make()
         let vehicle = try await service.resolvedVehicle(nil)
-        let drives = try await service.drives(vin: vehicle.vin, limit: 10).map { DriveEntity(info: $0, vehicleName: vehicle.name) }
+        let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: vehicle.vin)
+        let drives = try await service.drives(vin: vehicle.vin, limit: 10).map {
+            DriveEntity(info: $0, vehicleName: vehicle.name, knownPlaces: knownPlaces)
+        }
         FleetKitLog.entities.info("DriveEntityQuery suggesting \(drives.count, privacy: .public) drive(s) for \(vehicle.name, privacy: .public)")
         return drives
     }
@@ -412,11 +466,13 @@ public struct DriveEntityQuery: EntityQuery, EntityStringQuery, IndexedEntityQue
 
     public func reindexAllEntities(indexDescription: CSSearchableIndexDescription) async throws {
         let service = FleetIntentService.make()
+        let placeStore = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier)
         var all: [DriveEntity] = []
         for vehicle in try await service.vehicles() {
             // The same window the app keeps indexed: `FleetSpotlightIndexer.drivesPerVehicle`.
+            let knownPlaces = placeStore.places(forVIN: vehicle.vin)
             let drives = try await service.driveHistory(vin: vehicle.vin)
-            all.append(contentsOf: drives.map { DriveEntity(info: $0, vehicleName: vehicle.name) })
+            all.append(contentsOf: drives.map { DriveEntity(info: $0, vehicleName: vehicle.name, knownPlaces: knownPlaces) })
         }
         try await FleetSpotlightIndexer.donate(all)
     }

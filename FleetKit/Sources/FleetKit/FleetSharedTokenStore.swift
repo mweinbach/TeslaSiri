@@ -17,6 +17,7 @@ public struct FleetSharedTokenStore: Sendable {
     let appGroup: String
     private let readAccessToken: (@Sendable (FleetProvider) -> String?)?
     private static let sessionGenerationKey = "FleetKit.sessionGeneration"
+    private static let ownerDisplayNameKey = "FleetKit.ownerDisplayName"
 
     public init(appGroup: String = FleetKitConfig.appGroupIdentifier) {
         self.appGroup = appGroup
@@ -111,6 +112,22 @@ public struct FleetSharedTokenStore: Sendable {
     public func clearSelectedVIN() {
         defaults?.removeObject(forKey: selectedVINKey(for: provider))
         FleetWidgetStore.reload()
+    }
+
+    /// Optional user-provided first name (e.g. "Max") used to enrich Spotlight titles
+    /// such as "Max's Car: Ares" so Siri can match possessive car queries without Contacts access.
+    public func ownerDisplayName() -> String? {
+        let raw = defaults?.string(forKey: Self.ownerDisplayNameKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (raw?.isEmpty == false) ? raw : nil
+    }
+
+    public func save(ownerDisplayName: String?) {
+        let trimmed = ownerDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            defaults?.removeObject(forKey: Self.ownerDisplayNameKey)
+        } else {
+            defaults?.set(trimmed, forKey: Self.ownerDisplayNameKey)
+        }
     }
 }
 

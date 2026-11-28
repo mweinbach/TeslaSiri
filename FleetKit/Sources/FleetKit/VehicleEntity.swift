@@ -14,6 +14,8 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
 
     /// Full vehicle identification number (VIN).
     public let id: String
+    /// Optional owner name (e.g. "Max") used to build Spotlight titles like "Max's Car: Ares".
+    let spotlightOwnerName: String?
 
     @Property(
         title: "Vehicle Name",
@@ -70,36 +72,46 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
 
     public var attributeSet: CSSearchableItemAttributeSet {
         let attributes = defaultAttributeSet
-        let modelText = model ?? "Tesla"
+        let title = FleetSpotlightNaming.carTitle(
+            vehicleName: name,
+            ownerName: spotlightOwnerName,
+            isDefaultCar: isDefaultCar
+        )
+        let displayName = FleetSpotlightNaming.carDisplayName(
+            vehicleName: name,
+            model: model,
+            ownerName: spotlightOwnerName,
+            isDefaultCar: isDefaultCar
+        )
+        let modelText = [color, model ?? "Tesla"].compactMap { $0 }.joined(separator: " ")
         let description = String(
-            localized: "My car (\(modelText) named \(name)). Ask Siri for its battery, range, tire pressure, mileage, climate, drives, charging history, or software updates, or to lock, unlock, warm up my car, cool down my car, precondition, defrost, or send it a destination.",
+            localized: "\(title) (\(modelText)). Ask Siri to warm up my car, cool down my car, precondition, set temperature, defrost, Dog Mode, seat heaters, lock or unlock, open or close trunk, open frunk, send a destination, locate my car, or check battery, range, tire pressure, mileage, drives, charging history, and software updates.",
             bundle: .module,
             comment: "Spotlight searchable description for a vehicle entity"
         )
-        attributes.title = name
-        attributes.displayName = name
-        attributes.alternateNames = [
-            String(localized: "My Car", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
-            String(localized: "The Car", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
-            String(localized: "My Vehicle", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
-            String(localized: "My Tesla", bundle: .module, comment: "Alternate Spotlight name for vehicle"),
-            "Tesla",
-            model
-        ].compactMap { $0 }
+        attributes.title = title
+        attributes.displayName = displayName
+        attributes.alternateNames = FleetSpotlightNaming.carAlternateNames(
+            vehicleName: name,
+            model: model,
+            color: color,
+            ownerName: spotlightOwnerName
+        )
         attributes.kind = model ?? String(localized: "Tesla Vehicle", bundle: .module, comment: "Fallback Spotlight kind for a Tesla vehicle")
         attributes.contentDescription = description
         attributes.textContent = description
-        attributes.keywords = [
+        let baseKeywords: [String] = [
             String(localized: "car", bundle: .module, comment: "Spotlight keyword for vehicle"),
             String(localized: "my car", bundle: .module, comment: "Spotlight keyword for vehicle"),
             String(localized: "the car", bundle: .module, comment: "Spotlight keyword for vehicle"),
             String(localized: "vehicle", bundle: .module, comment: "Spotlight keyword for vehicle"),
             String(localized: "my vehicle", bundle: .module, comment: "Spotlight keyword for vehicle"),
             String(localized: "electric car", bundle: .module, comment: "Spotlight keyword for vehicle"),
-            "EV", "Tesla",
-            name, model, color,
+            "EV", "Tesla", "Wattie",
+            name, model, color, spotlightOwnerName,
             String(localized: "warm up", bundle: .module, comment: "Spotlight keyword for climate warming"),
             String(localized: "warm up my car", bundle: .module, comment: "Spotlight keyword for climate warming"),
+            "heat up my car",
             String(localized: "cool down", bundle: .module, comment: "Spotlight keyword for climate cooling"),
             String(localized: "cool down my car", bundle: .module, comment: "Spotlight keyword for climate cooling"),
             String(localized: "precondition", bundle: .module, comment: "Spotlight keyword for cabin preconditioning"),
@@ -108,6 +120,8 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
             String(localized: "AC", bundle: .module, comment: "Spotlight keyword for air conditioning"),
             String(localized: "air conditioning", bundle: .module, comment: "Spotlight keyword for air conditioning"),
             String(localized: "climate", bundle: .module, comment: "Spotlight keyword for climate"),
+            "Dog Mode", "Sentry Mode", "trunk", "frunk", "charge port", "Supercharger",
+            "location", "where did I park",
             String(localized: "battery", bundle: .module, comment: "Spotlight keyword for battery"),
             String(localized: "range", bundle: .module, comment: "Spotlight keyword for driving range"),
             String(localized: "mileage", bundle: .module, comment: "Spotlight keyword for odometer mileage"),
@@ -123,18 +137,21 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
             String(localized: "unlock my car", bundle: .module, comment: "Spotlight keyword for unlocking"),
             String(localized: "navigation", bundle: .module, comment: "Spotlight keyword for navigation")
         ].compactMap { $0 }
+        attributes.keywords = FleetSpotlightNaming.deduplicated(baseKeywords + (attributes.alternateNames ?? []))
         return attributes
     }
 
-    public init(id: String, name: String, model: String? = nil, color: String? = nil) {
+    public init(id: String, name: String, model: String? = nil, color: String? = nil, ownerName: String? = nil) {
         self.id = id
+        self.spotlightOwnerName = ownerName
         self.name = name
         self.model = model
         self.color = color
     }
 
-    public init(info: FleetVehicleInfo, usesTeslascope: Bool = false) {
+    public init(info: FleetVehicleInfo, usesTeslascope: Bool = false, ownerName: String? = nil) {
         self.id = info.vin
+        self.spotlightOwnerName = ownerName
         self.name = info.name
         self.model = info.modelName
         self.color = info.colorName
@@ -162,6 +179,7 @@ public struct VehicleEntity: AppEntity, IndexedEntity, SyncableEntity, Identifia
                     : "Unlock or Open Car: unlock the doors or turn off Sentry Mode"
             ]
             if info.canActuateTrunks != false {
+                commands.append(info.canActuateTrunks == true ? "Close a powered rear trunk" : "Close a powered rear trunk if equipped")
                 additional.append(info.canActuateTrunks == true ? "Unlock or Open Car: open the trunk or frunk" : "Unlock or Open Car: open the trunk or frunk if equipped")
             }
             if info.canAcceptNavigationRequests != false {
@@ -206,8 +224,9 @@ public struct VehicleEntityQuery: EnumerableEntityQuery, EntityStringQuery, Inde
         let vehicles = try await service.vehicles()
         guard let defaultVehicle = service.defaultVehicle(in: vehicles) else { return [] }
         let ordered = [defaultVehicle] + vehicles.filter { $0.vin != defaultVehicle.vin }
+        let ownerName = service.ownerDisplayName
         let entities = ordered.map { info in
-            let entity = VehicleEntity(info: info, usesTeslascope: service.usesTeslascope)
+            let entity = VehicleEntity(info: info, usesTeslascope: service.usesTeslascope, ownerName: ownerName)
             entity.isDefaultCar = info.vin == defaultVehicle.vin
             return entity
         }

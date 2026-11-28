@@ -56,7 +56,7 @@ public struct GetBatteryLevelIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
-            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, includesLocation: false)
 
             let isCharging = snapshot.chargingState?.lowercased() == "charging"
             let dialogText: String
@@ -170,7 +170,7 @@ public struct GetVehicleMileageIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
-            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, includesLocation: false)
             let dialogText: String
             if let mileage = entity.odometerDisplay {
                 dialogText = String(
@@ -251,7 +251,7 @@ public struct GetTirePressureIntent: AppIntent, PredictableIntent {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
             let snapshot = try await service.snapshot(vin: resolved.vin)
-            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name)
+            let entity = VehicleStatusEntity(snapshot: snapshot, vehicleName: resolved.name, includesLocation: false)
             let dialogText: String
             if let tires = entity.tireSummary {
                 dialogText = String(

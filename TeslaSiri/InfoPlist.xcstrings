@@ -19,6 +19,18 @@
         }
       }
     },
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "TeslaSiri"
+          }
+        }
+      }
+    },
     "NSSiriUsageDescription" : {
       "comment" : "Privacy permission prompt explaining why Wattie requests Siri access.",
       "extractionState" : "manual",

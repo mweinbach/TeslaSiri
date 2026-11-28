@@ -8,7 +8,7 @@ import UIKit
 /// Siri tip + 1-tap natural "my car" phrase pinners + Shortcuts link card at the bottom of the Vehicle tab.
 struct AppIntentDiscoveryCard: View {
     var vehicle: FleetVehicle? = nil
-    @State private var isStatusTipVisible = true
+    @State private var isWarmUpTipVisible = true
     @State private var voiceShortcutsByType: [String: INVoiceShortcut] = [:]
     @State private var activeSheet: VoiceShortcutSheetItem?
     @State private var isShowingWidgetGallery = CommandLine.arguments.contains("--preview-siri-widgets")
@@ -31,13 +31,24 @@ struct AppIntentDiscoveryCard: View {
 
                 carCommandsPermission
 
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(CarSiriVoicePhrase.allCases) { item in
-                        phraseButton(for: item)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Voice Phrases Without Saying Wattie")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text("Tap a phrase below to add it to Siri so you can say “Warm up my car” without the app name.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(CarSiriVoicePhrase.allCases) { item in
+                            phraseButton(for: item)
+                        }
                     }
                 }
 
-                SiriTipView(intent: statusIntent, isVisible: $isStatusTipVisible)
+                SiriTipView(intent: warmUpIntent, isVisible: $isWarmUpTipVisible)
                     .siriTipViewStyle(.automatic)
 
                 Divider()
@@ -153,8 +164,8 @@ struct AppIntentDiscoveryCard: View {
         )
     }
 
-    private var statusIntent: GetVehicleStatusIntent {
-        let intent = GetVehicleStatusIntent()
+    private var warmUpIntent: StartClimateIntent {
+        let intent = StartClimateIntent()
         if let vehicle, !vehicle.vin.isEmpty {
             intent.vehicle = VehicleEntity(id: vehicle.vin, name: vehicle.name)
         }

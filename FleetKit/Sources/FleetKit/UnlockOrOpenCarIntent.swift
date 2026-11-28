@@ -12,7 +12,7 @@ public enum CarAccessAction: String, AppEnum, Sendable {
     public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Car Access Action")
     public static let caseDisplayRepresentations: [CarAccessAction: DisplayRepresentation] = [
         .unlockDoors: DisplayRepresentation(title: "Unlock Doors", subtitle: "Unlock all of the car's doors"),
-        .openTrunk: DisplayRepresentation(title: "Open Trunk", subtitle: "Open the rear trunk; a powered trunk that is already open closes instead"),
+        .openTrunk: DisplayRepresentation(title: "Open Trunk", subtitle: "Open the rear trunk (to close a powered trunk, use Control Car)"),
         .openFrunk: DisplayRepresentation(title: "Open Frunk", subtitle: "Pop the front trunk under the hood; it has to be closed by hand"),
         .openChargePort: DisplayRepresentation(title: "Open Charge Port", subtitle: "Open and unlock the charge port door"),
         .turnOffSentry: DisplayRepresentation(title: "Turn Off Sentry Mode", subtitle: "Stop Sentry Mode camera monitoring while the car is parked")

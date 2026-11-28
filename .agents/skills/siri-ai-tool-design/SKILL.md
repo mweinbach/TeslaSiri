@@ -46,7 +46,7 @@ Always call `try await requestConfirmation(dialog:)` inside `perform()` before e
 | --- | --- |
 | `UnlockVehicleIntent` | `LockVehicleIntent` |
 | `OpenTrunkIntent` (rear trunk or frunk), Shortcuts-only `OpenFrunkIntent` | `StartClimateIntent`, `StopClimateIntent`, `SetCabinTemperatureIntent`, `ConfigureCabinClimateIntent` (except disabling Dog Mode) |
-| `CloseWindowsIntent` | `VentWindowsIntent`, `SetMaxDefrostIntent`, `SetBioweaponModeIntent`, `SetPetModeIntent(on: true)` |
+| `CloseWindowsIntent`, `ControlCarIntent` (`closeTrunk: true`) | `VentWindowsIntent`, `SetMaxDefrostIntent`, `SetBioweaponModeIntent`, `SetPetModeIntent(on: true)` |
 | `SetChargePortIntent(action: .open)` | `SetChargePortIntent(action: .close)`, `StartChargingIntent` |
 | `StopChargingIntent`, `SetChargeLimitIntent` | `SetSentryModeIntent(on: true)` |
 | `SetSentryModeIntent(on: false)`, `SetPetModeIntent(on: false)` | `FlashLightsIntent`, `SendNavigationIntent`, `SetSeatClimateIntent`, `SetSteeringWheelHeaterIntent` |
@@ -70,7 +70,7 @@ For several requested changes to one car, pass the supported fields together in 
 ## 4. Entities: `IndexedEntity`, `SyncableEntity`, `@Property`, and `@AppEntity(.generable)`
 
 1. **Server-Backed Entities (`IndexedEntity` + `SyncableEntity`)**:
-   - `VehicleEntity`, `VehicleStatusEntity`, `DriveEntity`, `SoftwareUpdateEntity`, and `ReleaseNoteEntity` conform to both `IndexedEntity` and `SyncableEntity` so Siri AI can find them in Spotlight without launching the app and inspect every `@Property(title: "...")` field. For tool intents Siri finds candidates only through Spotlight (`IndexedEntity`) or `EnumerableEntityQuery` (`VehicleEntityQuery`) and resolves them with `entities(for:)`; it does not call `EntityStringQuery.entities(matching:)` or `suggestedEntities()`, which the queries keep for the Shortcuts picker. `entities(for:)` must therefore resolve every identifier a tool can return: `DriveEntityQuery` pages back through `FleetIntentService.driveHistory` for drives older than the newest page.
+   - `VehicleEntity`, `VehicleStatusEntity`, `DriveEntity`, `ChargeSessionEntity`, `SoftwareUpdateEntity`, and `ReleaseNoteEntity` conform to both `IndexedEntity` and `SyncableEntity` so Siri AI can find them in Spotlight without launching the app and inspect every `@Property(title: "...")` field. For tool intents Siri finds candidates only through Spotlight (`IndexedEntity`) or `EnumerableEntityQuery` (`VehicleEntityQuery`) and resolves them with `entities(for:)`; it does not call `EntityStringQuery.entities(matching:)` or `suggestedEntities()`, which the queries keep for the Shortcuts picker. `entities(for:)` must therefore resolve every identifier a tool can return: `DriveEntityQuery` pages back through `FleetIntentService.driveHistory` for drives older than the newest page.
    - `FleetSpotlightIndexer` keeps the newest 500 drives and 200 charging sessions per car indexed, the same depth `entities(for:)` can resolve, so prefer letting Siri find a drive or charge in Spotlight over adding search parameters to a tool.
    - Use an `AppEnum` for a property with a fixed set of values (`VehicleChargingState`, `SoftwareUpdateStatus`). When the provider can report values outside the cases, keep its wording in a plain stored property (`reportedChargingState`, `reportedStatus`) for display and leave the enum property `nil`.
    - `DriveEntity` and `ChargeSessionEntity` carry `vehicleName`; pass the roster name wherever one is created.

@@ -102,6 +102,34 @@
         }
       }
     },
+    "%@ (%@). Ask Siri to warm up my car, cool down my car, precondition, set temperature, defrost, Dog Mode, seat heaters, lock or unlock, open or close trunk, open frunk, send a destination, locate my car, or check battery, range, tire pressure, mileage, drives, charging history, and software updates.": {
+      "comment": "Spotlight searchable description for a vehicle entity",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ (%2$@). Ask Siri to warm up my car, cool down my car, precondition, set temperature, defrost, Dog Mode, seat heaters, lock or unlock, open or close trunk, open frunk, send a destination, locate my car, or check battery, range, tire pressure, mileage, drives, charging history, and software updates."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@). Pídele a Siri calentar o enfriar tu coche, preacondicionar, ajustar la temperatura, desempañar, Modo Perro, calefacción de asientos, bloquear o desbloquear, abrir o cerrar el maletero, abrir el maletero delantero, enviar un destino, localizar tu coche o revisar batería, autonomía, presión de neumáticos, kilometraje, viajes, cargas y actualizaciones."
+          }
+        }
+      }
+    },
+    "%@ (Tesla)": {
+      "comment": "Spotlight title for a secondary car when no owner name is set.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (Tesla)"
+          }
+        }
+      }
+    },
     "%@ Autopilot": {
       "comment": "Autopilot percentage badge on drive card",
       "localizations": {
@@ -131,6 +159,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ estadísticas de batería"
+          }
+        }
+      }
+    },
+    "%@ Car Software: %@": {
+      "comment": "Spotlight title for vehicle software status when an owner name is set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ Car Software: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software del coche de %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@ Car Status: %@": {
+      "comment": "Spotlight title for live vehicle status when an owner name is set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ Car Status: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado del coche de %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@ Car: %@": {
+      "comment": "Spotlight title for a user's car when an owner name is set, e.g. 'Max's Car: Ares'.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ Car: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coche de %1$@: %2$@"
           }
         }
       }
@@ -180,7 +259,7 @@
       }
     },
     "%@ Status": {
-      "comment": "Display title for a vehicle status entity.\nSpotlight item title for a vehicle's status.",
+      "comment": "Display title for a vehicle status entity.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -309,6 +388,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ no respondió a tiempo, así que no se pudo confirmar la solicitud. Revisa el vehículo antes de intentarlo de nuevo."
+          }
+        }
+      }
+    },
+    "%@ drive to %@ (%@)": {
+      "comment": "Spotlight display name for a completed drive naming the car, destination, and distance",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ drive to %2$@ (%3$@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viaje de %1$@ a %2$@ (%3$@)"
           }
         }
       }
@@ -746,6 +842,7 @@
     },
     "%@ vehicle status": {
       "comment": "Spotlight display name for a vehicle's status.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -1675,11 +1772,35 @@
     },
     "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening the car, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Aplica controles de Tesla en una llamada: clima, temperatura (°F o °C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloqueo, activar Centinela, carga, límite/amperios, cerrar el puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir el vehículo o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
+          }
+        }
+      }
+    },
+    "Applies Tesla controls in one call: climate, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the trunk or charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "stale",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplica controles de Tesla en una llamada: clima, temperatura (°F o °C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloqueo, activar Centinela, carga, límite/amperios, cerrar el maletero o puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
+          }
+        }
+      }
+    },
+    "Applies Tesla controls in one call: warm up or cool down, target temperature (°F/°C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, lock, Sentry on, charging, limit/amps, close trunk or charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplica controles de Tesla en una llamada: calentar o enfriar, temperatura (°F/°C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloquear, activar Centinela, carga, límite/amperios, cerrar el maletero o puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
           }
         }
       }
@@ -2635,6 +2756,17 @@
         }
       }
     },
+    "Car Climate Control": {
+      "comment": "Spotlight kind for car climate control anchor.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Climatización del coche"
+          }
+        }
+      }
+    },
     "Car Control Settings": {
       "comment": "FleetKit Siri/Shortcuts label from ControlCarIntent.",
       "localizations": {
@@ -2642,6 +2774,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajustes de control del vehículo"
+          }
+        }
+      }
+    },
+    "Car Controls": {
+      "comment": "Spotlight kind for car controls anchor.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles del coche"
           }
         }
       }
@@ -2800,6 +2943,17 @@
         }
       }
     },
+    "Charged at %@": {
+      "comment": "Spotlight title for an AC charging session with a known location",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga en %@"
+          }
+        }
+      }
+    },
     "Charger Power": {
       "comment": "FleetKit Siri/Shortcuts label from VehicleStatusEntity.",
       "localizations": {
@@ -2812,7 +2966,7 @@
       }
     },
     "Charging": {
-      "comment": "Vehicle charging state: actively charging\nVehicle charging state: actively charging.\nWidget charging status while actively charging.",
+      "comment": "Vehicle charging state: actively charging.\nWidget charging status while actively charging.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -3378,6 +3532,17 @@
         }
       }
     },
+    "Climate & Preconditioning — %@": {
+      "comment": "Spotlight companion item display name for vehicle climate controls.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Climatización y preacondicionamiento — %@"
+          }
+        }
+      }
+    },
     "Climate Interaction": {
       "comment": "FleetKit Siri/Shortcuts label from SiriInteractiveSnippetIntents.",
       "localizations": {
@@ -3598,6 +3763,17 @@
         }
       }
     },
+    "Close Trunk": {
+      "comment": "App Entity property title used by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar maletero"
+          }
+        }
+      }
+    },
     "Close my car charge port": {
       "comment": "Siri prediction title for closing the charge port on the user's selected car.",
       "localizations": {
@@ -3709,7 +3885,7 @@
       }
     },
     "Complete": {
-      "comment": "Vehicle charging state: charging complete\nVehicle charging state: charging complete.",
+      "comment": "Vehicle charging state: charging complete.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -3848,6 +4024,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Controlar ${vehicle} con ${changes}"
+          }
+        }
+      }
+    },
+    "Control %@": {
+      "comment": "Spotlight companion item title for controlling the user's car.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlar %@"
           }
         }
       }
@@ -4271,7 +4458,7 @@
       }
     },
     "Disconnected": {
-      "comment": "Vehicle charging state: unplugged\nVehicle charging state: unplugged.",
+      "comment": "Vehicle charging state: unplugged.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -4530,6 +4717,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tiempo de viaje"
+          }
+        }
+      }
+    },
+    "Drive to %@": {
+      "comment": "Spotlight title for a completed drive with a known destination",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viaje a %@"
           }
         }
       }
@@ -7157,8 +7355,20 @@
         }
       }
     },
+    "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place (including saved nicknames), or within dates. Add a date range for older history. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista el historial de cargas del Tesla por tipo (Supercharger o CA), lugar (incluidos apodos guardados) o fechas. Añade un rango de fechas para historial más antiguo. Usa Ver detalles o Estadísticas de carga para más información."
+          }
+        }
+      }
+    },
     "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7168,8 +7378,20 @@
         }
       }
     },
+    "Lists the user's past Tesla drives by destination or starting place (including saved nicknames), date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Add a date range for older history. For one drive in detail, use the Get Drive Details tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca viajes pasados del Tesla por lugar (incluidos apodos guardados), fecha, distancia, duración o etiqueta, ordenados a tu gusto. Añade un rango de fechas para historial más antiguo. Usa Ver detalles del viaje para uno específico."
+          }
+        }
+      }
+    },
     "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Drive Details tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7224,7 +7446,7 @@
       }
     },
     "Locate my car": {
-      "comment": "App Intents parameter summary shown in the Shortcuts app.",
+      "comment": "Siri prediction title for finding where the user's selected car is.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7355,6 +7577,17 @@
         }
       }
     },
+    "Lock or unlock doors, open or close trunk, open frunk, start or stop charging, set charge limit, vent or close windows, toggle Sentry Mode, send a destination, or locate %@.": {
+      "comment": "Spotlight description for car controls anchor.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquea o desbloquea las puertas, abre o cierra el maletero, abre el maletero delantero, inicia o detiene la carga, ajusta el límite de carga, ventila o cierra las ventanillas, activa o desactiva el Modo Centinela, envía un destino o localiza %@."
+          }
+        }
+      }
+    },
     "Lock status unavailable": {
       "comment": "Widget security status when lock state is missing.",
       "localizations": {
@@ -7367,7 +7600,7 @@
       }
     },
     "Locked": {
-      "comment": "Summary segment indicating vehicle doors are locked.\nVehicle lock status badge: locked\nWidget security status when doors are locked.",
+      "comment": "Short lock status in Spotlight display name.\nSummary segment indicating vehicle doors are locked.\nVehicle lock status badge: locked\nWidget security status when doors are locked.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -7417,6 +7650,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bloquea inmediatamente todas las puertas del vehículo. Omite el vehículo para bloquear el seleccionado."
+          }
+        }
+      }
+    },
+    "Locks, Charging & Trunk — %@": {
+      "comment": "Spotlight companion item display name for vehicle controls.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cierre, carga y maletero — %@"
           }
         }
       }
@@ -7795,6 +8039,17 @@
         }
       }
     },
+    "My Car Software: %@": {
+      "comment": "Spotlight title for vehicle software status when no owner name is set.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software de mi coche: %@"
+          }
+        }
+      }
+    },
     "My Car Status": {
       "comment": "Spotlight alternate name for the user's car status.",
       "localizations": {
@@ -7802,6 +8057,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Estado de mi vehículo"
+          }
+        }
+      }
+    },
+    "My Car Status: %@": {
+      "comment": "Spotlight title for live vehicle status when no owner name is set.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado de mi coche: %@"
+          }
+        }
+      }
+    },
+    "My Car: %@": {
+      "comment": "Alternate Spotlight name pairing My Car with vehicle name\nSpotlight title for the default car when no owner name is set, e.g. 'My Car: Ares'.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mi coche: %@"
           }
         }
       }
@@ -7830,6 +8107,7 @@
     },
     "My car (%@ named %@). Ask Siri for its battery, range, tire pressure, mileage, climate, drives, charging history, or software updates, or to lock, unlock, warm up my car, cool down my car, precondition, defrost, or send it a destination.": {
       "comment": "Spotlight searchable description for a vehicle entity",
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -7934,7 +8212,7 @@
       }
     },
     "No Power": {
-      "comment": "Vehicle charging state: charger has no power\nVehicle charging state: plugged in with no power.",
+      "comment": "Vehicle charging state: plugged in with no power.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -8831,8 +9109,20 @@
         }
       }
     },
+    "Open the rear trunk (to close a powered trunk, use Control Car)": {
+      "comment": "App enum case subtitle shown by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero trasero (para cerrar un maletero eléctrico, usa Controlar vehículo)"
+          }
+        }
+      }
+    },
     "Open the rear trunk; a powered trunk that is already open closes instead": {
       "comment": "App enum case title or subtitle shown by Siri and Shortcuts.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -11487,7 +11777,7 @@
       }
     },
     "Starting": {
-      "comment": "Vehicle charging state: starting to charge\nVehicle charging state: starting to charge.",
+      "comment": "Vehicle charging state: starting to charge.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -11762,7 +12052,7 @@
       }
     },
     "Stopped": {
-      "comment": "Vehicle charging state: plugged in but stopped.\nVehicle charging state: plugged in, charging stopped",
+      "comment": "Vehicle charging state: plugged in but stopped.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -11867,6 +12157,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sesiones Supercharger"
+          }
+        }
+      }
+    },
+    "Supercharger at %@": {
+      "comment": "Spotlight title for a Supercharger session with a known location",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supercharger en %@"
           }
         }
       }
@@ -13880,6 +14181,17 @@
         }
       }
     },
+    "True to close a powered rear trunk (requires confirmation). Leave empty otherwise; opening the trunk uses the Unlock or Open Car tool.": {
+      "comment": "App Entity property description used by Siri and Shortcuts.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "True para cerrar un maletero trasero eléctrico (pide confirmación). Déjalo vacío en caso contrario; abrir el maletero usa la herramienta Desbloquear o abrir vehículo."
+          }
+        }
+      }
+    },
     "True to close the charge port door. Leave empty otherwise; opening it uses the Unlock or Open Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "localizations": {
@@ -14729,7 +15041,7 @@
       }
     },
     "Unlocked": {
-      "comment": "Summary segment indicating vehicle doors are unlocked.\nVehicle lock status badge: unlocked\nWidget security status when doors are unlocked.",
+      "comment": "Short unlock status in Spotlight display name.\nSummary segment indicating vehicle doors are unlocked.\nVehicle lock status badge: unlocked\nWidget security status when doors are unlocked.",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -15457,6 +15769,17 @@
         }
       }
     },
+    "Warm Up %@": {
+      "comment": "Spotlight companion item title for warming up or cooling down the user's car.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calentar %@"
+          }
+        }
+      }
+    },
     "Warm up %@": {
       "comment": "Siri prediction title for starting climate in a specific vehicle.",
       "localizations": {
@@ -15486,6 +15809,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Calentar o encender la climatización de ${vehicle}"
+          }
+        }
+      }
+    },
+    "Warm up, cool down, precondition cabin, set temperature, max defrost, seat heaters, seat cooling, steering wheel heater, Dog Mode, or Bioweapon Defense for %@.": {
+      "comment": "Spotlight description for car climate control anchor.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calienta, enfría, preacondiciona la cabina, ajusta la temperatura, desempañado máximo, calefacción o ventilación de asientos, volante calefactado, Modo Perro o Defensa Biológica para %@."
           }
         }
       }
@@ -16529,6 +16863,7 @@
     },
     "charge port": {
       "comment": "Siri search synonym or keyword for App Intents discovery.",
+      "extractionState": "stale",
       "localizations": {
         "es": {
           "stringUnit": {
@@ -16751,6 +17086,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "cerrar puerto de carga"
+          }
+        }
+      }
+    },
+    "close trunk": {
+      "comment": "Short step label for closing a powered rear trunk.",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cerrar maletero"
           }
         }
       }
@@ -17279,6 +17625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "calentar el volante"
+          }
+        }
+      }
+    },
+    "heat up my car": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "calentar mi coche"
           }
         }
       }

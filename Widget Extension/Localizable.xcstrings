@@ -292,6 +292,32 @@
       },
       "generatesSymbol": false
     },
+    "Applies Tesla controls in one call: climate, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the trunk or charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplica controles de Tesla en una llamada: clima, temperatura (°F o °C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloqueo, activar Centinela, carga, límite/amperios, cerrar el maletero o puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
+          }
+        }
+      }
+    },
+    "Applies Tesla controls in one call: warm up or cool down, target temperature (°F/°C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, lock, Sentry on, charging, limit/amps, close trunk or charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplica controles de Tesla en una llamada: calentar o enfriar, temperatura (°F/°C), desempañado, asientos delanteros, volante, Modo Perro/Defensa Biológica, bloquear, activar Centinela, carga, límite/amperios, cerrar el maletero o puerto de carga, ventanillas, luces, bocina o destino. Confirma acciones sensibles. Para desbloquear, abrir o desactivar Centinela usa Desbloquear o abrir vehículo; la ventilación de asientos y las actualizaciones usan otras herramientas."
+          }
+        }
+      }
+    },
     "Autopilot Distance": {
       "comment": "FleetKit Siri/Shortcuts label from DriveEntity.",
       "extractionState": "manual",
@@ -1695,6 +1721,19 @@
         }
       },
       "generatesSymbol": false
+    },
+    "Close Trunk": {
+      "comment": "App Entity property title used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar maletero"
+          }
+        }
+      }
     },
     "Close my car windows": {
       "comment": "App Intents parameter summary shown in the Shortcuts app.",
@@ -4127,6 +4166,19 @@
       },
       "generatesSymbol": false
     },
+    "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place (including saved nicknames), or within dates. Add a date range for older history. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista el historial de cargas del Tesla por tipo (Supercharger o CA), lugar (incluidos apodos guardados) o fechas. Añade un rango de fechas para historial más antiguo. Usa Ver detalles o Estadísticas de carga para más información."
+          }
+        }
+      }
+    },
     "Lists the user's past Tesla charging sessions, newest first, optionally only Superchargers or only AC, at a place, or within dates. Searches the connected provider’s charging history, including sessions too old for Spotlight. For one session in detail, use the Get Charge Details tool; for totals, the Get Charging Stats tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
       "extractionState": "manual",
@@ -4139,6 +4191,19 @@
         }
       },
       "generatesSymbol": false
+    },
+    "Lists the user's past Tesla drives by destination or starting place (including saved nicknames), date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Add a date range for older history. For one drive in detail, use the Get Drive Details tool.": {
+      "comment": "App Intent or parameter description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca viajes pasados del Tesla por lugar (incluidos apodos guardados), fecha, distancia, duración o etiqueta, ordenados a tu gusto. Añade un rango de fechas para historial más antiguo. Usa Ver detalles del viaje para uno específico."
+          }
+        }
+      }
     },
     "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Drive Details tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",
@@ -5269,6 +5334,19 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir el maletero delantero de mi vehículo"
+          }
+        }
+      }
+    },
+    "Open the rear trunk (to close a powered trunk, use Control Car)": {
+      "comment": "App enum case subtitle shown by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el maletero trasero (para cerrar un maletero eléctrico, usa Controlar vehículo)"
           }
         }
       }
@@ -8897,6 +8975,19 @@
         }
       },
       "generatesSymbol": false
+    },
+    "True to close a powered rear trunk (requires confirmation). Leave empty otherwise; opening the trunk uses the Unlock or Open Car tool.": {
+      "comment": "App Entity property description used by Siri and Shortcuts.",
+      "extractionState": "manual",
+      "generatesSymbol": false,
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "True para cerrar un maletero trasero eléctrico (pide confirmación). Déjalo vacío en caso contrario; abrir el maletero usa la herramienta Desbloquear o abrir vehículo."
+          }
+        }
+      }
     },
     "True to close the charge port door. Leave empty otherwise; opening it uses the Unlock or Open Car tool.": {
       "comment": "App Intent or parameter description used by Siri and Shortcuts.",

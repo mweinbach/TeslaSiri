@@ -1,15 +1,27 @@
 import AppIntents
 import FleetKit
 
-/// Zero-configuration App Shortcuts so common read and update tools are available
-/// in Siri, Spotlight, and on the Action button the moment the app is installed.
+/// Zero-configuration App Shortcuts so climate preconditioning, status, history,
+/// and software updates are available in Siri, Spotlight, and on the Action button
+/// the moment the app is installed.
 ///
-/// Control intents (`LockVehicleIntent`, `StartClimateIntent`, etc.) stay
-/// available in the Shortcuts app, while natural-language vehicle control routes
-/// directly to Siri AI's `@AppIntent(.tool)` surface (`ControlCarIntent`) without
-/// competing App Shortcut phrases.
+/// Other control intents (`LockVehicleIntent`, `UnlockVehicleIntent`, etc.) stay
+/// available in the Shortcuts app while natural-language vehicle control routes to
+/// Siri AI's `@AppIntent(.tool)` surface (`ControlCarIntent`) or SiriKit Car Commands.
 nonisolated struct TeslaSiriShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: StartClimateIntent(),
+            phrases: [
+                "Warm up my car with \(.applicationName)",
+                "Warm up \(\.$vehicle) with \(.applicationName)",
+                "Cool down my car with \(.applicationName)",
+                "Cool down \(\.$vehicle) with \(.applicationName)",
+                "Precondition my car with \(.applicationName)"
+            ],
+            shortTitle: "Warm Up Car",
+            systemImageName: "fanblades.fill"
+        )
         AppShortcut(
             intent: GetVehicleStatusIntent(),
             phrases: [

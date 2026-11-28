@@ -500,7 +500,7 @@ public struct ConfigureCabinClimateIntent: AppIntent, LongRunningIntent {
 public struct FindDrivesIntent: AppIntent {
     public static let title: LocalizedStringResource = "Find Drives"
     public static let description = IntentDescription(
-        "Lists the user's past Tesla drives by destination or starting place, date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Searches the connected provider’s drive history, including drives too old for Spotlight. For one drive in detail, use the Get Drive Details tool.",
+        "Lists the user's past Tesla drives by destination or starting place (including saved nicknames), date, distance, duration, or tag, sorted by most recent, longest, most energy, or most efficient. Add a date range for older history. For one drive in detail, use the Get Drive Details tool.",
         searchKeywords: ["Tesla", "trip", "trips", "drive history", "where did I drive", "when did I go", "commute"]
     )
     public static let isDiscoverable = true
@@ -538,11 +538,12 @@ public struct FindDrivesIntent: AppIntent {
         do {
             let service = FleetIntentService.make()
             let resolved = try await service.resolvedVehicle(vehicle?.id)
+            let knownPlaces = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier).places(forVIN: resolved.vin)
             let maxResults = min(max(filter.maximumResults ?? 10, 1), 50)
             let normalizedTag = filter.tagQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let generalLoc = filter.locationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let startLoc = filter.startLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let endLoc = filter.endLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let generalLoc = filter.locationQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let startLoc = filter.startLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let endLoc = filter.endLocationQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
             let tagLower = normalizedTag?.lowercased()
 
             let matches: (FleetDriveInfo) -> Bool = { drive in
@@ -568,17 +569,29 @@ public struct FindDrivesIntent: AppIntent {
                     }
                 }
                 if let query = generalLoc, !query.isEmpty {
-                    let startMatch = drive.startAddress?.lowercased().contains(query) == true
-                    let endMatch = drive.endAddress?.lowercased().contains(query) == true
+                    let startMatch = FleetSharedPlaceStore.matches(
+                        query: query, address: drive.startAddress,
+                        latitude: drive.startLatitude, longitude: drive.startLongitude, in: knownPlaces
+                    )
+                    let endMatch = FleetSharedPlaceStore.matches(
+                        query: query, address: drive.endAddress,
+                        latitude: drive.endLatitude, longitude: drive.endLongitude, in: knownPlaces
+                    )
                     guard startMatch || endMatch else { return false }
                 }
                 if let startQuery = startLoc, !startQuery.isEmpty {
-                    guard drive.startAddress?.lowercased().contains(startQuery) == true else {
+                    guard FleetSharedPlaceStore.matches(
+                        query: startQuery, address: drive.startAddress,
+                        latitude: drive.startLatitude, longitude: drive.startLongitude, in: knownPlaces
+                    ) else {
                         return false
                     }
                 }
                 if let endQuery = endLoc, !endQuery.isEmpty {
-                    guard drive.endAddress?.lowercased().contains(endQuery) == true else {
+                    guard FleetSharedPlaceStore.matches(
+                        query: endQuery, address: drive.endAddress,
+                        latitude: drive.endLatitude, longitude: drive.endLongitude, in: knownPlaces
+                    ) else {
                         return false
                     }
                 }
@@ -622,7 +635,7 @@ public struct FindDrivesIntent: AppIntent {
                 matched.sort { ($0.efficiencyWhPerMile ?? .infinity) < ($1.efficiencyWhPerMile ?? .infinity) }
             }
 
-            let results = matched.prefix(maxResults).map { DriveEntity(info: $0, vehicleName: resolved.name) }
+            let results = matched.prefix(maxResults).map { DriveEntity(info: $0, vehicleName: resolved.name, knownPlaces: knownPlaces) }
             log.success("matched \(results.count) drive(s) for \(resolved.name)")
 
             let dialogText: String

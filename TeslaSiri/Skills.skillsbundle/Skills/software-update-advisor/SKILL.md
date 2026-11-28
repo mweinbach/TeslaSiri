@@ -23,11 +23,11 @@ Only install when the user explicitly asks to. Before calling the Install Softwa
 - Check the battery level with the Get Vehicle Info tool (battery topic); if it's below 20%, recommend charging first.
 - Remind them the car can't be driven while updating (typically 20–40 minutes).
 
-The tool will ask the user to confirm before starting or scheduling.
+The tool will ask the user to confirm before starting or scheduling (scheduling a later start time requires a provider that supports delayed installs; otherwise the tool will say it can only start immediately).
 
 ## 4. Canceling a scheduled update
 
-If an update is scheduled and the user wants to drive or asks to cancel, call the Cancel Software Update tool. Let them know it can't stop an install that's already in progress.
+If an update is scheduled and the user wants to drive or asks to cancel, call the Cancel Software Update tool. Let them know it can't stop an install that's already in progress (and if the connected provider doesn't support canceling updates, relay that message).
 
 ## Don't
 

@@ -40,6 +40,10 @@ public struct FleetIntentService: Sendable {
 
     var appGroupIdentifier: String { sandbox?.appGroup ?? client.tokenStore.appGroup }
 
+    var ownerDisplayName: String? {
+        FleetSharedTokenStore(appGroup: appGroupIdentifier).ownerDisplayName()
+    }
+
     /// Opaque identity shared by the app and extension. Changes when credentials or sandbox mode change.
     public var sessionScopeID: String? {
         let current = Self.scope(client: client, sandbox: sandbox, fingerprint: credentialFingerprint)
@@ -260,6 +264,41 @@ public struct FleetIntentService: Sendable {
             return FleetDemoVehicleState.demoDrivePath(driveID: driveID, from: from, to: to)
         }
         return try await withSession { try await client.drivePath(vin: vin, driveID: driveID, from: from, to: to, maxPoints: maxPoints) }
+    }
+
+    /// Charges requested per page when walking charging history.
+    static let chargeHistoryPageSize = 100
+    /// Pages a filtered charge search or saved-charge lookup may walk: the newest 500 charges.
+    static let chargeHistoryMaxPages = 5
+
+    /// Charging history newest first, paging back in time until `isEnough` accepts what has been
+    /// collected, a page comes back short, or `maxPages` is reached.
+    func chargeHistory(
+        vin: String,
+        from: Date? = nil,
+        to: Date? = nil,
+        maxPages: Int = FleetIntentService.chargeHistoryMaxPages,
+        requireCompleteRows: Bool = false,
+        until isEnough: ([FleetChargeInfo]) -> Bool = { _ in false }
+    ) async throws -> [FleetChargeInfo] {
+        var collected: [FleetChargeInfo] = []
+        var seen: Set<String> = []
+        var before = to
+        for _ in 0..<max(maxPages, 1) {
+            try Task.checkCancellation()
+            let page = try await charges(
+                vin: vin,
+                limit: Self.chargeHistoryPageSize,
+                from: from,
+                to: before,
+                requireCompleteRows: requireCompleteRows
+            )
+            collected.append(contentsOf: page.filter { seen.insert($0.sessionID).inserted })
+            guard page.count >= Self.chargeHistoryPageSize, !isEnough(collected),
+                  let oldest = page.map(\.startedAtDate).min() else { break }
+            before = oldest.addingTimeInterval(-1)
+        }
+        return collected
     }
 
     public func charges(

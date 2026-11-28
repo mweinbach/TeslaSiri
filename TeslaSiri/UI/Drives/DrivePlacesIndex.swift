@@ -151,6 +151,7 @@ final class DrivePlacesIndex {
                                          arrivalIDs: [], departureIDs: [], lastVisit: 0, isResolved: false)
                     })
                 }
+                mirrorPlacesToSharedStore(places)
             }
             didLoadCache = true
         }
@@ -371,10 +372,40 @@ final class DrivePlacesIndex {
             if let edit, let offset = placeOffsets[edit.id] {
                 places[offset].nickname = edit.nickname
             }
+            mirrorPlacesToSharedStore(snapshot.places)
         }
         pendingSave = task
         defer { if pendingSave == task { pendingSave = nil } }
         try await task.value
+    }
+
+    private func mirrorPlacesToSharedStore(_ source: [DrivePlace]) {
+        let shared: [FleetKnownPlace] = source.compactMap { place in
+            let isNamed = place.nickname != nil || place.isDetectedHome || place.isResolved
+            guard isNamed else { return nil }
+            var alternates: [String] = []
+            if place.nickname != nil {
+                alternates.append(place.defaultName)
+            }
+            if place.name != place.displayName,
+               place.name != DrivePlace.unnamedPlaceholder,
+               place.name != DrivePlace.unknownPlaceholder {
+                alternates.append(place.name)
+            }
+            if let address = place.address, !address.isEmpty {
+                alternates.append(address)
+            }
+            alternates.append(contentsOf: place.categorySearchTerms)
+            return FleetKnownPlace(
+                id: place.id,
+                name: place.displayName,
+                alternateNames: alternates,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                isNamedPlace: true
+            )
+        }
+        FleetSharedPlaceStore.shared.save(shared, forVIN: vin)
     }
 
     private nonisolated struct Snapshot: Codable, Sendable {

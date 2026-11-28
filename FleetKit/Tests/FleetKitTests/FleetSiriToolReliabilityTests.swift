@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import Synchronization
 import Testing
 @testable import FleetKit
 
@@ -80,6 +81,14 @@ struct FleetSiriToolReliabilityTests {
             let status = try #require(try await GetVehicleStatusIntent().perform().value)
             #expect(status.isLocked == true)
             #expect(status.latitude == nil && status.longitude == nil && status.locationAddress == nil)
+
+            // Shortcuts-only narrow read intents also stay lock-screen friendly and strip coordinates.
+            let battery = try #require(try await GetBatteryLevelIntent().perform().value)
+            #expect(battery.latitude == nil && battery.longitude == nil && battery.locationAddress == nil)
+            let mileage = try #require(try await GetVehicleMileageIntent().perform().value)
+            #expect(mileage.latitude == nil && mileage.longitude == nil && mileage.locationAddress == nil)
+            let tires = try #require(try await GetTirePressureIntent().perform().value)
+            #expect(tires.latitude == nil && tires.longitude == nil && tires.locationAddress == nil)
 
             let tireReads = requests().filter { $0.url?.path == "/VIN-1/tire_pressure" }.count
             let located = try #require(try await LocateCarIntent().perform().value)
@@ -293,5 +302,184 @@ struct FleetSiriToolReliabilityTests {
         #expect((DriveFilterCriteria() as Any) is any GenerableEntity)
         // Only the Configure Tesla Cabin Climate shortcut action takes this one.
         #expect(!((CabinClimateSettings() as Any) is any GenerableEntity))
+    }
+
+    // MARK: - Shared Drive Places & Nicknames
+
+    @Test func `shared place nicknames and categories match drives, charges, and Spotlight keywords`() async throws {
+        try await withIsolatedFleetService(responder: { request in
+            switch request.url?.path {
+            case "/vehicles":
+                return (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+            case "/VIN-1/drives":
+                return (200, Data(#"""
+                {"results":[
+                  {"id":501,"started_at":1700000000,"ended_at":1700001800,
+                   "starting_location":"100 Main St","starting_latitude":37.3318,"starting_longitude":-122.0312,
+                   "ending_location":"250 Market St","ending_latitude":37.7749,"ending_longitude":-122.4194,
+                   "odometer_distance":14.5}
+                ]}
+                """#.utf8))
+            case "/VIN-1/charges":
+                return (200, Data(#"""
+                {"results":[
+                  {"id":901,"started_at":1700002000,"ended_at":1700005600,
+                   "location":"100 Main St","latitude":37.3318,"longitude":-122.0312,
+                   "is_supercharger":false,"energy_added":22.5,"cost":3.60,"currency":"USD"}
+                ]}
+                """#.utf8))
+            default:
+                return (404, Data())
+            }
+        }) { _ in
+            let service = FleetIntentService.make()
+            let store = FleetSharedPlaceStore(appGroup: service.appGroupIdentifier)
+            store.save([
+                FleetKnownPlace(
+                    id: "37.3318,-122.0312",
+                    name: "Home",
+                    alternateNames: ["100 Main St"],
+                    latitude: 37.3318,
+                    longitude: -122.0312,
+                    isNamedPlace: true
+                ),
+                FleetKnownPlace(
+                    id: "37.7749,-122.4194",
+                    name: "Iron Gym",
+                    alternateNames: ["250 Market St", "gym", "fitness center"],
+                    latitude: 37.7749,
+                    longitude: -122.4194,
+                    isNamedPlace: true
+                )
+            ], forVIN: "VIN-1")
+
+            let findByCategory = FindDrivesIntent()
+            findByCategory.filter = DriveFilterCriteria(endLocationQuery: "gym", maximumResults: 5)
+            let drives = try #require(try await findByCategory.perform().value)
+            #expect(drives.map(\.id) == ["VIN-1:501"])
+            #expect(drives.first?.startAddress == "Home")
+            #expect(drives.first?.endAddress == "Iron Gym")
+            let driveKeywords = Set(drives.first?.attributeSet.keywords ?? [])
+            #expect(driveKeywords.contains("Iron Gym"))
+            #expect(driveKeywords.contains("gym"))
+            #expect(driveKeywords.contains("250 Market St"))
+
+            let findHomeCharges = GetRecentChargesIntent()
+            findHomeCharges.locationQuery = "Home"
+            findHomeCharges.superchargersOnly = false
+            findHomeCharges.count = 5
+            let charges = try #require(try await findHomeCharges.perform().value)
+            #expect(charges.map(\.id) == ["VIN-1:901"])
+            #expect(charges.first?.location == "Home")
+            let chargeKeywords = Set(charges.first?.attributeSet.keywords ?? [])
+            #expect(chargeKeywords.contains("Home"))
+            #expect(chargeKeywords.contains("100 Main St"))
+
+            store.clearAll()
+            #expect(store.places(forVIN: "VIN-1").isEmpty)
+        }
+    }
+
+    // MARK: - Close rear trunk & equipment pre-checks
+
+    @Test func `Control Car closes a powered rear trunk with confirmation and respects trunk equipment`() async throws {
+        let unsupportedVehiclesJSON = #"""
+        {"results":[{"vin":"VIN-1","display_name":"Roadrunner","last_state":{"vehicle_config":{"car_type":"modely","can_actuate_trunks":false,"has_seat_cooling":false,"can_accept_navigation_requests":false}}}]}
+        """#
+
+        // Supported vehicle: closes rear trunk on Tessie.
+        try await withIsolatedFleetService(responder: { request in
+            switch request.url?.path {
+            case "/vehicles": (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+            case "/VIN-1/command/activate_rear_trunk": (200, Data(#"{"result":true}"#.utf8))
+            default: (404, Data())
+            }
+        }) { requests in
+            let intent = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.closeTrunk = true
+            intent.changes = changes
+            let confirmed = Mutex(false)
+            let result = try await FleetIntentService.$sandboxConfirmationRecorder.withValue({ _ in
+                confirmed.withLock { $0 = true }
+            }) {
+                try #require(try await intent.perform().value)
+            }
+            #expect(confirmed.withLock { $0 })
+            #expect(result.succeeded)
+            #expect(result.appliedValue == "close trunk")
+            #expect(requests().contains { $0.url?.path == "/VIN-1/command/activate_rear_trunk" })
+        }
+
+        // Unsupported vehicle: trunk close, seat cooling, and standalone navigation all fail BEFORE any command POST.
+        try await withIsolatedFleetService(responder: { request in
+            switch request.url?.path {
+            case "/vehicles": (200, Data(unsupportedVehiclesJSON.utf8))
+            default: (200, Data(#"{"result":true}"#.utf8))
+            }
+        }) { requests in
+            let closeTrunk = ControlCarIntent()
+            let changes = CarControlSettings()
+            changes.closeTrunk = true
+            closeTrunk.changes = changes
+            await #expect(throws: FleetKitError.self) { _ = try await closeTrunk.perform() }
+
+            let coolSeat = SetSeatClimateIntent(seat: .driver, level: 3, mode: .cool)
+            await #expect(throws: FleetKitError.self) { _ = try await coolSeat.perform() }
+
+            let nav = SendNavigationIntent()
+            nav.destination = "Blue Bottle Coffee, Oakland"
+            await #expect(throws: FleetKitError.self) { _ = try await nav.perform() }
+
+            #expect(!requests().contains { $0.url?.path.contains("/command/") == true })
+        }
+    }
+
+    // MARK: - Charging history & stats paging
+
+    private static func chargesPage(firstID: Int, count: Int, newestStart: Int, location: String, supercharger: Bool) -> Data {
+        let rows = (0..<count).map { offset -> String in
+            let start = newestStart - offset * 3_600
+            return """
+            {"id":\(firstID - offset),"started_at":\(start),"ended_at":\(start + 1800),"location":"\(location)","is_supercharger":\(supercharger),"energy_added":10.0,"cost":2.0,"currency":"USD"}
+            """
+        }
+        return Data("{\"results\":[\(rows.joined(separator: ","))]}".utf8)
+    }
+
+    private static func pagedChargesRouter(_ request: URLRequest) throws -> (Int, Data) {
+        guard let url = request.url else { return (404, Data()) }
+        switch url.path {
+        case "/vehicles":
+            return (200, Data(FleetKitFixtures.tessieVehiclesJSON.utf8))
+        case "/VIN-1/charges":
+            if queryValue("to", in: request) == nil {
+                return (200, chargesPage(firstID: 2_000, count: 100, newestStart: newestStart, location: "Home", supercharger: false))
+            }
+            return (200, chargesPage(firstID: 1_900, count: 35, newestStart: oldestStartOnFirstPage - 3_600, location: "Kettleman City Supercharger", supercharger: true))
+        default:
+            return (404, Data())
+        }
+    }
+
+    @Test func `filtered charging history, saved charge lookup, and charging stats page past 100 sessions`() async throws {
+        try await withIsolatedFleetService(responder: Self.pagedChargesRouter) { requests in
+            let search = GetRecentChargesIntent()
+            search.superchargersOnly = true
+            search.count = 1
+            let found = try #require(try await search.perform().value)
+            #expect(found.map(\.id) == ["VIN-1:1900"])
+            #expect(requests().filter { $0.url?.path == "/VIN-1/charges" }.count == 2)
+
+            let lookedUp = try await ChargeSessionEntityQuery().entities(for: ["VIN-1:1880"])
+            #expect(lookedUp.map(\.id) == ["VIN-1:1880"])
+
+            let statsIntent = GetChargingStatsIntent()
+            statsIntent.period = .last30Days
+            let stats = try #require(try await statsIntent.perform().value)
+            #expect(stats.sessionCount == 135)
+            #expect(stats.superchargerCount == 35)
+            #expect(stats.acSessionCount == 100)
+        }
     }
 }

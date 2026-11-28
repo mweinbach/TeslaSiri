@@ -56,6 +56,8 @@ public struct CarControlSettings: TransientAppEntity {
     public var chargingAmps: Int?
     @Property(title: "Close Charge Port", description: "True to close the charge port door. Leave empty otherwise; opening it uses the Unlock or Open Car tool.")
     public var closeChargePort: Bool?
+    @Property(title: "Close Trunk", description: "True to close a powered rear trunk (requires confirmation). Leave empty otherwise; opening the trunk uses the Unlock or Open Car tool.")
+    public var closeTrunk: Bool?
     @Property(title: "Windows", description: "Vent or close the windows. Closing requires confirmation.")
     public var windows: CarWindowAction?
     @Property(title: "Destination", description: "An address, coordinates, or map URL the user wants sent to the car's navigation.")
@@ -81,12 +83,12 @@ public struct CarControlSettings: TransientAppEntity {
 public struct ControlCarIntent: AppIntent, LongRunningIntent {
     public static let title: LocalizedStringResource = "Control Car"
     public static let description = IntentDescription(
-        "Applies Tesla controls in one call: climate power, target temperature (°F or °C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, locking, Sentry on, charging, limit/amps, closing the charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening the car, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.",
+        "Applies Tesla controls in one call: warm up or cool down, target temperature (°F/°C), defrost, front seat heat, steering wheel, Dog/Bioweapon Mode, lock, Sentry on, charging, limit/amps, close trunk or charge port, windows, lights, horn, or destination. Confirms sensitive actions. Unlocking, opening, or Sentry off needs Unlock or Open Car; seat cooling and updates use other tools.",
         searchKeywords: [
-            "control my car", "lock my car", "warm up my car", "cool down my car",
+            "control my car", "lock my car", "warm up my car", "heat up my car", "cool down my car",
             "precondition", "turn off climate", "defrost", "dog mode", "bioweapon defense",
             "turn on sentry mode", "start charging", "stop charging", "charge limit", "charging amps",
-            "close charge port", "vent windows", "close windows",
+            "close charge port", "close trunk", "vent windows", "close windows",
             "flash lights", "honk horn", "steering wheel heater", "prepare my Tesla"
         ]
     )
@@ -440,6 +442,19 @@ private extension CarControlSettings {
         }
         if charging == true {
             steps.append(.init("charge_start", String(localized: "start charging", bundle: .module, comment: "Short step label for starting charging.")))
+        }
+        if closeTrunk == true {
+            guard vehicle?.canActuateTrunks != false else {
+                throw FleetKitError.unsupportedAction(
+                    String(localized: "actuating the trunk", bundle: .module, comment: "Action name used in unsupported-action errors for trunk actuation.")
+                )
+            }
+            steps.append(.init(
+                "actuate_trunk",
+                String(localized: "close trunk", bundle: .module, comment: "Short step label for closing a powered rear trunk."),
+                ["which_trunk": .string(TrunkPosition.rear.rawValue), "command": .string("close")],
+                confirm: true
+            ))
         }
         if let windows {
             let label = windows == .vent

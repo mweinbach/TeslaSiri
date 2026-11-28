@@ -15,6 +15,8 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
     /// entity types in the shared Spotlight index, where the identifier is the
     /// primary key and collisions overwrite.
     public let id: String
+    /// Optional owner name (e.g. "Max") used to build Spotlight titles like "Max's Car Software: Ares".
+    let spotlightOwnerName: String?
 
     @Property(title: "VIN", description: "The car's vehicle identification number, for the app's own use.", visibility: .internal)
     public var vin: String
@@ -50,9 +52,10 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
     @Property(title: "Expected Duration (Minutes)", description: "How long the installation is expected to take, in minutes. The car can't be driven while it installs.")
     public var expectedDurationMinutes: Int?
 
-    public init(info: FleetSoftwareInfo, vin: String, vehicleName: String) {
+    public init(info: FleetSoftwareInfo, vin: String, vehicleName: String, ownerName: String? = nil) {
         self.id = Self.entityID(forVIN: vin)
         self.reportedStatus = info.status
+        self.spotlightOwnerName = ownerName
         self.vin = vin
         self.vehicleName = vehicleName
         self.currentVersion = info.currentVersion
@@ -206,11 +209,30 @@ public struct SoftwareUpdateEntity: AppEntity, IndexedEntity, SyncableEntity, Id
             bundle: .module,
             comment: "Spotlight searchable description for a vehicle software update"
         )
-        attributes.title = String(localized: "\(vehicleName) Software", bundle: .module, comment: "Spotlight title for a vehicle's software update status")
+        let softwareTitle = FleetSpotlightNaming.softwareTitle(
+            vehicleName: vehicleName,
+            availableVersion: availableVersion,
+            ownerName: spotlightOwnerName
+        )
+        attributes.title = softwareTitle
         attributes.displayName = String(localized: "\(vehicleName) software update", bundle: .module, comment: "Spotlight display name for a vehicle's software update")
+        var altNames: [String] = [
+            "\(vehicleName) Software",
+            "\(vehicleName) Update",
+            "My Car Software",
+            "My Car Update",
+            "Tesla Software Update",
+            currentVersion,
+            availableVersion
+        ].compactMap { $0 }
+        if let possessive = FleetSpotlightNaming.possessiveOwner(spotlightOwnerName) {
+            altNames.append("\(possessive) Car Software")
+            altNames.append("\(possessive) Car Update")
+        }
+        attributes.alternateNames = FleetSpotlightNaming.deduplicated(altNames)
         attributes.kind = String(localized: "Tesla Software Update", bundle: .module, comment: "Spotlight kind for a Tesla software update")
         attributes.contentDescription = description
-        attributes.textContent = description
+        attributes.textContent = "\(spokenStatus) \(description)"
         attributes.keywords = [
             vehicleName, FleetKitLog.vin(vin), "Tesla",
             String(localized: "software", bundle: .module, comment: "Spotlight keyword for software"),
@@ -436,11 +458,29 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
             .compactMap { $0 }
             .joined(separator: ". ")
         attributes.title = title
-        attributes.displayName = version.map { "\(title) \($0)" } ?? title
+        attributes.displayName = version.map { "\(title) (\($0))" } ?? title
+        attributes.alternateNames = FleetSpotlightNaming.deduplicated([
+            title,
+            version.map { "What's new in \($0)" },
+            version.map { "Release notes \($0)" },
+            "What's new in my car",
+            "Tesla release notes"
+        ].compactMap { $0 })
         attributes.kind = String(localized: "Tesla Release Note", bundle: .module, comment: "Spotlight kind for a Tesla release note")
         attributes.contentDescription = description
         attributes.textContent = description
-        attributes.keywords = [
+        var extraKeywords: [String] = []
+        let combined = [title, subtitle, details].compactMap { $0 }.joined(separator: " ").lowercased()
+        if combined.contains("full self-driving") || combined.contains("full self driving") {
+            extraKeywords.append(contentsOf: ["FSD", "Autopilot", "self driving"])
+        }
+        if combined.contains("dashcam") || combined.contains("sentry") {
+            extraKeywords.append(contentsOf: ["dashcam", "camera", "Sentry Mode"])
+        }
+        if combined.contains("climate") || combined.contains("precondition") {
+            extraKeywords.append(contentsOf: ["AC", "HVAC", "warm up", "cool down"])
+        }
+        attributes.keywords = FleetSpotlightNaming.deduplicated([
             "Tesla",
             String(localized: "release note", bundle: .module, comment: "Spotlight keyword for release note"),
             String(localized: "release version", bundle: .module, comment: "Spotlight keyword for release version"),
@@ -448,7 +488,7 @@ public struct ReleaseNoteEntity: AppEntity, IndexedEntity, SyncableEntity, Ident
             String(localized: "update", bundle: .module, comment: "Spotlight keyword for update"),
             String(localized: "version", bundle: .module, comment: "Spotlight keyword for version"),
             FleetKitLog.vin(vin), version, title, subtitle, details
-        ].compactMap { $0 }
+        ].compactMap { $0 } + extraKeywords)
         return attributes
     }
 

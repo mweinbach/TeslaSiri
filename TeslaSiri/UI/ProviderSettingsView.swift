@@ -14,6 +14,16 @@ struct ProviderSettingsView: View {
     let onSignOut: () -> Void
     var onOpenSandboxSettings: () -> Void = {}
 
+    @State private var ownerNameDraft: String = FleetSharedTokenStore.shared.ownerDisplayName() ?? ""
+    @State private var isReindexingSpotlight = false
+
+    private var spotlightPreviewTitle: String {
+        FleetSpotlightNaming.carTitle(
+            vehicleName: selectedVehicleName ?? String(localized: "Ares", comment: "Example car name in Settings Spotlight preview"),
+            ownerName: ownerNameDraft
+        )
+    }
+
     var body: some View {
         Form {
             if sandboxMode != .live {

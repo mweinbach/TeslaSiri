@@ -161,6 +161,9 @@ public struct SetSeatClimateIntent: AppIntent, LongRunningIntent, PredictableInt
                 ? String(localized: "the seat heater", bundle: .module, comment: "Feature name in unsupported-action errors for seat heating.")
                 : String(localized: "seat cooling", bundle: .module, comment: "Feature name in unsupported-action errors for seat cooling.")
 
+            if targetMode == .cool, resolved.hasSeatCooling == false {
+                throw FleetKitError.unsupportedAction(humanName)
+            }
             let available = try await service.controlActions(for: resolved)
             guard available.supports(action) else {
                 throw FleetKitError.unsupportedAction(humanName)
