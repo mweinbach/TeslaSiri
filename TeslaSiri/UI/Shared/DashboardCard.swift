@@ -101,13 +101,15 @@ struct DashboardCardHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Image(systemName: systemImage)
-                .font(.footnote.weight(.semibold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
             titleText
-                .font(.footnote.weight(.semibold))
+                .font(.caption2.weight(.bold))
+                .tracking(0.9)
+                .textCase(.uppercase)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)

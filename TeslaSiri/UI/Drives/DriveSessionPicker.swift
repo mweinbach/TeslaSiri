@@ -162,10 +162,7 @@ struct DriveSessionChip: View {
         .overlay {
             if isSelected {
                 RoundedRectangle(cornerRadius: AppTheme.tileCornerRadius, style: .continuous)
-                    .fill(AppTheme.accent.opacity(0.05))
-                    .allowsHitTesting(false)
-                RoundedRectangle(cornerRadius: AppTheme.tileCornerRadius, style: .continuous)
-                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                    .strokeBorder(AppTheme.accent.opacity(0.55), lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }

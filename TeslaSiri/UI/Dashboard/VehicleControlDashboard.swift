@@ -367,10 +367,11 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.batteryLevel, fractionLength: 0),
             unit: "%",
-            valueTint: snapshot.isActivelyCharging ? AppTheme.chargeGreen : .primary,
             caption: snapshot.isActivelyCharging
-                ? Text("\(Image(systemName: "bolt.fill")) Charging").foregroundStyle(AppTheme.chargeGreen)
+                ? Text("Charging")
                 : Text("Battery"),
+            captionIcon: snapshot.isActivelyCharging ? "bolt.fill" : nil,
+            captionTint: snapshot.isActivelyCharging ? AppTheme.chargeGreen : nil,
             accessibilityLabel: snapshot.isActivelyCharging ? "Battery, charging" : "Battery",
             accessibilityValue: formattedPercent(snapshot.batteryLevel)
         )
@@ -380,10 +381,11 @@ private struct VehicleHeroStats: View {
         stat(
             value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"),
             unit: nil,
-            valueTint: snapshot.climateOn == true ? AppTheme.climateBlue : .primary,
             caption: snapshot.climateOn == true
-                ? Text("Climate On").foregroundStyle(AppTheme.climateBlue)
+                ? Text("Climate On")
                 : Text("Inside"),
+            captionIcon: snapshot.climateOn == true ? "fan.fill" : nil,
+            captionTint: snapshot.climateOn == true ? AppTheme.climateBlue : nil,
             accessibilityLabel: snapshot.climateOn == true ? "Cabin temperature, climate on" : "Cabin temperature",
             accessibilityValue: formattedTemperature(snapshot.insideTemp, inFahrenheit: !prefersMetricUnits(units))
         )
@@ -399,23 +401,31 @@ private struct VehicleHeroStats: View {
     private func stat(
         value: String,
         unit: String?,
-        valueTint: Color = .primary,
         caption: Text,
+        captionIcon: String? = nil,
+        captionTint: Color? = nil,
         accessibilityLabel: LocalizedStringKey,
         accessibilityValue: String
     ) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             MetricValueText(
                 value: value,
                 unit: unit,
                 font: valueFont,
                 unitFont: compact ? .subheadline.weight(.semibold) : .headline
             )
-            .foregroundStyle(valueTint)
-            caption
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            .foregroundStyle(.primary)
+            HStack(spacing: 3) {
+                if let captionIcon, let captionTint {
+                    Image(systemName: captionIcon)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(captionTint)
+                }
+                caption
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity)
@@ -715,7 +725,8 @@ private struct QuickActionLabel: View {
     }
 }
 
-/// Liquid Glass tile for quick controls. Active controls get a tinted glass fill.
+/// Liquid Glass tile for quick controls. Active controls keep neutral glass and switch
+/// the glyph and label to the control's tint, so no tile ever becomes a solid saturated fill.
 private struct QuickActionButtonStyle: ButtonStyle {
     static let cornerRadius: CGFloat = 18
 
@@ -726,9 +737,9 @@ private struct QuickActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .foregroundStyle(isActive ? AnyShapeStyle(tint) : AnyShapeStyle(.primary))
             .glassEffect(
-                isActive ? .regular.tint(tint).interactive() : .regular.interactive(),
+                .regular.interactive(),
                 in: .rect(cornerRadius: Self.cornerRadius, style: .continuous)
             )
             .opacity(isEnabled ? 1 : 0.55)

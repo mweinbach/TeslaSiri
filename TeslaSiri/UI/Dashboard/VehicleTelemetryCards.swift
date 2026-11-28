@@ -160,19 +160,15 @@ struct VehicleBatteryCard: View {
 
     var body: some View {
         DashboardCard("Charging", systemImage: batterySymbol, tint: isCharging ? AppTheme.chargeGreen : .secondary) {
-            StatusBadge(
-                plugStatusText,
-                systemImage: isCharging ? "bolt.fill" : "powerplug",
-                tint: isCharging ? AppTheme.chargeGreen : (isPortOpen ? AppTheme.climateBlue : .secondary)
-            )
+            chargeLimitControl
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 10) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(formattedPercent(snapshot.batteryLevel))
-                            .font(.system(.title3, design: .rounded, weight: .semibold))
+                            .font(.system(.title, design: .rounded, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(isCharging ? AppTheme.chargeGreen : .primary)
+                            .foregroundStyle(.primary)
                         Text("·")
                             .foregroundStyle(.tertiary)
                         Text(formattedRange)
@@ -185,7 +181,20 @@ struct VehicleBatteryCard: View {
 
                     Spacer(minLength: 8)
 
-                    chargeLimitControl
+                    if isCharging, let remaining = snapshot.timeToFullCharge, remaining > 0 {
+                        let duration = Duration.seconds(Int((remaining * 3_600).rounded())).formatted(
+                            .units(allowed: [.hours, .minutes], width: .abbreviated, maximumUnitCount: 2)
+                        )
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(AppTheme.chargeGreen)
+                            Text("\(duration) to limit")
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                    }
                 }
 
                 if let level = snapshot.batteryLevel {
@@ -301,9 +310,13 @@ struct VehicleBatteryCard: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 9)
                     .background(
-                        (isCharging ? AppTheme.alertAmber : AppTheme.chargeGreen).opacity(0.13),
+                        AppTheme.insetSurface,
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                     )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder((isCharging ? AppTheme.alertAmber : AppTheme.chargeGreen).opacity(0.30), lineWidth: 0.75)
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(isRunningControl || isBusy(chargeCommand))
@@ -337,9 +350,13 @@ struct VehicleBatteryCard: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 9)
                     .background(
-                        isPortOpen ? AppTheme.climateBlue.opacity(0.13) : AppTheme.insetSurface,
+                        AppTheme.insetSurface,
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                     )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder((isPortOpen ? AppTheme.climateBlue : Color.primary).opacity(isPortOpen ? 0.30 : 0.12), lineWidth: 0.75)
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(isRunningControl || isBusy(portCommand))
@@ -371,10 +388,12 @@ struct VehicleBatteryCard: View {
     }
 
     private func detail(_ value: String, caption: LocalizedStringKey) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(caption)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 9.5, weight: .bold))
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundStyle(.tertiary)
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
@@ -386,15 +405,6 @@ struct VehicleBatteryCard: View {
         .padding(.vertical, 8)
         .background(AppTheme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
-    }
-
-    private var plugStatusText: String {
-        if let state = snapshot.chargingState, !state.isEmpty {
-            return humanizedStatus(state)
-        }
-        return isPortOpen
-            ? String(localized: "Port Open", comment: "Charging status badge when the charge port door is open")
-            : String(localized: "Unplugged", comment: "Charging status badge when the vehicle is not plugged in")
     }
 
     private var batterySymbol: String {
@@ -583,7 +593,10 @@ struct VehicleClimateCard: View {
     var body: some View {
         DashboardCard("Climate", systemImage: isOn ? "fan.fill" : "fan", tint: isOn ? AppTheme.climateBlue : .secondary) {
             VStack(alignment: .leading, spacing: 4) {
-                MetricValueText(value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"))
+                MetricValueText(
+                    value: formattedNumber(snapshot.insideTemp, fractionLength: 0, suffix: "°"),
+                    font: .system(.title, design: .rounded, weight: .semibold)
+                )
                 if let outside = snapshot.outsideTemp {
                     Text("\(formattedNumber(outside, fractionLength: 0, suffix: "°")) outside")
                         .font(.caption.weight(.medium))
@@ -630,7 +643,7 @@ struct VehicleClimateCard: View {
                 Text(formattedNumber(targetDisplay, fractionLength: 0, suffix: "°"))
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
-                    .foregroundStyle(AppTheme.climateBlue)
+                    .foregroundStyle(.primary)
                     .contentTransition(.numericText())
                     .accessibilityLabel("Target temperature \(formattedTemperature(targetDisplay, inFahrenheit: !isMetric))")
 
@@ -650,7 +663,11 @@ struct VehicleClimateCard: View {
             }
             .foregroundStyle(AppTheme.climateBlue)
             .padding(.horizontal, 4)
-            .background(AppTheme.climateBlue.opacity(0.13), in: Capsule())
+            .background(AppTheme.insetSurface, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(AppTheme.climateBlue.opacity(0.30), lineWidth: 0.75)
+            }
         } else {
             let startCommand = VehicleControlCommand.climate(shouldTurnOn: true)
             Button {
@@ -672,7 +689,11 @@ struct VehicleClimateCard: View {
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 30)
                 .padding(.horizontal, 8)
-                .background(AppTheme.climateBlue.opacity(0.12), in: Capsule())
+                .background(AppTheme.insetSurface, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(AppTheme.climateBlue.opacity(0.30), lineWidth: 0.75)
+                }
             }
             .buttonStyle(.plain)
             .disabled(isRunningControl || isBusy(startCommand))
@@ -792,10 +813,11 @@ struct VehicleSecurityCard: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 30)
             .padding(.horizontal, 8)
-            .background(
-                isSentryOn ? AppTheme.accent.opacity(0.14) : AppTheme.insetSurface,
-                in: Capsule()
-            )
+            .background(AppTheme.insetSurface, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder((isSentryOn ? AppTheme.accent : Color.primary).opacity(isSentryOn ? 0.32 : 0.10), lineWidth: 0.75)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isRunningControl || isBusy(command))
